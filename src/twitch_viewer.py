@@ -7,32 +7,39 @@ import re
 import subprocess
 import time
 from pathlib import Path
+from typing import Optional, Dict, List, Any
 import streamlink
 import shutil
 
-class TwitchStreamError(Exception):
-    """Custom exception for stream-related errors"""
-    pass
+from .exceptions import TwitchStreamError, PlayerError, ValidationError, StreamlinkError
+from .config_manager import ConfigManager
+from .logging_config import get_logger
+from .constants import (
+    SUPPORTED_PLAYERS, COMMON_PLAYER_PATHS, TWITCH_USERNAME_PATTERN,
+    ENV_PLAYER_PATH, ENV_PLAYER_NAME, ERROR_MESSAGES
+)
+
+logger = get_logger(__name__)
+
 
 class TwitchViewer:
-    def __init__(self, config_path=None):
-        self.config_path = config_path or Path("config/settings.json")
-        self.settings = self._load_settings()
-        self.player_path = None
+    """Main class for watching Twitch streams with ad avoidance."""
+    
+    def __init__(self, config_manager: Optional[ConfigManager] = None):
+        """
+        Initialize the TwitchViewer.
+        
+        Args:
+            config_manager: Configuration manager instance
+        """
+        self.config = config_manager or ConfigManager()
+        self.player_path: Optional[str] = None
         self.session = streamlink.Streamlink()
         
-    def _load_settings(self):
-        """Load settings from the config file"""
-        if os.path.exists(self.config_path):
-            with open(self.config_path, 'r') as f:
-                return json.load(f)
-        return {
-            "preferred_quality": "best",
-            "player": "mpv",
-            "cache_duration": 30
-        }
+        logger.info("TwitchViewer initialized")
+        
 
-    def _validate_channel(self, channel_name):
+    def _validate_channel(self, channel_name: str) -> str:
         """
         Validate the Twitch channel name
         Args:
@@ -43,58 +50,42 @@ class TwitchViewer:
             ValueError: If channel name is invalid
         """
         if not channel_name:
-            raise ValueError("Channel name cannot be empty")
+            raise ValidationError(ERROR_MESSAGES["empty_channel"])
         
         # Twitch usernames can only contain letters, numbers, and underscores
-        if not re.match(r'^[a-zA-Z0-9_]{4,25}$', channel_name):
-            raise ValueError("Invalid channel name format")
+        if not re.match(TWITCH_USERNAME_PATTERN, channel_name):
+            raise ValidationError(ERROR_MESSAGES["invalid_channel"])
         
         return channel_name.lower()
 
-    def _get_supported_players(self):
+    def _get_supported_players(self) -> Dict[str, List[str]]:
         """Get supported player configurations"""
-        return {
-            'vlc': ['vlc', 'vlc.exe'],
-            'mpv': ['mpv', 'mpv.exe', 'mpv.com'],
-            'mpc-hc': ['mpc-hc', 'mpc-hc.exe', 'mpc-hc64.exe']
-        }
+        return SUPPORTED_PLAYERS
     
-    def _get_common_player_paths(self):
+    def _get_common_player_paths(self) -> Dict[str, List[str]]:
         """Get common installation paths for players"""
-        return {
-            'vlc': [
-                r"C:\Program Files\VideoLAN\VLC\vlc.exe",
-                r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
-            ],
-            'mpv': [
-                r"C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe"
-            ],
-            'mpc-hc': [
-                r"C:\Program Files\MPC-HC\mpc-hc64.exe",
-                r"C:\Program Files (x86)\MPC-HC\mpc-hc.exe"
-            ]
-        }
+        return COMMON_PLAYER_PATHS
     
     def _check_environment_player(self, debug=False):
         """Check for player from environment variables (PowerShell integration)"""
-        exported_player_path = os.environ.get('TWITCH_PLAYER_PATH')
-        exported_player_name = os.environ.get('TWITCH_PLAYER_NAME')
+        exported_player_path = os.environ.get(ENV_PLAYER_PATH)
+        exported_player_name = os.environ.get(ENV_PLAYER_NAME)
         
         if exported_player_path and os.path.exists(exported_player_path):
             if debug:
-                print(f"DEBUG: Found exported player: {exported_player_name} at {exported_player_path}")
+                logger.debug(f"Found exported player: {exported_player_name} at {exported_player_path}")
             self.player_path = exported_player_path
             return exported_player_name.lower() if exported_player_name else 'unknown'
         return None
     
     def _check_manual_player(self, debug=False):
         """Check for manually configured player path"""
-        manual_player_path = self.settings.get('player_path')
+        manual_player_path = self.config.get('player_path')
         if manual_player_path and os.path.exists(manual_player_path):
             if debug:
-                print(f"DEBUG: Using manual player path: {manual_player_path}")
+                logger.debug(f"Using manual player path: {manual_player_path}")
             self.player_path = manual_player_path
-            return self.settings.get('player', 'manual')
+            return self.config.get('player', 'manual')
         return None
     
     def _check_player_in_path(self, player_name, executables, debug=False):
@@ -103,7 +94,7 @@ class TwitchViewer:
             player_path = shutil.which(exe)
             if player_path:
                 if debug:
-                    print(f"DEBUG: Found {player_name} in PATH: {player_path}")
+                    logger.debug(f"Found {player_name} in PATH: {player_path}")
                 self.player_path = player_path
                 return player_name
         return None
@@ -113,17 +104,17 @@ class TwitchViewer:
         for path in paths:
             if os.path.exists(path):
                 if debug:
-                    print(f"DEBUG: Found {player_name} at: {path}")
+                    logger.debug(f"Found {player_name} at: {path}")
                 self.player_path = path
                 return player_name
         return None
 
     def _detect_player(self):
         """Detect available video player on the system"""
-        debug = self.settings.get('debug', False)
+        debug = self.config.get('debug', False)
         
         if debug:
-            print("DEBUG: Starting player detection...")
+            logger.debug("Starting player detection...")
         
         # Stage 1: Check environment variables (PowerShell integration)
         result = self._check_environment_player(debug)
@@ -140,7 +131,7 @@ class TwitchViewer:
         common_paths = self._get_common_player_paths()
         
         # Check preferred player first
-        preferred_player = self.settings.get('player', 'vlc')
+        preferred_player = self.config.get('player', 'vlc')
         if preferred_player in players:
             # Try PATH first
             result = self._check_player_in_path(preferred_player, players[preferred_player], debug)
@@ -168,7 +159,7 @@ class TwitchViewer:
         
         # Final fallback: Let streamlink handle detection
         if debug:
-            print("DEBUG: No players found, using streamlink auto-detection")
+            logger.debug("No players found, using streamlink auto-detection")
         self.player_path = None
         return 'auto'
 
@@ -185,7 +176,7 @@ class TwitchViewer:
             if not streams:
                 raise TwitchStreamError(f"No streams available for channel: {channel_name}")
             
-            quality = self.settings.get("preferred_quality", "best")
+            quality = self.config.get("preferred_quality", "best")
             if quality not in streams:
                 quality = "best"
             
@@ -199,9 +190,13 @@ class TwitchViewer:
         Args:
             channel_name (str): Name of the Twitch channel to watch
         """
+        logger.info(f"Starting stream for channel: {channel_name}")
+        logger.debug(f"Configuration: player={self.config.get('player')}, quality={self.config.get('preferred_quality')}, debug={self.config.get('debug')}")
+        
         try:
             # Validate channel name
             channel_name = self._validate_channel(channel_name)
+            logger.debug(f"Channel name validated: {channel_name}")
             
             # Detect player if not already done
             if self.player_path is None:
@@ -212,7 +207,7 @@ class TwitchViewer:
                     print(f"Using streamlink auto-detection for player: {player_name}")
             
             # Get stream quality
-            quality = self.settings.get("preferred_quality", "best")
+            quality = self.config.get("preferred_quality", "best")
             
             # Build streamlink command
             cmd = [
@@ -226,7 +221,7 @@ class TwitchViewer:
                 cmd.extend(['--player', self.player_path])
             
             # Add player arguments if specified
-            player_args = self.settings.get('player_args')
+            player_args = self.config.get('player_args')
             if player_args:
                 cmd.extend(['--player-args', player_args])
             

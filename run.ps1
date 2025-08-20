@@ -1,87 +1,14 @@
-param(
-    [Parameter(Mandatory=$true, Position=0)]
-    [string]$ChannelName,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$SkipPlayerCheck
-)
+# TwitchAdAvoider - Simple GUI Launcher
+# Handles virtual environment setup and launches the GUI
 
 # Set error action preference
 $ErrorActionPreference = "Stop"
 
-# Import shared utilities
+# Import shared utilities for colored output
 Import-Module "$PSScriptRoot\scripts\TwitchUtilities.psm1" -Force
 
-# Check for available video players (essential players only)
-function Test-VideoPlayers {
-    $players = [ordered]@{
-        "VLC" = @("vlc", "vlc.exe")
-        "MPV" = @("mpv", "mpv.exe", "mpv.com") 
-        "MPC-HC" = @("mpc-hc", "mpc-hc.exe", "mpc-hc64.exe")
-    }
-    
-    $knownPaths = [ordered]@{
-        "VLC" = @(
-            "C:\Program Files\VideoLAN\VLC\vlc.exe",
-            "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
-        )
-        "MPV" = @(
-            "C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe"
-        )
-        "MPC-HC" = @(
-            "C:\Program Files\MPC-HC\mpc-hc64.exe",
-            "C:\Program Files (x86)\MPC-HC\mpc-hc.exe"
-        )
-    }
-    
-    $foundPlayers = @()
-    $playerPaths = @{}
-    
-    # Check PATH and known paths for each player
-    foreach ($playerName in $players.Keys) {
-        # Try PATH first
-        foreach ($exe in $players[$playerName]) {
-            $playerPath = Get-Command $exe -ErrorAction SilentlyContinue
-            if ($playerPath) {
-                Write-Success "Found ${playerName}: $($playerPath.Source)"
-                $foundPlayers += $playerName
-                $playerPaths[$playerName] = $playerPath.Source
-                break
-            }
-        }
-        
-        # If not found in PATH, try known paths
-        if ($foundPlayers -notcontains $playerName -and $knownPaths.ContainsKey($playerName)) {
-            foreach ($path in $knownPaths[$playerName]) {
-                if (Test-Path $path) {
-                    Write-Success "Found ${playerName}: $path"
-                    $foundPlayers += $playerName
-                    $playerPaths[$playerName] = $path
-                    break
-                }
-            }
-        }
-    }
-    
-    if ($foundPlayers.Count -eq 0) {
-        Write-Error "No supported video players found"
-        Write-Info "Please install VLC, MPV, or MPC-HC"
-        return $false
-    }
-    
-    Write-Success "Available players: $($foundPlayers -join ', ')"
-    
-    # Export first found player for Python integration
-    $primaryPlayer = $foundPlayers[0]
-    $env:TWITCH_PLAYER_NAME = $primaryPlayer
-    $env:TWITCH_PLAYER_PATH = $playerPaths[$primaryPlayer]
-    Write-Info "Using: $primaryPlayer"
-    
-    return $true
-}
-
-# Setup virtual environment
 function Initialize-VirtualEnvironment {
+    """Setup or use existing virtual environment"""
     $venvPath = "venv"
     
     if (-not (Test-Path $venvPath)) {
@@ -96,7 +23,7 @@ function Initialize-VirtualEnvironment {
         }
     }
     else {
-        Write-Success "Virtual environment already exists"
+        Write-Success "Using existing virtual environment"
     }
     
     # Activate virtual environment
@@ -119,84 +46,90 @@ function Initialize-VirtualEnvironment {
     }
 }
 
-# Install dependencies
 function Install-Dependencies {
+    """Install Python dependencies from requirements.txt"""
     if (Test-Path "requirements.txt") {
         Write-Info "Installing dependencies..."
         try {
-            pip install -r requirements.txt
+            pip install -r requirements.txt --quiet
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Dependencies installed successfully"
                 return $true
             }
             else {
-                Write-Error "Failed to install dependencies"
-                return $false
+                Write-Warning "Some dependencies may not have installed correctly"
+                return $true  # Continue anyway
             }
         }
         catch {
-            Write-Error "Failed to install dependencies: $_"
-            return $false
+            Write-Warning "Failed to install some dependencies: $_"
+            return $true  # Continue anyway
         }
     }
     else {
         Write-Warning "requirements.txt not found"
+        return $true
+    }
+}
+
+function Start-GUI {
+    """Launch the TwitchAdAvoider GUI"""
+    Write-Info "Launching TwitchAdAvoider GUI..."
+    Write-Info "==============================="
+    
+    try {
+        python main.py
+        return $true
+    }
+    catch {
+        Write-Error "Failed to start GUI: $_"
         return $false
     }
 }
 
 # Main execution
 try {
-    Write-Info "TwitchAdAvoider PowerShell Runner"
-    Write-Info "================================"
+    Write-Info "TwitchAdAvoider GUI Launcher"
+    Write-Info "============================"
     
-    # Set working directory
+    # Set working directory to script location
     Set-Location (Split-Path -Parent $MyInvocation.MyCommand.Path)
     
-    # Validate and setup
-    $validatedChannel = Test-ChannelName $ChannelName
-    Write-Success "Channel: $validatedChannel"
-    
-    # Check requirements
-    if (-not (Test-PythonInstallation)) { exit 1 }
-    if (-not (Test-StreamlinkInstallation)) { exit 1 }
-    
-    # Check video players unless skipped
-    if (-not $SkipPlayerCheck) {
-        if (-not (Test-VideoPlayers)) { 
-            Write-Warning "Use -SkipPlayerCheck flag to bypass, but ensure a player is installed"
-            exit 1 
-        }
-    } else {
-        Write-Warning "Player check skipped - ensure VLC/MPV/MPC-HC is installed"
+    # Check Python installation
+    if (-not (Test-PythonInstallation)) { 
+        Write-Error "Python is required. Please install Python 3.6+ from https://python.org"
+        Read-Host "Press Enter to exit"
+        exit 1 
     }
     
     # Setup virtual environment
     if (-not (Initialize-VirtualEnvironment)) {
+        Write-Error "Failed to initialize virtual environment"
+        Read-Host "Press Enter to exit"
         exit 1
     }
     
     # Install dependencies
     if (-not (Install-Dependencies)) {
-        Write-Warning "Continuing anyway, but the script may fail if dependencies are missing"
-    }
-    
-    # Run the main script
-    Write-Info "Starting TwitchAdAvoider for channel: $validatedChannel"
-    Write-Info "Press Ctrl+C to stop the stream"
-    
-    try {
-        python watch_stream.py $validatedChannel
-    }
-    catch {
-        Write-Error "Failed to start stream: $_"
+        Write-Error "Failed to install dependencies"
+        Read-Host "Press Enter to exit"
         exit 1
     }
+    
+    # Launch GUI
+    if (-not (Start-GUI)) {
+        Write-Error "Failed to launch GUI"
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+    
+    Write-Success "GUI session completed"
 }
 catch {
     Write-Error "Unexpected error: $_"
+    Read-Host "Press Enter to exit"
     exit 1
 }
 finally {
-    Write-Info "Script completed"
+    Write-Info "Launcher finished"
 }
