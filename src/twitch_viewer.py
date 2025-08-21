@@ -223,11 +223,8 @@ class TwitchViewer:
         # Priority 2: Check for manual player path in settings
         # If user has specified an explicit path, use it without further detection
         # This path has already been validated for security during configuration
-        manual_player_path = self.config.get('player_path')
-        if manual_player_path and os.path.exists(manual_player_path):
-            if debug:
-                logger.debug(f"Using manual player path: {manual_player_path}")
-            self.player_path = manual_player_path
+        manual_result = self._check_manual_player(debug)
+        if manual_result:
             return player_choice
         
         # Priority 3: Handle 'auto' choice - delegate to streamlink
@@ -329,9 +326,9 @@ class TwitchViewer:
             if self.player_path is None:
                 player_name = self._detect_player()
                 if self.player_path:
-                    print(f"Using player: {player_name} ({self.player_path})")
+                    logger.info(f"Using player: {player_name} ({self.player_path})")
                 else:
-                    print(f"Using streamlink auto-detection for player: {player_name}")
+                    logger.info(f"Using streamlink auto-detection for player: {player_name}")
             
             # Get stream quality
             quality = self.config.get("preferred_quality", "best")
@@ -356,19 +353,23 @@ class TwitchViewer:
             title = f"Twitch - {channel_name}"
             cmd.extend(['--title', title])
             
-            print(f"Starting stream for channel: {channel_name}")
-            print(f"Quality: {quality}")
-            print(f"Command: {' '.join(cmd)}")
+            logger.info(f"Starting stream for channel: {channel_name}")
+            logger.info(f"Quality: {quality}")
+            logger.debug(f"Command: {' '.join(cmd)}")
             
             # Start streamlink process (non-blocking)
             process = subprocess.Popen(cmd)
             return process
                 
         except ValueError as e:
-            print(f"Error: {str(e)}")
+            logger.error(f"Validation error: {str(e)}")
+            raise ValidationError(f"Invalid input: {str(e)}") from e
         except TwitchStreamError as e:
-            print(f"Stream Error: {str(e)}")
+            logger.error(f"Stream error: {str(e)}")
+            raise
         except FileNotFoundError:
-            print("Error: streamlink command not found. Please ensure streamlink is installed and in PATH.")
+            logger.error("streamlink command not found. Please ensure streamlink is installed and in PATH.")
+            raise StreamlinkError("streamlink command not found") from None
         except Exception as e:
-            print(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error: {str(e)}")
+            raise TwitchStreamError(f"Unexpected error: {str(e)}") from e

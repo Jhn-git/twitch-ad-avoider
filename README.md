@@ -73,7 +73,7 @@ A Python implementation for watching Twitch streams while avoiding ads, featurin
 
 3. **Install dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
 4. **Verify installation**:
