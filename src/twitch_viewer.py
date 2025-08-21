@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import time
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 import streamlink
@@ -64,7 +65,8 @@ class TwitchViewer:
         """
         try:
             # Try to create a session and check a non-existent stream
-            test_streams = self.session.streams("twitch.tv/nonexistentchannel123456")
+            test_channel = f"twitch.tv/test_{uuid.uuid4().hex[:12]}"
+            test_streams = self.session.streams(test_channel)
             # If we get here without exception, streamlink is working
             logger.debug("Streamlink availability check passed")
             return True
