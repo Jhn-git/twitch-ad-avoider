@@ -58,6 +58,28 @@ python -m unittest tests.test_validators
 
 # Run specific test method
 python -m unittest tests.test_validators.TestChannelValidation.test_valid_channel_names
+
+# Alternative: Run tests with pytest
+python -m pytest tests/
+
+# Run specific test with pytest
+python -m pytest tests/test_validators.py::TestChannelValidation::test_valid_channel_names
+```
+
+### Code Quality Tools
+```bash
+# Format code with Black (configured in pyproject.toml)
+black --check .
+
+# Lint code with flake8
+flake8 .
+
+# Type checking with mypy
+python -m mypy src/
+
+# Generate coverage report
+python -m coverage run -m unittest discover tests/
+python -m coverage report
 ```
 
 ### Configuration
@@ -65,15 +87,28 @@ python -m unittest tests.test_validators.TestChannelValidation.test_valid_channe
 - Favorites file: `config/favorites.json`
 - Log file: `logs/twitch_ad_avoider.log`
 
-### Dependencies
+### Package Installation
+The project is configured as an installable Python package using `pyproject.toml`:
+
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (production)
+pip install -e .
+
+# Install with development dependencies
+pip install -e .[dev]
 
 # Core dependency: streamlink>=5.0.0
+# Development dependencies: pytest, black, flake8, mypy, coverage, pre-commit
 ```
 
 ## Key Implementation Details
+
+### Modern Python Project Structure
+The project follows modern Python packaging standards:
+- **`pyproject.toml`**: Centralized project configuration, dependencies, and tool settings
+- **Editable installation**: `pip install -e .` for development workflow
+- **Tool configuration**: Black, flake8, pytest, coverage, and mypy configured in pyproject.toml
+- **Package metadata**: Version, description, authors, and classifiers defined
 
 ### Configuration System
 The `ConfigManager` class handles JSON-based configuration with:

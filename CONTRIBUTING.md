@@ -72,21 +72,29 @@ source venv/bin/activate
 ### 3. Install Dependencies
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (production)
+pip install -e .
 
-# Install development dependencies (if you have a dev requirements file)
-pip install pytest pytest-cov flake8 black mypy
+# Install with development dependencies
+pip install -e .[dev]
 ```
 
 ### 4. Verify Setup
 
 ```bash
 # Run tests to ensure everything works
+python -m unittest discover tests/
+
+# Alternative: Run tests with pytest
 python -m pytest tests/
 
 # Run the application
 python main.py --help
+
+# Code quality checks (now configured in pyproject.toml)
+black --check .
+flake8 .
+python -m coverage run -m unittest discover tests/ && python -m coverage report
 ```
 
 ## Code Style Guidelines
