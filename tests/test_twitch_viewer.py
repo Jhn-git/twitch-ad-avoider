@@ -83,7 +83,11 @@ class TestTwitchViewer(unittest.TestCase):
         self.assertEqual(result, 'vlc')
         self.assertEqual(self.viewer.player_path, 'C:\\manual\\vlc.exe')
 
-    def test_check_manual_player_not_found(self):
+    @patch('os.path.exists')
+    def test_check_manual_player_not_found(self, mock_exists):
+        mock_exists.return_value = False
+        # Ensure no manual player path is configured
+        self.viewer.config.set('player_path', None)
         result = self.viewer._check_manual_player()
         self.assertIsNone(result)
 
@@ -134,10 +138,12 @@ class TestTwitchViewer(unittest.TestCase):
     @patch.object(TwitchViewer, '_check_environment_player')
     @patch.object(TwitchViewer, '_check_manual_player')
     @patch.object(TwitchViewer, '_check_player_in_path')
-    def test_detect_player_fallback_to_auto(self, mock_path, mock_manual, mock_env):
+    @patch.object(TwitchViewer, '_check_player_common_paths')
+    def test_detect_player_fallback_to_auto(self, mock_common_paths, mock_path, mock_manual, mock_env):
         mock_env.return_value = None
         mock_manual.return_value = None
         mock_path.return_value = None
+        mock_common_paths.return_value = None
         result = self.viewer._detect_player()
         self.assertEqual(result, 'auto')
         self.assertIsNone(self.viewer.player_path)
