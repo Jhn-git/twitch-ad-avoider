@@ -27,6 +27,7 @@ from src.streamlink_status import StreamlinkStatusChecker
 from src.status_monitor import StatusMonitor
 from src.constants import GUI_GEOMETRY, GUI_MIN_SIZE
 from gui.favorites_manager import FavoritesManager, FavoriteChannelInfo
+from gui.themes import get_theme
 
 logger = get_logger(__name__)
 
@@ -126,8 +127,14 @@ class StreamGUI:
         self.current_stream_thread = None
         self.current_stream_process = None
         
+        # Theme management
+        self.current_theme_name = self.config.get('current_theme', 'light')
+        self.current_theme = get_theme(self.current_theme_name)
+        self.themed_widgets = []  # Track widgets that need theming
+        
         # Create GUI components
         self.setup_gui()
+        self.apply_theme()  # Apply initial theme
         self.refresh_favorites_list()
         
         # Check streamlink availability and warn user if not available
@@ -255,6 +262,13 @@ class StreamGUI:
                                     command=self._on_debug_toggle)
         debug_check.grid(row=0, column=2, pady=5, sticky=tk.W)
         
+        # Dark mode toggle
+        self.dark_mode_var = tk.BooleanVar(value=self.current_theme_name == "dark")
+        dark_mode_check = ttk.Checkbutton(settings_frame, text="Dark Mode",
+                                        variable=self.dark_mode_var,
+                                        command=self._on_theme_toggle)
+        dark_mode_check.grid(row=0, column=3, pady=5, sticky=tk.W)
+        
         # Status bar with enhanced message history
         self.status_text = tk.Text(main_frame)
         self.status_manager = StatusManager(self.status_text, max_history=100)
@@ -288,6 +302,14 @@ class StreamGUI:
         # Settings frame
         settings_frame.columnconfigure(1, weight=1)
         settings_frame.columnconfigure(2, weight=1)
+        settings_frame.columnconfigure(3, weight=1)
+        
+        # Store widgets for theme management
+        self.themed_widgets.extend([
+            main_frame, input_frame, fav_frame, list_frame, 
+            fav_btn_frame, settings_frame, self.favorites_listbox,
+            self.status_text, self.validation_label
+        ])
     
     def _check_streamlink_dependency(self) -> None:
         """
@@ -335,20 +357,20 @@ class StreamGUI:
         Returns:
             tk.Canvas: Canvas widget with drawn circle
         """
-        # Configure Canvas with default background (will be updated dynamically)
+        # Configure Canvas with theme-aware background
         canvas = tk.Canvas(parent, width=size, height=size, 
                           highlightthickness=0,  # Remove focus highlight ring
                           bd=0,                   # Remove border
-                          bg="white",            # Default background (will change dynamically)
+                          bg=self.current_theme["canvas_bg"],  # Theme-aware background
                           relief=tk.FLAT)        # Ensure no border effects
         
-        # Define colors
+        # Define colors using current theme
         if is_live:
-            fill_color = "#e74c3c"  # Bright red for live channels
-            outline_color = "#c0392b"  # Darker red border
+            fill_color = self.current_theme["circle_live_fill"]
+            outline_color = self.current_theme["circle_live_outline"]
         else:
-            fill_color = "#95a5a6"  # Gray for offline channels  
-            outline_color = "#7f8c8d"  # Darker gray border
+            fill_color = self.current_theme["circle_offline_fill"]
+            outline_color = self.current_theme["circle_offline_outline"]
         
         # Draw circle (with small margin)
         margin = 1
@@ -365,7 +387,7 @@ class StreamGUI:
         """
         # Reset all Canvas widgets to default background
         for canvas in self.canvas_widgets:
-            canvas.config(bg="white")
+            canvas.config(bg=self.current_theme["canvas_bg"])
         
         # Set selected row Canvas to selection background color
         if self.selected_favorite_line and self.selected_favorite_line <= len(self.canvas_widgets):
@@ -373,7 +395,87 @@ class StreamGUI:
             canvas_index = self.selected_favorite_line - 1
             if 0 <= canvas_index < len(self.canvas_widgets):
                 selected_canvas = self.canvas_widgets[canvas_index]
-                selected_canvas.config(bg="#0078d4")  # Match Text widget selection color
+                selected_canvas.config(bg=self.current_theme["canvas_selected_bg"])
+    
+    def apply_theme(self) -> None:
+        """
+        Apply current theme to all widgets in the application.
+        
+        This is the core of the centralized theming engine.
+        """
+        theme = self.current_theme
+        
+        # Configure root window
+        self.root.config(bg=theme["root_bg"])
+        
+        # Configure Text widgets (favorites list and status)
+        self.favorites_listbox.configure(
+            bg=theme["text_bg"],
+            fg=theme["text_fg"],
+            selectbackground=theme["text_select_bg"],
+            selectforeground=theme["text_select_fg"],
+            insertbackground=theme["text_fg"]
+        )
+        
+        # Update favorites selection tag colors
+        self.favorites_listbox.tag_configure('selected', 
+            background=theme["text_select_bg"], 
+            foreground=theme["text_select_fg"]
+        )
+        
+        # Configure TTK Style for themed widgets
+        style = ttk.Style()
+        try:
+            style.theme_use('clam')  # Use clam theme as base for styling
+        except tk.TclError:
+            pass  # Fallback to default if clam not available
+            
+        # Configure TTK widget styles
+        style.configure('TFrame', background=theme["frame_bg"])
+        style.configure('TLabelFrame', background=theme["frame_bg"], foreground=theme["labelframe_fg"])
+        style.configure('TLabelFrame.Label', background=theme["frame_bg"], foreground=theme["labelframe_fg"])
+        style.configure('TLabel', background=theme["label_bg"], foreground=theme["label_fg"])
+        style.configure('TButton', background=theme["button_bg"], foreground=theme["button_fg"])
+        style.map('TButton', background=[('active', theme["button_active_bg"])])
+        style.configure('TEntry', fieldbackground=theme["entry_bg"], foreground=theme["entry_fg"])
+        style.configure('TCombobox', fieldbackground=theme["combobox_bg"], foreground=theme["combobox_fg"])
+        
+        # Update validation label colors (will be set dynamically during validation)
+        # Update Canvas status circles
+        self._update_canvas_backgrounds()
+        
+        # Update status manager theme
+        self.status_manager.update_theme(theme)
+        
+        logger.debug(f"Applied theme: {self.current_theme_name}")
+    
+    def switch_theme(self) -> None:
+        """
+        Switch between light and dark themes.
+        
+        Toggles the current theme and immediately applies it to all widgets.
+        """
+        # Toggle theme
+        if self.current_theme_name == "light":
+            new_theme_name = "dark"
+        else:
+            new_theme_name = "light"
+            
+        # Update theme
+        self.current_theme_name = new_theme_name
+        self.current_theme = get_theme(new_theme_name)
+        
+        # Save preference to config
+        self.config.set('current_theme', new_theme_name)
+        self.config.save_settings()
+        
+        # Apply new theme
+        self.apply_theme()
+        
+        # Refresh favorites list to update Canvas circles
+        self.refresh_favorites_list()
+        
+        logger.info(f"Switched to {new_theme_name} theme")
     
     def refresh_favorites_list(self) -> None:
         """
@@ -427,19 +529,19 @@ class StreamGUI:
         channel = self.channel_var.get().strip()
         
         if not channel:
-            self.validation_label.config(text="", foreground="gray")
+            self.validation_label.config(text="", foreground=self.current_theme["validation_neutral"])
             self.watch_btn.config(state="disabled")
             return
         
         try:
             validate_channel_name(channel)
-            self.validation_label.config(text="✓ Valid", foreground="green")
+            self.validation_label.config(text="✓ Valid", foreground=self.current_theme["validation_valid"])
             self.watch_btn.config(state="normal")
         except ValidationError as e:
-            self.validation_label.config(text=f"✗ {str(e)}", foreground="red")
+            self.validation_label.config(text=f"✗ {str(e)}", foreground=self.current_theme["validation_invalid"])
             self.watch_btn.config(state="disabled")
         except Exception:
-            self.validation_label.config(text="✗ Invalid format", foreground="red")
+            self.validation_label.config(text="✗ Invalid format", foreground=self.current_theme["validation_invalid"])
             self.watch_btn.config(state="disabled")
 
     def watch_stream(self) -> None:
@@ -674,6 +776,30 @@ class StreamGUI:
             else:
                 self.status_manager.add_system_message("Debug mode disabled")
                 logger.info("Debug mode disabled via GUI checkbox")
+    
+    def _on_theme_toggle(self):
+        """Handle dark mode checkbox toggle"""
+        is_dark_mode = self.dark_mode_var.get()
+        old_theme = self.current_theme_name
+        new_theme_name = "dark" if is_dark_mode else "light"
+        
+        if old_theme != new_theme_name:
+            # Update theme
+            self.current_theme_name = new_theme_name
+            self.current_theme = get_theme(new_theme_name)
+            
+            # Save preference to config
+            self.config.set('current_theme', new_theme_name)
+            self.config.save_settings()
+            
+            # Apply new theme
+            self.apply_theme()
+            
+            # Refresh favorites list to update Canvas circles
+            self.refresh_favorites_list()
+            
+            self.status_manager.add_system_message(f"Switched to {new_theme_name} theme")
+            logger.info(f"Theme changed via GUI checkbox: {old_theme} -> {new_theme_name}")
     
     def _reconfigure_logging(self):
         """Reconfigure logging based on current settings"""

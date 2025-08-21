@@ -81,8 +81,9 @@ class StatusManager:
         self.max_history = max_history
         self.messages = deque(maxlen=max_history)
         self.visible_lines = 3  # Number of lines to show in status bar
+        self.current_theme = None  # Will be set by update_theme()
         
-        # Configure text widget
+        # Configure text widget (initial configuration - will be updated by theme)
         self._configure_text_widget()
         
         # Add initial message
@@ -90,21 +91,36 @@ class StatusManager:
     
     def _configure_text_widget(self):
         """Configure the text widget appearance and behavior"""
+        # Use theme colors if available, otherwise use defaults
+        if self.current_theme:
+            bg_color = self.current_theme["status_bg"]
+            info_color = self.current_theme["status_info"]
+            warning_color = self.current_theme["status_warning"]
+            error_color = self.current_theme["status_error"]
+            system_color = self.current_theme["status_system"]
+        else:
+            # Default colors (light theme)
+            bg_color = "#f0f0f0"
+            info_color = "black"
+            warning_color = "orange"
+            error_color = "red"
+            system_color = "blue"
+        
         # Configure text widget properties
         self.text_widget.config(
             state=tk.DISABLED,  # Read-only
             wrap=tk.WORD,       # Word wrapping
             height=self.visible_lines,
-            bg="#f0f0f0",       # Light gray background
+            bg=bg_color,
             relief=tk.SUNKEN,
             borderwidth=1
         )
         
         # Configure color tags
-        self.text_widget.tag_configure("info", foreground="black")
-        self.text_widget.tag_configure("warning", foreground="orange")
-        self.text_widget.tag_configure("error", foreground="red", font=("TkDefaultFont", 9, "bold"))
-        self.text_widget.tag_configure("system", foreground="blue")
+        self.text_widget.tag_configure("info", foreground=info_color)
+        self.text_widget.tag_configure("warning", foreground=warning_color)
+        self.text_widget.tag_configure("error", foreground=error_color, font=("TkDefaultFont", 9, "bold"))
+        self.text_widget.tag_configure("system", foreground=system_color)
         
         # Disable text selection and editing
         self.text_widget.bind("<Button-1>", lambda e: "break")
@@ -206,3 +222,14 @@ class StatusManager:
         self.visible_lines = max(1, min(lines, 10))  # Between 1 and 10 lines
         self.text_widget.config(height=self.visible_lines)
         self._update_display()
+    
+    def update_theme(self, theme: dict):
+        """
+        Update status manager theme and reconfigure colors.
+        
+        Args:
+            theme: Theme dictionary containing color definitions
+        """
+        self.current_theme = theme
+        self._configure_text_widget()
+        self._update_display()  # Refresh display with new colors

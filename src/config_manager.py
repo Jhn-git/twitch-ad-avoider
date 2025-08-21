@@ -13,6 +13,18 @@ from .validators import (
     validate_file_path, sanitize_player_args, validate_numeric_range,
     sanitize_string_input
 )
+# Import theme validation from gui module (avoid circular import)
+import sys
+import os
+gui_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'gui')
+if gui_path not in sys.path:
+    sys.path.insert(0, gui_path)
+try:
+    from themes import is_valid_theme
+except ImportError:
+    # Fallback if GUI module not available
+    def is_valid_theme(theme: str) -> bool:
+        return theme in ['light', 'dark']
 from .exceptions import ValidationError
 
 logger = get_logger(__name__)
@@ -233,6 +245,13 @@ class ConfigManager:
             
             elif key == 'player_args':
                 sanitize_player_args(value)
+                return True
+            
+            elif key == 'current_theme':
+                if not isinstance(value, str):
+                    raise ValidationError("Theme setting must be a string")
+                if not is_valid_theme(value):
+                    raise ValidationError(f"Invalid theme '{value}'. Available themes: light, dark")
                 return True
             
             else:

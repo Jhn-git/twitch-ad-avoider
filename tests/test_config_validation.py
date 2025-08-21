@@ -192,6 +192,23 @@ class TestConfigManagerValidation(unittest.TestCase):
         self.assertEqual(self.config.get('preferred_quality'), 'best')
         self.assertEqual(self.config.get('cache_duration'), 60)  # Should still be 60
 
+    def test_theme_validation(self):
+        """Test theme setting validation"""
+        # Valid themes
+        valid_themes = ['light', 'dark']
+        for theme in valid_themes:
+            with self.subTest(theme=theme):
+                result = self.config.set('current_theme', theme)
+                self.assertTrue(result, f"Theme '{theme}' should be valid")
+                self.assertEqual(self.config.get('current_theme'), theme)
+        
+        # Invalid themes
+        invalid_themes = ['blue', 'green', 'invalid', '', None, 123, True]
+        for theme in invalid_themes:
+            with self.subTest(theme=theme):
+                result = self.config.set('current_theme', theme)
+                self.assertFalse(result, f"Theme '{theme}' should be invalid")
+
 
 if __name__ == '__main__':
     unittest.main()
