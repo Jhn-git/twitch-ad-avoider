@@ -42,15 +42,17 @@ def validate_channel_name(channel_name: str) -> str:
             "Invalid channel name. Must contain only letters, numbers, and underscores"
         )
     
-    # Additional security checks
-    # Block suspicious patterns that could be used for attacks
+    # Additional security checks - multi-layered attack prevention
+    # These patterns protect against various attack vectors that could exploit channel names
     suspicious_patterns = [
-        r'\.\./',  # Path traversal
-        r'[<>"|*?]',  # Shell metacharacters
-        r'[\x00-\x1f\x7f-\x9f]',  # Control characters
-        r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',  # Windows reserved names
+        r'\.\./',  # Path traversal: prevents "../../../etc/passwd" style attacks
+        r'[<>"|*?]',  # Shell metacharacters: blocks redirection and wildcards
+        r'[\x00-\x1f\x7f-\x9f]',  # Control characters: prevents null bytes and escape sequences
+        r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',  # Windows reserved device names
     ]
     
+    # Apply each security pattern check
+    # Using case-insensitive matching to catch mixed-case evasion attempts
     for pattern in suspicious_patterns:
         if re.search(pattern, channel_name, re.IGNORECASE):
             raise ValidationError("Channel name contains forbidden characters or patterns")
@@ -78,16 +80,19 @@ def sanitize_player_args(player_args: Optional[str]) -> Optional[str]:
     if not player_args:
         return None
     
-    # Check for dangerous shell metacharacters and patterns
+    # Multi-layer command injection prevention
+    # Each pattern targets a specific attack vector used in command injection
     dangerous_patterns = [
-        r'[;&|`$]',  # Command separators and substitution
-        r'[<>]',     # Redirection operators
-        r'\$\(',     # Command substitution
-        r'`',        # Backtick command substitution
-        r'\\x[0-9a-fA-F]{2}',  # Hex escape sequences
-        r'[\x00-\x1f\x7f-\x9f]',  # Control characters
+        r'[;&|`$]',  # Command separators (;), background (&), pipes (|), substitution ($, `)
+        r'[<>]',     # I/O redirection operators that could redirect sensitive data
+        r'\$\(',     # POSIX command substitution $(command) syntax
+        r'`',        # Backtick command substitution (legacy shell syntax)
+        r'\\x[0-9a-fA-F]{2}',  # Hex escape sequences that could encode dangerous chars
+        r'[\x00-\x1f\x7f-\x9f]',  # Control characters including null bytes and DEL
     ]
     
+    # Apply comprehensive pattern matching to detect injection attempts
+    # This catches both obvious and obfuscated command injection patterns
     for pattern in dangerous_patterns:
         if re.search(pattern, player_args):
             raise ValidationError(
@@ -95,10 +100,15 @@ def sanitize_player_args(player_args: Optional[str]) -> Optional[str]:
                 "Only basic flags and values are allowed."
             )
     
-    # Validate using shell parsing to catch injection attempts
+    # Shell parsing validation - catch malformed command structures
+    # This secondary validation uses Python's shlex module to parse arguments
+    # exactly as a shell would, catching syntax errors that could indicate:
+    # - Unbalanced quotes that might break out of intended argument structure
+    # - Complex shell constructs that our pattern matching might miss
+    # - Malformed escape sequences or quote combinations
     try:
-        # This will raise an exception if the string contains unbalanced quotes
-        # or other shell parsing errors that could indicate injection attempts
+        # shlex.split() parses exactly like POSIX shell argument parsing
+        # If this raises ValueError, the arguments are malformed or suspicious
         shlex.split(player_args)
     except ValueError as e:
         raise ValidationError(f"Invalid player arguments format: {e}")
@@ -135,31 +145,46 @@ def validate_file_path(file_path: Optional[str], must_exist: bool = False) -> Op
         # Convert to Path object for validation
         path = Path(file_path)
         
-        # Check for path traversal attempts
+        # Multi-level path traversal protection
+        # Defense in depth: check both Path object analysis and string patterns
         path_str = str(path)
+        
+        # Level 1: Check Path object parts for traversal sequences
+        # Path().parts splits the path and normalizes it, catching most traversal attempts
         if '..' in path.parts:
             raise ValidationError("Path traversal sequences (..) are not allowed")
         
-        # Also check for relative path patterns in string form
+        # Level 2: String-based detection for raw traversal patterns
+        # Catches cases where Path normalization might not detect traversal
+        # Covers both Unix (../) and Windows (..\) path separators
         if '../' in file_path or '..\\'  in file_path:
             raise ValidationError("Path traversal sequences (..) are not allowed")
         
-        # Block suspicious path patterns
+        # Comprehensive path security validation
+        # These patterns prevent various file system security issues
         dangerous_patterns = [
-            r'[\x00-\x1f\x7f-\x9f]',  # Control characters
-            r'[<>"|*?]',  # Windows forbidden characters (except : for drive letters)
-            r'^\s*$',     # Empty or whitespace-only paths
+            r'[\x00-\x1f\x7f-\x9f]',  # Control chars: null bytes, escape sequences, DEL
+            r'[<>"|*?]',  # Windows forbidden chars (except : for drive letters)
+            r'^\s*$',     # Empty paths: prevent confusion and potential bypasses
         ]
         
+        # Apply file system security checks
+        # Each pattern targets different classes of file system vulnerabilities
         for pattern in dangerous_patterns:
             if re.search(pattern, path_str):
                 raise ValidationError("File path contains forbidden characters")
         
-        # Convert to absolute path to prevent confusion
+        # Path normalization and bounds checking
+        # Convert to absolute path to eliminate ambiguity and prevent relative path attacks
+        # resolve() also normalizes the path, removing redundant separators and resolving symlinks
         abs_path = path.resolve()
         
-        # Additional security: ensure path is within reasonable bounds
-        # (prevent extremely long paths that could cause issues)
+        # Path length validation - defense against resource exhaustion
+        # Extremely long paths can cause issues with:
+        # - File system limits
+        # - Buffer overflows in native code
+        # - Memory exhaustion
+        # - UI display problems
         if len(str(abs_path)) > 1000:
             raise ValidationError("File path is too long (max 1000 characters)")
         

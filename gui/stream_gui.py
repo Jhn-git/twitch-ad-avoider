@@ -26,7 +26,25 @@ from gui.favorites_manager import FavoritesManager, FavoriteChannelInfo
 logger = get_logger(__name__)
 
 class StreamGUI:
-    def __init__(self, root, config_manager=None):
+    """
+    Main GUI class for TwitchAdAvoider Stream Manager.
+    
+    Provides a user-friendly interface for watching Twitch streams with features including:
+    - Real-time channel name validation
+    - Favorites management
+    - Quality selection
+    - Status monitoring
+    - Player configuration
+    """
+    
+    def __init__(self, root: tk.Tk, config_manager: Optional[ConfigManager] = None):
+        """
+        Initialize the Stream GUI.
+        
+        Args:
+            root: The main tkinter window
+            config_manager: Configuration manager instance
+        """
         self.root = root
         self.root.title("TwitchAdAvoider - Stream Manager")
         self.root.geometry(GUI_GEOMETRY)
@@ -66,8 +84,17 @@ class StreamGUI:
         # Handle window closing
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-    def setup_gui(self):
-        """Setup the GUI layout"""
+    def setup_gui(self) -> None:
+        """
+        Setup the GUI layout and components.
+        
+        Creates the main interface including:
+        - Stream input section with validation
+        - Quality selection dropdown
+        - Favorites management section
+        - Status display
+        - Player configuration
+        """
         # Main frame
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -182,8 +209,12 @@ class StreamGUI:
         settings_frame.columnconfigure(1, weight=1)
         settings_frame.columnconfigure(2, weight=1)
     
-    def _check_streamlink_dependency(self):
-        """Check if streamlink is available and warn user if not"""
+    def _check_streamlink_dependency(self) -> None:
+        """
+        Check if streamlink is available and warn user if not.
+        
+        Displays an error dialog and disables functionality if streamlink is not available.
+        """
         if not self.viewer.is_streamlink_available():
             error_msg = (
                 "Streamlink is not available or not working properly.\n\n"
@@ -196,16 +227,29 @@ class StreamGUI:
             # Disable watch functionality
             self.watch_btn.config(state='disabled', text="Streamlink Required")
     
-    def _disable_watch_buttons(self):
-        """Disable watch button during stream"""
+    def _disable_watch_buttons(self) -> None:
+        """
+        Disable watch button during stream.
+        
+        Prevents multiple concurrent streams from being started.
+        """
         self.watch_btn.config(state='disabled')
     
-    def _enable_watch_buttons(self):
-        """Re-enable watch button after stream ends"""
+    def _enable_watch_buttons(self) -> None:
+        """
+        Re-enable watch button after stream ends.
+        
+        Restores watch functionality after a stream process completes.
+        """
         self.watch_btn.config(state='normal', text="Watch Stream")
     
-    def refresh_favorites_list(self):
-        """Refresh the favorites listbox with status information"""
+    def refresh_favorites_list(self) -> None:
+        """
+        Refresh the favorites listbox with status information.
+        
+        Updates the display to show current live status for each favorite channel.
+        Uses status icons: 🔴 for live channels, ⚫ for offline channels.
+        """
         self.favorites_listbox.delete(0, tk.END)
         
         # Get favorites with status info
@@ -217,8 +261,18 @@ class StreamGUI:
             display_text = f"{status_icon} {fav.channel_name}"
             self.favorites_listbox.insert(tk.END, display_text)
     
-    def _validate_channel_input(self, *args):
-        """Real-time validation for channel input with visual feedback"""
+    def _validate_channel_input(self, *args) -> None:
+        """
+        Real-time validation for channel input with visual feedback.
+        
+        Args:
+            *args: Tkinter trace callback arguments (unused)
+            
+        Provides immediate visual feedback on channel name validity:
+        - Green checkmark for valid names
+        - Red X with error message for invalid names
+        - Enables/disables watch button based on validity
+        """
         channel = self.channel_var.get().strip()
         
         if not channel:
@@ -237,8 +291,20 @@ class StreamGUI:
             self.validation_label.config(text="✗ Invalid format", foreground="red")
             self.watch_btn.config(state="disabled")
 
-    def watch_stream(self):
-        """Start watching a stream"""
+    def watch_stream(self) -> None:
+        """
+        Start watching a stream.
+        
+        Validates the channel name, updates configuration from GUI settings,
+        and starts the stream in a separate thread to prevent GUI blocking.
+        
+        Handles:
+        - Channel name validation
+        - Concurrent stream prevention
+        - Configuration updates
+        - Debug mode changes
+        - Thread management
+        """
         channel = self.channel_var.get().strip()
         if not channel:
             messagebox.showerror("Error", "Please enter a channel name")

@@ -97,15 +97,33 @@ class TwitchViewer:
         return validate_channel_name(channel_name)
 
     def _get_supported_players(self) -> Dict[str, List[str]]:
-        """Get supported player configurations"""
+        """
+        Get supported player configurations.
+        
+        Returns:
+            Dict[str, List[str]]: Dictionary mapping player names to their executable names
+        """
         return SUPPORTED_PLAYERS
     
     def _get_common_player_paths(self) -> Dict[str, List[str]]:
-        """Get common installation paths for players"""
+        """
+        Get common installation paths for players.
+        
+        Returns:
+            Dict[str, List[str]]: Dictionary mapping player names to their common installation paths
+        """
         return COMMON_PLAYER_PATHS
     
-    def _check_environment_player(self, debug=False):
-        """Check for player from environment variables (PowerShell integration)"""
+    def _check_environment_player(self, debug: bool = False) -> Optional[str]:
+        """
+        Check for player from environment variables (PowerShell integration).
+        
+        Args:
+            debug: Enable debug logging
+            
+        Returns:
+            Optional[str]: Player name if found via environment variables, None otherwise
+        """
         exported_player_path = os.environ.get(ENV_PLAYER_PATH)
         exported_player_name = os.environ.get(ENV_PLAYER_NAME)
         
@@ -116,8 +134,16 @@ class TwitchViewer:
             return exported_player_name.lower() if exported_player_name else 'unknown'
         return None
     
-    def _check_manual_player(self, debug=False):
-        """Check for manually configured player path"""
+    def _check_manual_player(self, debug: bool = False) -> Optional[str]:
+        """
+        Check for manually configured player path.
+        
+        Args:
+            debug: Enable debug logging
+            
+        Returns:
+            Optional[str]: Player name if manually configured path exists, None otherwise
+        """
         manual_player_path = self.config.get('player_path')
         if manual_player_path and os.path.exists(manual_player_path):
             if debug:
@@ -126,8 +152,18 @@ class TwitchViewer:
             return self.config.get('player', 'manual')
         return None
     
-    def _check_player_in_path(self, player_name, executables, debug=False):
-        """Check if player is available in system PATH"""
+    def _check_player_in_path(self, player_name: str, executables: List[str], debug: bool = False) -> Optional[str]:
+        """
+        Check if player is available in system PATH.
+        
+        Args:
+            player_name: Name of the player to check
+            executables: List of executable names to search for
+            debug: Enable debug logging
+            
+        Returns:
+            Optional[str]: Player name if found in PATH, None otherwise
+        """
         for exe in executables:
             player_path = shutil.which(exe)
             if player_path:
@@ -137,8 +173,18 @@ class TwitchViewer:
                 return player_name
         return None
     
-    def _check_player_common_paths(self, player_name, paths, debug=False):
-        """Check player in common installation paths"""
+    def _check_player_common_paths(self, player_name: str, paths: List[str], debug: bool = False) -> Optional[str]:
+        """
+        Check player in common installation paths.
+        
+        Args:
+            player_name: Name of the player to check
+            paths: List of paths to check
+            debug: Enable debug logging
+            
+        Returns:
+            Optional[str]: Player name if found in common paths, None otherwise
+        """
         for path in paths:
             if os.path.exists(path):
                 if debug:
@@ -147,20 +193,36 @@ class TwitchViewer:
                 return player_name
         return None
 
-    def _detect_player(self):
-        """Detect available video player based on GUI selection and configuration"""
+    def _detect_player(self) -> str:
+        """
+        Detect available video player based on GUI selection and configuration.
+        
+        Uses a priority-based detection system:
+        1. Manual player path from configuration
+        2. Auto detection if selected
+        3. Selected player search in PATH and common locations
+        4. Environment variables (PowerShell integration)
+        5. Fallback to streamlink auto-detection
+        
+        Returns:
+            str: Name of the detected player or 'auto' for streamlink auto-detection
+        """
         debug = self.config.get('debug', False)
         
         if debug:
             logger.debug("Starting simplified player detection...")
         
-        # Priority 1: Use GUI selection if available
+        # Priority 1: Determine player choice from GUI or configuration
+        # The GUI selection (self.selected_player) takes precedence over config file
+        # This allows users to override the saved preference temporarily
         player_choice = self.selected_player or self.config.get('player', 'vlc')
         
         if debug:
             logger.debug(f"Player choice: {player_choice}")
         
         # Priority 2: Check for manual player path in settings
+        # If user has specified an explicit path, use it without further detection
+        # This path has already been validated for security during configuration
         manual_player_path = self.config.get('player_path')
         if manual_player_path and os.path.exists(manual_player_path):
             if debug:
@@ -168,47 +230,64 @@ class TwitchViewer:
             self.player_path = manual_player_path
             return player_choice
         
-        # Priority 3: Handle 'auto' choice - let streamlink decide
+        # Priority 3: Handle 'auto' choice - delegate to streamlink
+        # When 'auto' is selected, we don't set a specific player path
+        # Streamlink will use its own detection algorithm to find available players
         if player_choice == 'auto':
             if debug:
                 logger.debug("Using streamlink auto-detection")
             self.player_path = None
             return 'auto'
         
-        # Priority 4: Try to find the selected player
-        players = self._get_supported_players()
-        common_paths = self._get_common_player_paths()
+        # Priority 4: Search for the selected player using multiple detection methods
+        # This implements a comprehensive search strategy to maximize player detection success
+        players = self._get_supported_players()  # Get executable names for each player
+        common_paths = self._get_common_player_paths()  # Get OS-specific installation paths
         
         if player_choice in players:
-            # Try PATH first
+            # Sub-priority 4a: Search system PATH first
+            # PATH search is fastest and most reliable for properly installed software
+            # Uses shutil.which() which respects OS-specific executable extensions
             result = self._check_player_in_path(player_choice, players[player_choice], debug)
             if result:
                 return result
             
-            # Try common paths
+            # Sub-priority 4b: Search common installation directories
+            # Fallback for players installed in standard locations but not in PATH
+            # Covers cases where installers don't modify PATH environment variable
             if player_choice in common_paths:
                 result = self._check_player_common_paths(player_choice, common_paths[player_choice], debug)
                 if result:
                     return result
         
-        # Priority 5: Fall back to environment variables (PowerShell integration)
+        # Priority 5: Check environment variables (PowerShell integration)
+        # Allows PowerShell scripts to override player detection by setting
+        # TWITCH_PLAYER_PATH and TWITCH_PLAYER_NAME environment variables
+        # This provides a bridge for advanced users and automation scripts
         result = self._check_environment_player(debug)
         if result:
             return result
         
-        # Final fallback: Let streamlink handle detection
+        # Final fallback: Delegate to streamlink's built-in detection
+        # When all our detection methods fail, let streamlink try its own algorithms
+        # Streamlink has its own player detection logic that may succeed where ours failed
         if debug:
             logger.debug(f"Could not find {player_choice}, using streamlink auto-detection")
         self.player_path = None
         return 'auto'
 
-    def _get_stream(self, channel_name):
+    def _get_stream(self, channel_name: str) -> str:
         """
-        Get the stream URL for a channel
+        Get the stream URL for a channel.
+        
         Args:
-            channel_name (str): Name of the channel
+            channel_name: Name of the channel
+            
         Returns:
-            str: Stream URL
+            str: Stream URL for the specified quality
+            
+        Raises:
+            TwitchStreamError: If no streams are available or streamlink fails
         """
         try:
             streams = self.session.streams(f"twitch.tv/{channel_name}")
@@ -223,11 +302,20 @@ class TwitchViewer:
         except streamlink.StreamlinkError as e:
             raise TwitchStreamError(f"Failed to get stream: {str(e)}")
 
-    def watch_stream(self, channel_name):
+    def watch_stream(self, channel_name: str) -> Optional[subprocess.Popen]:
         """
-        Watch a Twitch stream for the specified channel
+        Watch a Twitch stream for the specified channel.
+        
         Args:
-            channel_name (str): Name of the Twitch channel to watch
+            channel_name: Name of the Twitch channel to watch
+            
+        Returns:
+            Optional[subprocess.Popen]: The streamlink process if started successfully, None if error
+            
+        Raises:
+            ValidationError: If channel name is invalid
+            TwitchStreamError: If stream cannot be accessed
+            FileNotFoundError: If streamlink is not installed
         """
         logger.info(f"Starting stream for channel: {channel_name}")
         logger.debug(f"Configuration: player={self.config.get('player')}, quality={self.config.get('preferred_quality')}, debug={self.config.get('debug')}")
