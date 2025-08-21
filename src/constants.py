@@ -22,7 +22,9 @@ DEFAULT_SETTINGS = {
     # Stream status monitoring settings
     "enable_status_monitoring": True,
     "status_check_interval": 300,  # 5 minutes in seconds
-    "status_cache_duration": 60  # 1 minute in seconds
+    "status_cache_duration": 60,  # 1 minute in seconds
+    # GUI theme settings
+    "current_theme": "light"  # light or dark theme
 }
 
 # Stream quality options
