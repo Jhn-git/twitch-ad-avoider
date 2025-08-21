@@ -22,11 +22,6 @@ DEFAULT_SETTINGS = {
     # Stream status monitoring settings
     "enable_status_monitoring": True,
     "status_check_interval": 300,  # 5 minutes in seconds
-    "twitch_client_id": None,
-    "twitch_client_secret": None,
-    "show_viewer_count": True,
-    "show_stream_title": True,
-    "show_game_name": True,
     "status_cache_duration": 60  # 1 minute in seconds
 }
 

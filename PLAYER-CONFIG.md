@@ -1,17 +1,20 @@
 # Player Configuration Guide
 
-This document explains the enhanced player detection and configuration options available in TwitchAdAvoider.
+This document explains the simplified player detection and configuration options available in TwitchAdAvoider.
 
-## Automatic Player Detection
+## Player Selection Priority
 
-The application uses a multi-stage approach to find video players:
+The application uses a straightforward priority system for player selection:
 
-### Stage 1: Environment Variables (PowerShell Integration)
-- PowerShell script exports `TWITCH_PLAYER_NAME` and `TWITCH_PLAYER_PATH`
-- Python automatically uses the player found by PowerShell
-- Most reliable method for Windows
+### Priority 1: GUI Selection (Primary)
+- The player selected in the GUI dropdown is the primary choice
+- Available options: VLC, MPV, MPC-HC, Auto
+- This selection takes precedence over configuration files
 
-### Stage 2: Manual Configuration (settings.json)
+### Priority 2: Manual Player Path (Override)
+- If `player_path` is specified in settings.json, it will be used regardless of GUI selection
+- Useful for custom player installations or specific player versions
+
 ```json
 {
     "player_path": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
@@ -19,21 +22,21 @@ The application uses a multi-stage approach to find video players:
 }
 ```
 
-### Stage 3: PATH Detection
-- Uses `shutil.which()` to find players in system PATH
-- Checks for: vlc, mpv, mpc-hc, potplayer, wmplayer
+### Priority 3: Auto Detection
+- When "Auto" is selected in GUI, streamlink handles player detection
+- Streamlink will find the best available player automatically
 
-### Stage 4: Common Installation Paths
-Automatically checks these locations:
-- VLC: `C:\Program Files\VideoLAN\VLC\vlc.exe`
-- MPV: `C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe`
-- MPC-HC: `C:\Program Files\MPC-HC\mpc-hc64.exe`
-- PotPlayer: `C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe`
-- Windows Media Player: `C:\Program Files\Windows Media Player\wmplayer.exe`
+### Priority 4: Player Search
+- If the selected player isn't found in PATH, the app searches common installation paths
+- Searches both system PATH and standard installation directories
 
-### Stage 5: Streamlink Auto-Detection
-- Lets streamlink handle player detection
-- Falls back to streamlink's default behavior
+### Priority 5: Environment Variables (PowerShell Integration)
+- PowerShell script exports `TWITCH_PLAYER_NAME` and `TWITCH_PLAYER_PATH`
+- Fallback option when GUI selection can't be found
+- Maintains compatibility with PowerShell scripts
+
+### Final Fallback: Streamlink Auto-Detection
+- If all else fails, streamlink handles player detection automatically
 
 ## Configuration Options (settings.json)
 
@@ -73,43 +76,53 @@ Automatically checks these locations:
 }
 ```
 
+## How It Works
+
+### Simple Player Selection
+1. **Choose in GUI**: Select your preferred player from the dropdown (VLC, MPV, MPC-HC, or Auto)
+2. **Start Stream**: The selected player will be used directly
+3. **Fallback**: If the selected player isn't found, the app will try to locate it automatically
+
+### Manual Override
+If you have a custom installation, specify the exact path in settings.json:
+```json
+{
+    "player_path": "C:\\Custom\\Path\\To\\vlc.exe"
+}
+```
+
 ## Troubleshooting
 
 ### Debug Mode
-Set `"debug": true` in settings.json to see detailed player detection logs:
-```
-DEBUG: Starting player detection...
-DEBUG: Found exported player: VLC at C:\Program Files\VideoLAN\VLC\vlc.exe
-```
-
-### Diagnostic Script
-Run the comprehensive diagnostic script:
-```powershell
-.\diagnose-environment.ps1
+Enable debug mode to see which player is being used:
+```json
+{
+    "debug": true
+}
 ```
 
-This will show:
-- All available players
-- PATH configuration
-- Environment variables
-- Python vs PowerShell detection differences
+Debug output will show:
+```
+DEBUG: Starting simplified player detection...
+DEBUG: Player choice: vlc
+DEBUG: Found vlc in PATH: C:\Program Files\VideoLAN\VLC\vlc.exe
+```
+
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| Selected player not working | Check if player is installed and in PATH |
+| "Auto" not finding players | Install VLC or MPV from official sources |
+| Custom player path not working | Verify the path exists and is executable |
 
 ### Manual Player Specification
-If auto-detection fails, manually specify the player:
+For reliable operation, specify the exact player path:
 ```json
 {
     "player_path": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
     "player": "vlc"
 }
-```
-
-### PowerShell Script Options
-```powershell
-# Skip player detection entirely
-.\run.ps1 ChannelName -SkipPlayerCheck
-
-# Normal usage
-.\run.ps1 ChannelName
 ```
 
 ## Supported Players

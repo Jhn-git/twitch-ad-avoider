@@ -34,10 +34,52 @@ class TwitchViewer:
         """
         self.config = config_manager or ConfigManager()
         self.player_path: Optional[str] = None
+        self.selected_player: Optional[str] = None
         self.session = streamlink.Streamlink()
         
-        logger.info("TwitchViewer initialized")
+        # Check streamlink availability on startup
+        if not self._check_streamlink_availability():
+            logger.warning("Streamlink availability check failed")
         
+        logger.info("TwitchViewer initialized")
+    
+    def set_player_choice(self, player_name: str) -> None:
+        """
+        Set the player choice from GUI selection.
+        
+        Args:
+            player_name: Name of the player selected in GUI ('vlc', 'mpv', 'mpc-hc', 'auto')
+        """
+        self.selected_player = player_name
+        # Reset player path when player choice changes to force re-detection
+        self.player_path = None
+        logger.debug(f"Player choice set to: {player_name}")
+    
+    def _check_streamlink_availability(self) -> bool:
+        """
+        Check if streamlink is available and working
+        
+        Returns:
+            True if streamlink is functional, False otherwise
+        """
+        try:
+            # Try to create a session and check a non-existent stream
+            test_streams = self.session.streams("twitch.tv/nonexistentchannel123456")
+            # If we get here without exception, streamlink is working
+            logger.debug("Streamlink availability check passed")
+            return True
+        except Exception as e:
+            logger.error(f"Streamlink availability check failed: {e}")
+            return False
+    
+    def is_streamlink_available(self) -> bool:
+        """
+        Public method to check streamlink availability
+        
+        Returns:
+            True if streamlink is available, False otherwise
+        """
+        return self._check_streamlink_availability()
 
     def _validate_channel(self, channel_name: str) -> str:
         """
@@ -110,56 +152,57 @@ class TwitchViewer:
         return None
 
     def _detect_player(self):
-        """Detect available video player on the system"""
+        """Detect available video player based on GUI selection and configuration"""
         debug = self.config.get('debug', False)
         
         if debug:
-            logger.debug("Starting player detection...")
+            logger.debug("Starting simplified player detection...")
         
-        # Stage 1: Check environment variables (PowerShell integration)
+        # Priority 1: Use GUI selection if available
+        player_choice = self.selected_player or self.config.get('player', 'vlc')
+        
+        if debug:
+            logger.debug(f"Player choice: {player_choice}")
+        
+        # Priority 2: Check for manual player path in settings
+        manual_player_path = self.config.get('player_path')
+        if manual_player_path and os.path.exists(manual_player_path):
+            if debug:
+                logger.debug(f"Using manual player path: {manual_player_path}")
+            self.player_path = manual_player_path
+            return player_choice
+        
+        # Priority 3: Handle 'auto' choice - let streamlink decide
+        if player_choice == 'auto':
+            if debug:
+                logger.debug("Using streamlink auto-detection")
+            self.player_path = None
+            return 'auto'
+        
+        # Priority 4: Try to find the selected player
+        players = self._get_supported_players()
+        common_paths = self._get_common_player_paths()
+        
+        if player_choice in players:
+            # Try PATH first
+            result = self._check_player_in_path(player_choice, players[player_choice], debug)
+            if result:
+                return result
+            
+            # Try common paths
+            if player_choice in common_paths:
+                result = self._check_player_common_paths(player_choice, common_paths[player_choice], debug)
+                if result:
+                    return result
+        
+        # Priority 5: Fall back to environment variables (PowerShell integration)
         result = self._check_environment_player(debug)
         if result:
             return result
         
-        # Stage 2: Check manual configuration
-        result = self._check_manual_player(debug)
-        if result:
-            return result
-        
-        # Stage 3: Check PATH and common installations
-        players = self._get_supported_players()
-        common_paths = self._get_common_player_paths()
-        
-        # Check preferred player first
-        preferred_player = self.config.get('player', 'vlc')
-        if preferred_player in players:
-            # Try PATH first
-            result = self._check_player_in_path(preferred_player, players[preferred_player], debug)
-            if result:
-                return result
-            
-            # Try common paths for preferred player
-            if preferred_player in common_paths:
-                result = self._check_player_common_paths(preferred_player, common_paths[preferred_player], debug)
-                if result:
-                    return result
-        
-        # Fall back to any available player (in priority order)
-        for player_name in ['vlc', 'mpv', 'mpc-hc']:
-            # Check PATH
-            result = self._check_player_in_path(player_name, players[player_name], debug)
-            if result:
-                return result
-            
-            # Check common paths
-            if player_name in common_paths:
-                result = self._check_player_common_paths(player_name, common_paths[player_name], debug)
-                if result:
-                    return result
-        
         # Final fallback: Let streamlink handle detection
         if debug:
-            logger.debug("No players found, using streamlink auto-detection")
+            logger.debug(f"Could not find {player_choice}, using streamlink auto-detection")
         self.player_path = None
         return 'auto'
 
@@ -233,11 +276,9 @@ class TwitchViewer:
             print(f"Quality: {quality}")
             print(f"Command: {' '.join(cmd)}")
             
-            # Start streamlink process
-            process = subprocess.run(cmd, capture_output=False)
-            
-            if process.returncode != 0:
-                raise TwitchStreamError(f"Streamlink failed with return code {process.returncode}")
+            # Start streamlink process (non-blocking)
+            process = subprocess.Popen(cmd)
+            return process
                 
         except ValueError as e:
             print(f"Error: {str(e)}")

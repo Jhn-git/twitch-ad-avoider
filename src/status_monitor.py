@@ -1,14 +1,14 @@
 """
 Background status monitoring system for favorite channels
-Polls Twitch API periodically to update stream status
+Uses streamlink to check stream status periodically
 """
 import time
 import threading
 from typing import Dict, List, Callable, Optional
 from datetime import datetime, timezone
 
-from .twitch_api import TwitchAPIClient, StreamInfo
-from .exceptions import TwitchAPIError
+from .streamlink_status import StreamlinkStatusChecker
+from .exceptions import StreamlinkError
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 class StatusMonitor:
     """Background monitor for checking stream status of favorite channels"""
     
-    def __init__(self, api_client: TwitchAPIClient, 
+    def __init__(self, status_checker: StreamlinkStatusChecker, 
                  favorites_manager, 
                  config_manager,
                  status_callback: Optional[Callable] = None):
@@ -25,12 +25,12 @@ class StatusMonitor:
         Initialize status monitor
         
         Args:
-            api_client: Twitch API client instance
+            status_checker: StreamlinkStatusChecker instance
             favorites_manager: FavoritesManager instance
             config_manager: ConfigManager instance  
             status_callback: Optional callback function called when status updates
         """
-        self.api_client = api_client
+        self.status_checker = status_checker
         self.favorites_manager = favorites_manager
         self.config = config_manager
         self.status_callback = status_callback
@@ -41,7 +41,7 @@ class StatusMonitor:
         self._is_running = False
         
         # Status cache to avoid unnecessary updates
-        self._status_cache: Dict[str, StreamInfo] = {}
+        self._status_cache: Dict[str, bool] = {}
         self._cache_timestamp: Optional[datetime] = None
     
     def start_monitoring(self) -> None:
@@ -54,8 +54,8 @@ class StatusMonitor:
             logger.info("Status monitoring is disabled in configuration")
             return
         
-        if not self.api_client.is_configured():
-            logger.warning("Twitch API client is not configured, status monitoring disabled")
+        if not self.status_checker.is_available():
+            logger.warning("Streamlink is not available, status monitoring disabled")
             return
         
         logger.info("Starting stream status monitoring")
@@ -83,8 +83,8 @@ class StatusMonitor:
     
     def force_refresh(self) -> None:
         """Force an immediate status refresh"""
-        if not self.api_client.is_configured():
-            logger.warning("API client not configured, cannot refresh status")
+        if not self.status_checker.is_available():
+            logger.warning("Streamlink not available, cannot refresh status")
             return
         
         logger.info("Forcing immediate status refresh")
@@ -129,35 +129,28 @@ class StatusMonitor:
         logger.debug(f"Checking status for {len(favorites)} favorite channels")
         
         try:
-            # Get status for all channels in batch
-            status_results = self.api_client.get_multiple_stream_info(favorites)
+            # Get status for all channels using streamlink
+            status_results = self.status_checker.check_multiple_streams(favorites)
             
             # Update status for each channel
             updated_channels = []
-            for channel_name, stream_info in status_results.items():
+            for channel_name, is_live in status_results.items():
                 # Check if status actually changed before updating
-                cached_info = self._status_cache.get(channel_name.lower())
+                cached_status = self._status_cache.get(channel_name.lower())
                 
-                if (cached_info is None or 
-                    cached_info.is_live != stream_info.is_live or
-                    cached_info.viewer_count != stream_info.viewer_count or
-                    cached_info.title != stream_info.title):
-                    
-                    # Update favorites manager with new status
+                if cached_status is None or cached_status != is_live:
+                    # Update favorites manager with new status (simplified)
                     self.favorites_manager.update_channel_status(
                         channel_name=channel_name,
-                        is_live=stream_info.is_live,
-                        title=stream_info.title,
-                        game_name=stream_info.game_name,
-                        viewer_count=stream_info.viewer_count
+                        is_live=is_live
                     )
                     
                     # Update cache
-                    self._status_cache[channel_name.lower()] = stream_info
+                    self._status_cache[channel_name.lower()] = is_live
                     updated_channels.append(channel_name)
                     
                     logger.debug(f"Status updated for {channel_name}: "
-                               f"{'LIVE' if stream_info.is_live else 'OFFLINE'}")
+                               f"{'LIVE' if is_live else 'OFFLINE'}")
             
             # Update cache timestamp
             self._cache_timestamp = datetime.now(timezone.utc)
@@ -171,21 +164,21 @@ class StatusMonitor:
             
             logger.debug(f"Status check completed, {len(updated_channels)} channels updated")
             
-        except TwitchAPIError as e:
-            logger.error(f"API error during status check: {e}")
+        except StreamlinkError as e:
+            logger.error(f"Streamlink error during status check: {e}")
         except Exception as e:
             logger.error(f"Unexpected error during status check: {e}")
     
-    def get_cached_status(self, channel_name: str) -> Optional[StreamInfo]:
+    def get_cached_status(self, channel_name: str) -> Optional[bool]:
         """Get cached status for a channel"""
-        cached_info = self._status_cache.get(channel_name.lower())
+        cached_status = self._status_cache.get(channel_name.lower())
         
         # Check if cache is still valid
         cache_duration = self.config.get('status_cache_duration', 60)  # 1 minute default
         
-        if (cached_info and self._cache_timestamp and 
+        if (cached_status is not None and self._cache_timestamp and 
             (datetime.now(timezone.utc) - self._cache_timestamp).total_seconds() < cache_duration):
-            return cached_info
+            return cached_status
         
         return None
     
@@ -206,19 +199,16 @@ class StatusMonitor:
         
         # Get immediate status for the new channel
         try:
-            stream_info = self.api_client.get_stream_info(channel_name)
+            is_live = self.status_checker.check_stream_status(channel_name)
             
-            # Update favorites manager
+            # Update favorites manager (simplified)
             self.favorites_manager.update_channel_status(
                 channel_name=channel_name,
-                is_live=stream_info.is_live,
-                title=stream_info.title,
-                game_name=stream_info.game_name,
-                viewer_count=stream_info.viewer_count
+                is_live=is_live
             )
             
             # Update cache
-            self._status_cache[channel_name.lower()] = stream_info
+            self._status_cache[channel_name.lower()] = is_live
             
             # Notify callback
             if self.status_callback:
@@ -228,9 +218,9 @@ class StatusMonitor:
                     logger.error(f"Error in status callback: {e}")
             
             logger.debug(f"Status fetched for new channel {channel_name}: "
-                       f"{'LIVE' if stream_info.is_live else 'OFFLINE'}")
+                       f"{'LIVE' if is_live else 'OFFLINE'}")
                        
-        except TwitchAPIError as e:
+        except StreamlinkError as e:
             logger.error(f"Failed to get status for new channel {channel_name}: {e}")
     
     def remove_channel_from_monitoring(self, channel_name: str) -> None:

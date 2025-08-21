@@ -13,9 +13,6 @@ class FavoriteChannelInfo(NamedTuple):
     """Information about a favorite channel including status"""
     channel_name: str
     is_live: bool = False
-    title: Optional[str] = None
-    game_name: Optional[str] = None
-    viewer_count: Optional[int] = None
     last_checked: Optional[datetime] = None
     last_seen_live: Optional[datetime] = None
 
@@ -40,9 +37,6 @@ class FavoritesManager:
                             favorites_dict[channel.lower()] = {
                                 'channel_name': channel,
                                 'is_live': False,
-                                'title': None,
-                                'game_name': None,
-                                'viewer_count': None,
                                 'last_checked': None,
                                 'last_seen_live': None
                             }
@@ -85,9 +79,6 @@ class FavoritesManager:
             self.favorites_data[channel_name] = {
                 'channel_name': channel_name,
                 'is_live': False,
-                'title': None,
-                'game_name': None,
-                'viewer_count': None,
                 'last_checked': None,
                 'last_seen_live': None
             }
@@ -130,19 +121,13 @@ class FavoritesManager:
             favorites.append(FavoriteChannelInfo(
                 channel_name=channel_data['channel_name'],
                 is_live=channel_data.get('is_live', False),
-                title=channel_data.get('title'),
-                game_name=channel_data.get('game_name'),
-                viewer_count=channel_data.get('viewer_count'),
                 last_checked=last_checked,
                 last_seen_live=last_seen_live
             ))
         
         return sorted(favorites, key=lambda x: x.channel_name)
     
-    def update_channel_status(self, channel_name: str, is_live: bool, 
-                            title: Optional[str] = None, 
-                            game_name: Optional[str] = None,
-                            viewer_count: Optional[int] = None) -> None:
+    def update_channel_status(self, channel_name: str, is_live: bool) -> None:
         """Update status information for a favorite channel"""
         channel_name = channel_name.lower().strip()
         if channel_name in self.favorites_data:
@@ -150,9 +135,6 @@ class FavoritesManager:
             
             self.favorites_data[channel_name].update({
                 'is_live': is_live,
-                'title': title,
-                'game_name': game_name,
-                'viewer_count': viewer_count,
                 'last_checked': now
             })
             
@@ -190,9 +172,6 @@ class FavoritesManager:
             return FavoriteChannelInfo(
                 channel_name=channel_data['channel_name'],
                 is_live=channel_data.get('is_live', False),
-                title=channel_data.get('title'),
-                game_name=channel_data.get('game_name'),
-                viewer_count=channel_data.get('viewer_count'),
                 last_checked=last_checked,
                 last_seen_live=last_seen_live
             )
