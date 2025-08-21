@@ -9,6 +9,7 @@ import subprocess
 import sys
 import os
 from pathlib import Path
+from typing import Optional
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
