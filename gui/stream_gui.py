@@ -3,16 +3,20 @@ Simple GUI for TwitchAdAvoider Stream Manager
 Uses tkinter for a lightweight interface
 """
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, font
 import threading
 import subprocess
 import sys
 import os
+import platform
 from pathlib import Path
 from typing import Optional
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import status manager
+from .status_manager import StatusManager, StatusLevel, StatusCategory
 
 from src.twitch_viewer import TwitchViewer
 from src.exceptions import TwitchStreamError, ValidationError
@@ -25,6 +29,57 @@ from src.constants import GUI_GEOMETRY, GUI_MIN_SIZE
 from gui.favorites_manager import FavoritesManager, FavoriteChannelInfo
 
 logger = get_logger(__name__)
+
+
+def get_emoji_font():
+    """
+    Get an appropriate font for emoji display based on the operating system.
+    
+    Returns:
+        tuple: (font_family, font_size) for emoji support, or None if no suitable font found
+    """
+    system = platform.system().lower()
+    
+    # Try to create test font objects to see what's available
+    try:
+        if system == "windows":
+            # Windows emoji fonts in order of preference
+            font_options = [
+                ("Segoe UI Emoji", 10),
+                ("Segoe UI Symbol", 10),
+                ("Segoe UI", 10),
+                ("Arial Unicode MS", 10)
+            ]
+        elif system == "darwin":  # macOS
+            font_options = [
+                ("Apple Color Emoji", 10),
+                ("Helvetica", 10)
+            ]
+        else:  # Linux and other Unix-like systems
+            font_options = [
+                ("Noto Color Emoji", 10),
+                ("DejaVu Sans", 10),
+                ("Liberation Sans", 10),
+                ("Arial", 10)
+            ]
+        
+        # Test each font option to see if it's available
+        for family, size in font_options:
+            try:
+                test_font = font.Font(family=family, size=size)
+                # If we get here without exception, the font is available
+                logger.debug(f"Using emoji font: {family} size {size}")
+                return (family, size)
+            except tk.TclError:
+                continue
+                
+    except Exception as e:
+        logger.debug(f"Error detecting emoji fonts: {e}")
+    
+    # Fallback to default font
+    logger.debug("No specific emoji font found, using system default")
+    return None
+
 
 class StreamGUI:
     """
@@ -138,15 +193,39 @@ class StreamGUI:
         list_frame = ttk.Frame(fav_frame)
         list_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        self.favorites_listbox = tk.Listbox(list_frame, height=8)
+        # Configure favorites text widget with emoji-supporting font (replacing listbox)
+        emoji_font_config = get_emoji_font()
+        if emoji_font_config:
+            family, size = emoji_font_config
+            favorites_font = font.Font(family=family, size=size)
+            self.favorites_listbox = tk.Text(list_frame, height=8, font=favorites_font, 
+                                           state=tk.DISABLED, cursor="arrow", wrap=tk.NONE)
+        else:
+            self.favorites_listbox = tk.Text(list_frame, height=8, state=tk.DISABLED, 
+                                           cursor="arrow", wrap=tk.NONE)
+        
         scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.favorites_listbox.yview)
         self.favorites_listbox.configure(yscrollcommand=scrollbar.set)
+        
+        # Configure text widget appearance to look like a listbox
+        self.favorites_listbox.configure(
+            bg="white",
+            relief=tk.SUNKEN,
+            borderwidth=1,
+            selectbackground="#0078d4",  # Windows-style selection color
+            selectforeground="white"
+        )
         
         self.favorites_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
-        # Bind double-click to watch
-        self.favorites_listbox.bind('<Double-1>', lambda e: self.watch_favorite())
+        # Add selection tracking variables
+        self.selected_favorite_line = None
+        self.canvas_widgets = []  # Track Canvas widgets for dynamic background updates
+        
+        # Bind events for list-like behavior
+        self.favorites_listbox.bind('<Button-1>', self._on_favorite_click)
+        self.favorites_listbox.bind('<Double-Button-1>', lambda e: self.watch_favorite())
         
         # Favorites buttons
         fav_btn_frame = ttk.Frame(fav_frame)
@@ -176,10 +255,10 @@ class StreamGUI:
                                     command=self._on_debug_toggle)
         debug_check.grid(row=0, column=2, pady=5, sticky=tk.W)
         
-        # Status bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_label = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_label.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
+        # Status bar with enhanced message history
+        self.status_text = tk.Text(main_frame)
+        self.status_manager = StatusManager(self.status_text, max_history=100)
+        self.status_text.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
         
         # Configure grid weights for responsive layout
         # Root window
@@ -224,7 +303,7 @@ class StreamGUI:
                 "The application may not function correctly without streamlink."
             )
             messagebox.showerror("Streamlink Not Available", error_msg)
-            self.status_var.set("ERROR: Streamlink not available - install with 'pip install streamlink'")
+            self.status_manager.add_error("Streamlink not available - install with 'pip install streamlink'", StatusCategory.SYSTEM)
             # Disable watch functionality
             self.watch_btn.config(state='disabled', text="Streamlink Required")
     
@@ -244,23 +323,94 @@ class StreamGUI:
         """
         self.watch_btn.config(state='normal', text="Watch Stream")
     
+    def _create_status_circle(self, parent, is_live: bool, size: int = 12) -> tk.Canvas:
+        """
+        Create a small Canvas with a colored circle for status indication.
+        
+        Args:
+            parent: Parent widget for the Canvas
+            is_live: True for live (red circle), False for offline (gray circle)  
+            size: Size of the Canvas and circle in pixels
+            
+        Returns:
+            tk.Canvas: Canvas widget with drawn circle
+        """
+        # Configure Canvas with default background (will be updated dynamically)
+        canvas = tk.Canvas(parent, width=size, height=size, 
+                          highlightthickness=0,  # Remove focus highlight ring
+                          bd=0,                   # Remove border
+                          bg="white",            # Default background (will change dynamically)
+                          relief=tk.FLAT)        # Ensure no border effects
+        
+        # Define colors
+        if is_live:
+            fill_color = "#e74c3c"  # Bright red for live channels
+            outline_color = "#c0392b"  # Darker red border
+        else:
+            fill_color = "#95a5a6"  # Gray for offline channels  
+            outline_color = "#7f8c8d"  # Darker gray border
+        
+        # Draw circle (with small margin)
+        margin = 1
+        canvas.create_oval(margin, margin, size-margin, size-margin, 
+                          fill=fill_color, outline=outline_color, width=1)
+        
+        return canvas
+    
+    def _update_canvas_backgrounds(self) -> None:
+        """
+        Update Canvas widget backgrounds to match their row selection state.
+        
+        This ensures Canvas widgets blend seamlessly with selected/unselected rows.
+        """
+        # Reset all Canvas widgets to default background
+        for canvas in self.canvas_widgets:
+            canvas.config(bg="white")
+        
+        # Set selected row Canvas to selection background color
+        if self.selected_favorite_line and self.selected_favorite_line <= len(self.canvas_widgets):
+            # Canvas widgets are 0-indexed, but line numbers are 1-indexed
+            canvas_index = self.selected_favorite_line - 1
+            if 0 <= canvas_index < len(self.canvas_widgets):
+                selected_canvas = self.canvas_widgets[canvas_index]
+                selected_canvas.config(bg="#0078d4")  # Match Text widget selection color
+    
     def refresh_favorites_list(self) -> None:
         """
-        Refresh the favorites listbox with status information.
+        Refresh the favorites text widget with status information.
         
         Updates the display to show current live status for each favorite channel.
-        Uses status icons: 🔴 for live channels, ⚫ for offline channels.
+        Uses Canvas-drawn circles: red for live channels, gray for offline channels.
         """
-        self.favorites_listbox.delete(0, tk.END)
+        # Clear current content and Canvas tracking
+        self.favorites_listbox.configure(state=tk.NORMAL)
+        self.favorites_listbox.delete(1.0, tk.END)
+        self.selected_favorite_line = None
+        self.canvas_widgets.clear()  # Clear Canvas widget tracking
         
         # Get favorites with status info
         favorites = self.favorites_manager.get_favorites_with_status()
         
-        for fav in favorites:
-            # Create simple display text with status indicator
-            status_icon = "🔴" if fav.is_live else "⚫"
-            display_text = f"{status_icon} {fav.channel_name}"
-            self.favorites_listbox.insert(tk.END, display_text)
+        for i, fav in enumerate(favorites):
+            if i > 0:
+                self.favorites_listbox.insert(tk.END, "\n")
+            
+            # Create Canvas circle for status indication
+            status_circle = self._create_status_circle(self.favorites_listbox, fav.is_live, size=14)
+            
+            # Store Canvas widget for dynamic background updates
+            self.canvas_widgets.append(status_circle)
+            
+            # Insert the Canvas circle at the beginning of the line
+            self.favorites_listbox.window_create(tk.END, window=status_circle)
+            
+            # Add channel name with a space after the circle
+            self.favorites_listbox.insert(tk.END, f" {fav.channel_name}")
+        
+        # Update Canvas backgrounds to match current selection state
+        self._update_canvas_backgrounds()
+        
+        self.favorites_listbox.configure(state=tk.DISABLED)
     
     def _validate_channel_input(self, *args) -> None:
         """
@@ -341,7 +491,7 @@ class StreamGUI:
         # Start stream in separate thread - disable all watch buttons
         self._disable_watch_buttons()
         self.watch_btn.config(text="Starting...")
-        self.status_var.set(f"Starting stream for {channel}...")
+        self.status_manager.add_stream_message(f"Starting stream for {channel}...")
         
         def stream_worker():
             try:
@@ -367,27 +517,55 @@ class StreamGUI:
         self.current_stream_thread = threading.Thread(target=stream_worker, daemon=True)
         self.current_stream_thread.start()
     
+    def _on_favorite_click(self, event):
+        """Handle click events in the favorites text widget for selection"""
+        # Get the line that was clicked
+        click_index = self.favorites_listbox.index(f"@{event.x},{event.y}")
+        line_start = click_index.split('.')[0] + '.0'
+        line_end = click_index.split('.')[0] + '.end'
+        
+        # Clear previous selection
+        self.favorites_listbox.configure(state=tk.NORMAL)
+        if self.selected_favorite_line:
+            old_start = f"{self.selected_favorite_line}.0"
+            old_end = f"{self.selected_favorite_line}.end"
+            self.favorites_listbox.tag_remove('selected', old_start, old_end)
+        
+        # Add selection to clicked line
+        line_num = int(click_index.split('.')[0])
+        self.selected_favorite_line = line_num
+        self.favorites_listbox.tag_add('selected', line_start, line_end)
+        self.favorites_listbox.tag_configure('selected', background='#0078d4', foreground='white')
+        
+        # Update Canvas backgrounds to match selection state
+        self._update_canvas_backgrounds()
+        
+        self.favorites_listbox.configure(state=tk.DISABLED)
+    
     def watch_favorite(self):
         """Watch selected favorite channel"""
-        selection = self.favorites_listbox.curselection()
-        if not selection:
+        if not self.selected_favorite_line:
             messagebox.showwarning("Warning", "Please select a favorite channel")
             return
         
-        # Extract channel name from formatted display text
-        display_text = self.favorites_listbox.get(selection[0])
+        # Extract channel name from formatted display text in the selected line
+        line_start = f"{self.selected_favorite_line}.0"
+        line_end = f"{self.selected_favorite_line}.end"
+        display_text = self.favorites_listbox.get(line_start, line_end).strip()
+        
+        if not display_text:
+            messagebox.showwarning("Warning", "No channel selected")
+            return
+            
         channel = self._extract_channel_name(display_text)
         self.channel_var.set(channel)
         self.watch_stream()
     
     def _extract_channel_name(self, display_text: str) -> str:
         """Extract channel name from formatted display text"""
-        # Format is: "🔴 channel_name" or "⚫ channel_name"
-        # Remove status icon and extract channel name
-        parts = display_text.split(' ', 1)
-        if len(parts) > 1:
-            return parts[1].strip()
-        return display_text
+        # Format is now: " channel_name" (Canvas circle + space + channel name)
+        # The Canvas circle is embedded as a widget, so text starts with space
+        return display_text.strip()
     
     def _add_channel_to_favorites(self, channel_name: str) -> None:
         """
@@ -414,7 +592,7 @@ class StreamGUI:
             # Add to status monitoring
             self.status_monitor.add_channel_to_monitoring(channel_name)
             self.refresh_favorites_list()
-            self.status_var.set(f"Added {channel_name} to favorites")
+            self.status_manager.add_favorites_message(f"Added {channel_name} to favorites")
             messagebox.showinfo("Success", f"Added {channel_name} to favorites")
         else:
             messagebox.showwarning("Warning", f"{channel_name} is already in favorites")
@@ -432,13 +610,19 @@ class StreamGUI:
     
     def remove_favorite(self):
         """Remove selected favorite"""
-        selection = self.favorites_listbox.curselection()
-        if not selection:
+        if not self.selected_favorite_line:
             messagebox.showwarning("Warning", "Please select a favorite to remove")
             return
         
-        # Extract channel name from formatted display text
-        display_text = self.favorites_listbox.get(selection[0])
+        # Extract channel name from formatted display text in the selected line
+        line_start = f"{self.selected_favorite_line}.0"
+        line_end = f"{self.selected_favorite_line}.end"
+        display_text = self.favorites_listbox.get(line_start, line_end).strip()
+        
+        if not display_text:
+            messagebox.showwarning("Warning", "No channel selected")
+            return
+            
         channel = self._extract_channel_name(display_text)
         
         if messagebox.askyesno("Confirm", f"Remove {channel} from favorites?"):
@@ -446,22 +630,22 @@ class StreamGUI:
             # Remove from status monitoring
             self.status_monitor.remove_channel_from_monitoring(channel)
             self.refresh_favorites_list()
-            self.status_var.set(f"Removed {channel} from favorites")
+            self.status_manager.add_favorites_message(f"Removed {channel} from favorites")
     
     def stream_finished(self, message):
         """Handle stream finishing"""
         self._enable_watch_buttons()
-        self.status_var.set(message)
+        self.status_manager.add_stream_message(message, StatusLevel.INFO)
     
     def stream_error(self, message):
         """Handle stream error"""
         self._enable_watch_buttons()
-        self.status_var.set(message)
+        self.status_manager.add_stream_message(message, StatusLevel.ERROR)
         messagebox.showerror("Stream Error", message)
     
     def refresh_status(self):
         """Manually refresh stream status"""
-        self.status_var.set("Refreshing stream status...")
+        self.status_manager.add_status_message("Refreshing stream status...")
         self.status_monitor.force_refresh()
     
     def _on_status_updated(self, updated_channels):
@@ -471,9 +655,9 @@ class StreamGUI:
         
         # Update status message
         if len(updated_channels) == 1:
-            self.root.after(0, lambda: self.status_var.set(f"Status updated for {updated_channels[0]}"))
+            self.root.after(0, lambda: self.status_manager.add_status_message(f"Status updated for {updated_channels[0]}"))
         else:
-            self.root.after(0, lambda: self.status_var.set(f"Status updated for {len(updated_channels)} channels"))
+            self.root.after(0, lambda: self.status_manager.add_status_message(f"Status updated for {len(updated_channels)} channels"))
     
     def _on_debug_toggle(self):
         """Handle debug mode checkbox toggle"""
@@ -485,10 +669,10 @@ class StreamGUI:
             self._reconfigure_logging()
             
             if new_debug:
-                self.status_var.set("Debug mode enabled - verbose logging active")
+                self.status_manager.add_system_message("Debug mode enabled - verbose logging active")
                 logger.debug("Debug mode enabled via GUI checkbox")
             else:
-                self.status_var.set("Debug mode disabled")
+                self.status_manager.add_system_message("Debug mode disabled")
                 logger.info("Debug mode disabled via GUI checkbox")
     
     def _reconfigure_logging(self):
