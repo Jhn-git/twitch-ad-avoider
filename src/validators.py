@@ -1,0 +1,348 @@
+"""
+Input validation and sanitization functions for TwitchAdAvoider
+Provides security-focused validation to prevent injection attacks and ensure data integrity.
+"""
+import os
+import re
+import shlex
+from pathlib import Path
+from typing import Optional, Union, List, Any
+from .exceptions import ValidationError
+from .constants import TWITCH_USERNAME_PATTERN, QUALITY_OPTIONS, SUPPORTED_PLAYERS
+
+
+def validate_channel_name(channel_name: str) -> str:
+    """
+    Validate and sanitize Twitch channel name with enhanced security controls.
+    
+    Args:
+        channel_name: Raw channel name input
+        
+    Returns:
+        Validated and normalized channel name
+        
+    Raises:
+        ValidationError: If channel name is invalid or potentially malicious
+    """
+    if not channel_name:
+        raise ValidationError("Channel name cannot be empty")
+    
+    # Remove whitespace and convert to lowercase
+    channel_name = channel_name.strip().lower()
+    
+    # Check length constraints (Twitch allows 4-25 characters)
+    if len(channel_name) < 4:
+        raise ValidationError("Channel name must be at least 4 characters long")
+    if len(channel_name) > 25:
+        raise ValidationError("Channel name cannot exceed 25 characters")
+    
+    # Validate against Twitch username pattern
+    if not re.match(TWITCH_USERNAME_PATTERN, channel_name):
+        raise ValidationError(
+            "Invalid channel name. Must contain only letters, numbers, and underscores"
+        )
+    
+    # Additional security checks
+    # Block suspicious patterns that could be used for attacks
+    suspicious_patterns = [
+        r'\.\./',  # Path traversal
+        r'[<>"|*?]',  # Shell metacharacters
+        r'[\x00-\x1f\x7f-\x9f]',  # Control characters
+        r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',  # Windows reserved names
+    ]
+    
+    for pattern in suspicious_patterns:
+        if re.search(pattern, channel_name, re.IGNORECASE):
+            raise ValidationError("Channel name contains forbidden characters or patterns")
+    
+    return channel_name
+
+
+def sanitize_player_args(player_args: Optional[str]) -> Optional[str]:
+    """
+    Sanitize player arguments to prevent command injection attacks.
+    
+    Args:
+        player_args: Raw player arguments string
+        
+    Returns:
+        Sanitized player arguments or None if invalid
+        
+    Raises:
+        ValidationError: If arguments contain potentially dangerous content
+    """
+    if not player_args:
+        return None
+    
+    player_args = player_args.strip()
+    if not player_args:
+        return None
+    
+    # Check for dangerous shell metacharacters and patterns
+    dangerous_patterns = [
+        r'[;&|`$]',  # Command separators and substitution
+        r'[<>]',     # Redirection operators
+        r'\$\(',     # Command substitution
+        r'`',        # Backtick command substitution
+        r'\\x[0-9a-fA-F]{2}',  # Hex escape sequences
+        r'[\x00-\x1f\x7f-\x9f]',  # Control characters
+    ]
+    
+    for pattern in dangerous_patterns:
+        if re.search(pattern, player_args):
+            raise ValidationError(
+                "Player arguments contain forbidden characters. "
+                "Only basic flags and values are allowed."
+            )
+    
+    # Validate using shell parsing to catch injection attempts
+    try:
+        # This will raise an exception if the string contains unbalanced quotes
+        # or other shell parsing errors that could indicate injection attempts
+        shlex.split(player_args)
+    except ValueError as e:
+        raise ValidationError(f"Invalid player arguments format: {e}")
+    
+    # Additional length check to prevent excessively long arguments
+    if len(player_args) > 500:
+        raise ValidationError("Player arguments are too long (max 500 characters)")
+    
+    return player_args
+
+
+def validate_file_path(file_path: Optional[str], must_exist: bool = False) -> Optional[str]:
+    """
+    Validate file path to prevent path traversal attacks and ensure security.
+    
+    Args:
+        file_path: Raw file path input
+        must_exist: Whether the file must exist on the filesystem
+        
+    Returns:
+        Validated absolute path or None if input is None
+        
+    Raises:
+        ValidationError: If path is invalid or potentially malicious
+    """
+    if not file_path:
+        return None
+    
+    file_path = file_path.strip()
+    if not file_path:
+        return None
+    
+    try:
+        # Convert to Path object for validation
+        path = Path(file_path)
+        
+        # Check for path traversal attempts
+        path_str = str(path)
+        if '..' in path.parts:
+            raise ValidationError("Path traversal sequences (..) are not allowed")
+        
+        # Also check for relative path patterns in string form
+        if '../' in file_path or '..\\'  in file_path:
+            raise ValidationError("Path traversal sequences (..) are not allowed")
+        
+        # Block suspicious path patterns
+        dangerous_patterns = [
+            r'[\x00-\x1f\x7f-\x9f]',  # Control characters
+            r'[<>"|*?]',  # Windows forbidden characters (except : for drive letters)
+            r'^\s*$',     # Empty or whitespace-only paths
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, path_str):
+                raise ValidationError("File path contains forbidden characters")
+        
+        # Convert to absolute path to prevent confusion
+        abs_path = path.resolve()
+        
+        # Additional security: ensure path is within reasonable bounds
+        # (prevent extremely long paths that could cause issues)
+        if len(str(abs_path)) > 1000:
+            raise ValidationError("File path is too long (max 1000 characters)")
+        
+        # Check existence if required
+        if must_exist and not abs_path.exists():
+            raise ValidationError(f"File does not exist: {abs_path}")
+        
+        # For executable paths, do additional validation
+        if abs_path.suffix.lower() in {'.exe', '.com', '.bat', '.cmd', '.scr'}:
+            # For Windows executables, check they're in reasonable locations
+            if os.name == 'nt':
+                allowed_prefixes = [
+                    'C:\\Program Files',
+                    'C:\\Program Files (x86)',
+                    'C:\\Windows\\System32',
+                    'C:\\ProgramData\\chocolatey',
+                ]
+                path_str_upper = str(abs_path).upper()
+                if not any(path_str_upper.startswith(prefix.upper()) for prefix in allowed_prefixes):
+                    # Allow if it's in PATH or user explicitly set it
+                    pass  # We'll allow it but log a warning
+        
+        return str(abs_path)
+        
+    except (OSError, ValueError) as e:
+        raise ValidationError(f"Invalid file path: {e}")
+
+
+def validate_numeric_range(value: Any, min_val: Optional[float] = None, 
+                          max_val: Optional[float] = None, 
+                          data_type: type = int) -> Union[int, float]:
+    """
+    Validate numeric values are within acceptable ranges.
+    
+    Args:
+        value: Value to validate
+        min_val: Minimum allowed value (inclusive)
+        max_val: Maximum allowed value (inclusive)
+        data_type: Expected numeric type (int or float)
+        
+    Returns:
+        Validated numeric value
+        
+    Raises:
+        ValidationError: If value is invalid or out of range
+    """
+    # Type conversion and validation
+    try:
+        if data_type == int:
+            numeric_value = int(value)
+        elif data_type == float:
+            numeric_value = float(value)
+        else:
+            raise ValidationError(f"Unsupported numeric type: {data_type}")
+    except (ValueError, TypeError):
+        raise ValidationError(f"Invalid {data_type.__name__} value: {value}")
+    
+    # Range validation
+    if min_val is not None and numeric_value < min_val:
+        raise ValidationError(f"Value {numeric_value} is below minimum {min_val}")
+    
+    if max_val is not None and numeric_value > max_val:
+        raise ValidationError(f"Value {numeric_value} is above maximum {max_val}")
+    
+    return numeric_value
+
+
+def validate_quality_option(quality: str) -> str:
+    """
+    Validate stream quality option.
+    
+    Args:
+        quality: Quality setting to validate
+        
+    Returns:
+        Validated quality option
+        
+    Raises:
+        ValidationError: If quality is not supported
+    """
+    if not quality or not isinstance(quality, str):
+        raise ValidationError("Quality option cannot be empty")
+    
+    quality = quality.strip().lower()
+    
+    if quality not in QUALITY_OPTIONS:
+        raise ValidationError(
+            f"Invalid quality option: {quality}. "
+            f"Supported options: {', '.join(QUALITY_OPTIONS)}"
+        )
+    
+    return quality
+
+
+def validate_player_choice(player: str) -> str:
+    """
+    Validate player choice.
+    
+    Args:
+        player: Player name to validate
+        
+    Returns:
+        Validated player name
+        
+    Raises:
+        ValidationError: If player is not supported
+    """
+    if not player or not isinstance(player, str):
+        raise ValidationError("Player choice cannot be empty")
+    
+    player = player.strip().lower()
+    
+    valid_players = list(SUPPORTED_PLAYERS.keys()) + ['auto']
+    if player not in valid_players:
+        raise ValidationError(
+            f"Invalid player choice: {player}. "
+            f"Supported players: {', '.join(valid_players)}"
+        )
+    
+    return player
+
+
+def validate_log_level(log_level: str) -> str:
+    """
+    Validate logging level.
+    
+    Args:
+        log_level: Log level to validate
+        
+    Returns:
+        Validated log level
+        
+    Raises:
+        ValidationError: If log level is not supported
+    """
+    if not log_level or not isinstance(log_level, str):
+        raise ValidationError("Log level cannot be empty")
+    
+    log_level = log_level.strip().upper()
+    
+    valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+    if log_level not in valid_levels:
+        raise ValidationError(
+            f"Invalid log level: {log_level}. "
+            f"Supported levels: {', '.join(valid_levels)}"
+        )
+    
+    return log_level
+
+
+def sanitize_string_input(input_str: Optional[str], max_length: int = 1000, 
+                         allow_empty: bool = True) -> Optional[str]:
+    """
+    General purpose string sanitization with security controls.
+    
+    Args:
+        input_str: String to sanitize
+        max_length: Maximum allowed length
+        allow_empty: Whether empty strings are allowed
+        
+    Returns:
+        Sanitized string or None
+        
+    Raises:
+        ValidationError: If string is invalid
+    """
+    if input_str is None:
+        return None
+    
+    if not isinstance(input_str, str):
+        raise ValidationError("Input must be a string")
+    
+    # Normalize whitespace
+    sanitized = input_str.strip()
+    
+    if not sanitized and not allow_empty:
+        raise ValidationError("Input cannot be empty")
+    
+    # Check length
+    if len(sanitized) > max_length:
+        raise ValidationError(f"Input too long (max {max_length} characters)")
+    
+    # Remove control characters (except common whitespace)
+    sanitized = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', sanitized)
+    
+    return sanitized if sanitized else None

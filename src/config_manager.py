@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from .constants import DEFAULT_SETTINGS, CONFIG_FILE, QUALITY_OPTIONS, SUPPORTED_PLAYERS
 from .logging_config import get_logger
+from .validators import (
+    validate_quality_option, validate_player_choice, validate_log_level,
+    validate_file_path, sanitize_player_args, validate_numeric_range,
+    sanitize_string_input
+)
+from .exceptions import ValidationError
 
 logger = get_logger(__name__)
 
@@ -172,7 +178,7 @@ class ConfigManager:
     
     def _validate_setting(self, key: str, value: Any) -> bool:
         """
-        Validate a single setting.
+        Validate a single setting using enhanced security-focused validators.
         
         Args:
             key: Setting key
@@ -181,24 +187,65 @@ class ConfigManager:
         Returns:
             True if setting is valid, False otherwise
         """
-        validators = {
-            'preferred_quality': lambda v: v in QUALITY_OPTIONS,
-            'player': lambda v: v in list(SUPPORTED_PLAYERS.keys()) + ['auto'],
-            'cache_duration': lambda v: isinstance(v, int) and v >= 0,
-            'debug': lambda v: isinstance(v, bool),
-            'log_to_file': lambda v: isinstance(v, bool),
-            'log_level': lambda v: v in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-            'player_path': lambda v: v is None or isinstance(v, str),
-            'player_args': lambda v: v is None or isinstance(v, str)
-        }
-        
-        validator = validators.get(key)
-        if validator:
-            try:
-                return validator(value)
-            except (TypeError, ValueError):
-                return False
-        
-        # Unknown setting keys are allowed but logged
-        logger.debug(f"Unknown setting key: {key}")
-        return True
+        try:
+            if key == 'preferred_quality':
+                validate_quality_option(value)
+                return True
+            
+            elif key == 'player':
+                validate_player_choice(value)
+                return True
+            
+            elif key == 'cache_duration':
+                validate_numeric_range(value, min_val=0, max_val=3600, data_type=int)
+                return True
+            
+            elif key == 'status_check_interval':
+                validate_numeric_range(value, min_val=10, max_val=86400, data_type=int)
+                return True
+            
+            elif key == 'status_cache_duration':
+                validate_numeric_range(value, min_val=1, max_val=3600, data_type=int)
+                return True
+            
+            elif key == 'debug':
+                if not isinstance(value, bool):
+                    raise ValidationError("Debug setting must be a boolean")
+                return True
+            
+            elif key == 'log_to_file':
+                if not isinstance(value, bool):
+                    raise ValidationError("Log to file setting must be a boolean")
+                return True
+            
+            elif key == 'enable_status_monitoring':
+                if not isinstance(value, bool):
+                    raise ValidationError("Status monitoring setting must be a boolean")
+                return True
+            
+            elif key == 'log_level':
+                validate_log_level(value)
+                return True
+            
+            elif key == 'player_path':
+                validate_file_path(value, must_exist=False)
+                return True
+            
+            elif key == 'player_args':
+                sanitize_player_args(value)
+                return True
+            
+            else:
+                # Unknown setting keys are allowed but logged
+                logger.debug(f"Unknown setting key: {key}")
+                # Apply basic string sanitization for unknown string values
+                if isinstance(value, str):
+                    sanitize_string_input(value, max_length=1000)
+                return True
+                
+        except ValidationError as e:
+            logger.warning(f"Validation failed for {key}={value}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected validation error for {key}={value}: {e}")
+            return False

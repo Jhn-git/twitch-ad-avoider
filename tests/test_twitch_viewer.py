@@ -32,7 +32,17 @@ class TestTwitchViewer(unittest.TestCase):
             self.assertEqual(validated, channel.lower())
 
     def test_validate_channel_invalid(self):
-        invalid_channels = ['', 'ab', 'test$channel', 'very_very_very_long_channel_name']
+        # Updated test cases for enhanced validation
+        invalid_channels = [
+            '',  # Empty
+            'ab',  # Too short
+            'abc',  # Still too short (min 4 chars)
+            'test$channel',  # Invalid character
+            'a' * 26,  # Too long (max 25 chars)
+            '../../../etc/passwd',  # Path traversal
+            'test;whoami',  # Command injection
+            'test\x00name',  # Control character
+        ]
         for channel in invalid_channels:
             with self.assertRaises(ValidationError):
                 self.viewer._validate_channel(channel)

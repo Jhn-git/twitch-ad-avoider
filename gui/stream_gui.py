@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.twitch_viewer import TwitchViewer
 from src.exceptions import TwitchStreamError, ValidationError
 from src.config_manager import ConfigManager
+from src.validators import validate_channel_name
 from src.logging_config import get_logger, reconfigure_logging
 from src.streamlink_status import StreamlinkStatusChecker
 from src.status_monitor import StatusMonitor
@@ -81,6 +82,13 @@ class StreamGUI:
         self.channel_entry = ttk.Entry(input_frame, textvariable=self.channel_var, width=25)
         self.channel_entry.grid(row=0, column=1, padx=(10, 0), pady=(0, 5), sticky=(tk.W, tk.E))
         self.channel_entry.bind('<Return>', lambda e: self.watch_stream())
+        
+        # Add real-time validation for channel input
+        self.channel_var.trace_add('write', self._validate_channel_input)
+        
+        # Validation feedback label
+        self.validation_label = ttk.Label(input_frame, text="", foreground="red", font=("Arial", 8))
+        self.validation_label.grid(row=0, column=2, padx=(5, 0), pady=(0, 5), sticky=tk.W)
         
         # Quality selection
         ttk.Label(input_frame, text="Quality:").grid(row=1, column=0, sticky=tk.W, pady=(0, 5))
@@ -209,11 +217,38 @@ class StreamGUI:
             display_text = f"{status_icon} {fav.channel_name}"
             self.favorites_listbox.insert(tk.END, display_text)
     
+    def _validate_channel_input(self, *args):
+        """Real-time validation for channel input with visual feedback"""
+        channel = self.channel_var.get().strip()
+        
+        if not channel:
+            self.validation_label.config(text="", foreground="gray")
+            self.watch_btn.config(state="disabled")
+            return
+        
+        try:
+            validate_channel_name(channel)
+            self.validation_label.config(text="✓ Valid", foreground="green")
+            self.watch_btn.config(state="normal")
+        except ValidationError as e:
+            self.validation_label.config(text=f"✗ {str(e)}", foreground="red")
+            self.watch_btn.config(state="disabled")
+        except Exception:
+            self.validation_label.config(text="✗ Invalid format", foreground="red")
+            self.watch_btn.config(state="disabled")
+
     def watch_stream(self):
         """Start watching a stream"""
         channel = self.channel_var.get().strip()
         if not channel:
             messagebox.showerror("Error", "Please enter a channel name")
+            return
+        
+        # Validate channel before proceeding
+        try:
+            validate_channel_name(channel)
+        except ValidationError as e:
+            messagebox.showerror("Validation Error", str(e))
             return
         
         # Prevent concurrent streams
@@ -298,6 +333,15 @@ class StreamGUI:
         if not channel_name:
             messagebox.showerror("Error", "Please enter a channel name")
             return
+        
+        # Validate channel name
+        try:
+            validated_channel = validate_channel_name(channel_name)
+        except ValidationError as e:
+            messagebox.showerror("Validation Error", str(e))
+            return
+        
+        channel_name = validated_channel
         
         if self.favorites_manager.add_favorite(channel_name):
             # Add to status monitoring

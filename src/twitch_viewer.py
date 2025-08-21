@@ -15,6 +15,7 @@ import shutil
 from .exceptions import TwitchStreamError, PlayerError, ValidationError, StreamlinkError
 from .config_manager import ConfigManager
 from .logging_config import get_logger
+from .validators import validate_channel_name
 from .constants import (
     SUPPORTED_PLAYERS, COMMON_PLAYER_PATHS, TWITCH_USERNAME_PATTERN,
     ENV_PLAYER_PATH, ENV_PLAYER_NAME, ERROR_MESSAGES
@@ -85,22 +86,15 @@ class TwitchViewer:
 
     def _validate_channel(self, channel_name: str) -> str:
         """
-        Validate the Twitch channel name
+        Validate the Twitch channel name using enhanced security controls.
         Args:
             channel_name (str): Name of the channel to validate
         Returns:
             str: Validated channel name
         Raises:
-            ValueError: If channel name is invalid
+            ValidationError: If channel name is invalid
         """
-        if not channel_name:
-            raise ValidationError(ERROR_MESSAGES["empty_channel"])
-        
-        # Twitch usernames can only contain letters, numbers, and underscores
-        if not re.match(TWITCH_USERNAME_PATTERN, channel_name):
-            raise ValidationError(ERROR_MESSAGES["invalid_channel"])
-        
-        return channel_name.lower()
+        return validate_channel_name(channel_name)
 
     def _get_supported_players(self) -> Dict[str, List[str]]:
         """Get supported player configurations"""
