@@ -1,6 +1,7 @@
 """
 Constants and default configuration values for TwitchAdAvoider
 """
+
 from pathlib import Path
 from typing import Dict, List, Any
 
@@ -24,7 +25,12 @@ DEFAULT_SETTINGS = {
     "status_check_interval": 300,  # 5 minutes in seconds
     "status_cache_duration": 60,  # 1 minute in seconds
     # GUI theme settings
-    "current_theme": "light"  # light or dark theme
+    "current_theme": "light",  # light or dark theme
+    # Network settings
+    "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
+    "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
+    "retry_delay": 5,  # Delay between retry attempts in seconds
+    "enable_network_diagnostics": True,  # Enable network connectivity diagnostics
 }
 
 # Stream quality options
@@ -32,28 +38,28 @@ QUALITY_OPTIONS = ["best", "worst", "720p", "480p", "360p", "160p"]
 
 # Supported players and their executable names
 SUPPORTED_PLAYERS = {
-    'vlc': ['vlc', 'vlc.exe'],
-    'mpv': ['mpv', 'mpv.exe', 'mpv.com'],
-    'mpc-hc': ['mpc-hc', 'mpc-hc.exe', 'mpc-hc64.exe']
+    "vlc": ["vlc", "vlc.exe"],
+    "mpv": ["mpv", "mpv.exe", "mpv.com"],
+    "mpc-hc": ["mpc-hc", "mpc-hc.exe", "mpc-hc64.exe"],
 }
 
 # Common player installation paths
 COMMON_PLAYER_PATHS = {
-    'vlc': [
+    "vlc": [
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
         r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
         "/usr/bin/vlc",
-        "/usr/local/bin/vlc"
+        "/usr/local/bin/vlc",
     ],
-    'mpv': [
+    "mpv": [
         r"C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe",
         "/usr/bin/mpv",
-        "/usr/local/bin/mpv"
+        "/usr/local/bin/mpv",
     ],
-    'mpc-hc': [
+    "mpc-hc": [
         r"C:\Program Files\MPC-HC\mpc-hc64.exe",
-        r"C:\Program Files (x86)\MPC-HC\mpc-hc.exe"
-    ]
+        r"C:\Program Files (x86)\MPC-HC\mpc-hc.exe",
+    ],
 }
 
 # File paths
@@ -69,11 +75,31 @@ GUI_GEOMETRY = "400x500"
 GUI_MIN_SIZE = (350, 400)
 
 # Twitch username validation regex
-TWITCH_USERNAME_PATTERN = r'^[a-zA-Z0-9_]{4,25}$'
+TWITCH_USERNAME_PATTERN = r"^[a-zA-Z0-9_]{4,25}$"
 
 # Environment variable names for PowerShell integration
-ENV_PLAYER_PATH = 'TWITCH_PLAYER_PATH'
-ENV_PLAYER_NAME = 'TWITCH_PLAYER_NAME'
+ENV_PLAYER_PATH = "TWITCH_PLAYER_PATH"
+ENV_PLAYER_NAME = "TWITCH_PLAYER_NAME"
+
+# Network-related constants
+TWITCH_GQL_ENDPOINT = "https://gql.twitch.tv/gql"
+TWITCH_USHER_ENDPOINT = "https://usher.ttvnw.net"
+NETWORK_TEST_ENDPOINTS = [
+    "https://www.twitch.tv",
+    "https://gql.twitch.tv",
+    "https://usher.ttvnw.net",
+]
+
+# Default network timeout values
+DEFAULT_NETWORK_TIMEOUT = 30
+DEFAULT_RETRY_ATTEMPTS = 3
+DEFAULT_RETRY_DELAY = 5
+MIN_NETWORK_TIMEOUT = 10
+MAX_NETWORK_TIMEOUT = 120
+MIN_RETRY_ATTEMPTS = 1
+MAX_RETRY_ATTEMPTS = 10
+MIN_RETRY_DELAY = 1
+MAX_RETRY_DELAY = 30
 
 # Error messages
 ERROR_MESSAGES = {
@@ -82,7 +108,11 @@ ERROR_MESSAGES = {
     "no_streams": "No streams available for channel: {}",
     "streamlink_error": "Failed to get stream: {}",
     "player_not_found": "Video player not found. Please install VLC, MPV, or MPC-HC",
-    "streamlink_not_found": "streamlink command not found. Please ensure streamlink is installed and in PATH"
+    "streamlink_not_found": "streamlink command not found. Please ensure streamlink is installed and in PATH",
+    "network_timeout": "Network timeout occurred. Check your internet connection or increase timeout in settings.",
+    "connection_failed": "Failed to connect to Twitch servers. Please check your internet connection.",
+    "retry_exhausted": "Max retry attempts exceeded. Connection to {} failed after {} attempts.",
+    "network_diagnostics_failed": "Network diagnostics failed. Unable to reach Twitch servers.",
 }
 
 # Enhanced validation error messages
@@ -103,5 +133,8 @@ VALIDATION_ERROR_MESSAGES = {
     "invalid_type": "Invalid {} value: {}",
     "config_validation_failed": "Configuration validation failed: {}",
     "string_too_long": "Input too long (max {} characters)",
-    "string_empty_not_allowed": "Input cannot be empty"
+    "string_empty_not_allowed": "Input cannot be empty",
+    "network_timeout_invalid": "Network timeout must be between {} and {} seconds",
+    "retry_attempts_invalid": "Retry attempts must be between {} and {} attempts",
+    "retry_delay_invalid": "Retry delay must be between {} and {} seconds",
 }
