@@ -1,6 +1,28 @@
 """
-Favorites Manager for TwitchAdAvoider GUI
-Handles storage and management of favorite channels with status tracking
+Favorites Manager for TwitchAdAvoider GUI.
+
+This module provides persistent storage and management of favorite channels with 
+status tracking capabilities. It handles JSON-based storage with backward 
+compatibility and atomic operations.
+
+The :class:`FavoritesManager` provides:
+    - Persistent channel favorites storage
+    - Real-time status tracking integration
+    - JSON format migration and backward compatibility
+    - Thread-safe operations for GUI integration
+    - Automatic data validation and error recovery
+
+Features:
+    - Atomic file operations to prevent data corruption
+    - UTC timestamp tracking for live status history
+    - Flexible data format supporting future extensions
+    - Integration with status monitoring system
+
+See Also:
+    :class:`~gui.stream_gui.StreamGUI`: Primary GUI integration
+    :class:`~src.status_monitor.StatusMonitor`: Status checking integration  
+    :class:`~gui.status_manager.StatusManager`: GUI status display
+    :class:`FavoriteChannelInfo`: Channel information data structure
 """
 import json
 import os
@@ -10,7 +32,26 @@ from datetime import datetime, timezone
 
 
 class FavoriteChannelInfo(NamedTuple):
-    """Information about a favorite channel including status"""
+    """
+    Information about a favorite channel including live status and timing data.
+    
+    This data structure holds comprehensive information about a favorited channel,
+    including current live status and historical timing information for status tracking.
+    
+    Attributes:
+        channel_name (str): The Twitch channel name (validated format)
+        is_live (bool): Current live status of the channel  
+        last_checked (Optional[datetime]): UTC timestamp of last status check
+        last_seen_live (Optional[datetime]): UTC timestamp when channel was last seen live
+        
+    Example:
+        >>> info = FavoriteChannelInfo("ninja", True, datetime.now(timezone.utc))
+        >>> print(f"{info.channel_name} is {'live' if info.is_live else 'offline'}")
+        
+    See Also:
+        :class:`FavoritesManager`: Manager class that uses this data structure
+        :class:`~src.status_monitor.StatusMonitor`: Status checking functionality
+    """
     channel_name: str
     is_live: bool = False
     last_checked: Optional[datetime] = None

@@ -1,6 +1,20 @@
 """
-Input validation and sanitization functions for TwitchAdAvoider
-Provides security-focused validation to prevent injection attacks and ensure data integrity.
+Input validation and sanitization functions for TwitchAdAvoider.
+
+This module provides security-focused validation to prevent injection attacks and ensure data integrity.
+All user inputs should pass through these validation functions before being processed by the application.
+
+The validation layer implements defense-in-depth security patterns to protect against:
+    - Path traversal attacks
+    - Command injection vulnerabilities  
+    - Shell metacharacter exploitation
+    - Control character injection
+    - Platform-specific attack vectors
+
+See Also:
+    :mod:`src.exceptions`: Custom exception classes for validation errors
+    :mod:`src.config_manager`: Configuration validation integration
+    :class:`~src.twitch_viewer.TwitchViewer`: Main class using these validators
 """
 import os
 import re
@@ -15,14 +29,32 @@ def validate_channel_name(channel_name: str) -> str:
     """
     Validate and sanitize Twitch channel name with enhanced security controls.
     
+    This function implements multi-layered security validation to protect against various
+    attack vectors while ensuring compliance with Twitch username requirements.
+    
     Args:
-        channel_name: Raw channel name input
+        channel_name (str): Raw channel name input from user
         
     Returns:
-        Validated and normalized channel name
+        str: Validated and normalized channel name (lowercase, trimmed)
         
     Raises:
-        ValidationError: If channel name is invalid or potentially malicious
+        ValidationError: If channel name is invalid, too short/long, or potentially malicious
+        
+    Example:
+        >>> validate_channel_name("Ninja")
+        'ninja'
+        >>> validate_channel_name("test_channel_123")
+        'test_channel_123'
+        
+    Note:
+        Channel names must be 4-25 characters, contain only alphanumeric characters 
+        and underscores, and pass security pattern validation.
+        
+    See Also:
+        :func:`sanitize_string_input`: For general string sanitization
+        :class:`~src.exceptions.ValidationError`: Exception raised on validation failure
+        :data:`~src.constants.TWITCH_USERNAME_PATTERN`: Regex pattern used for validation
     """
     if not channel_name:
         raise ValidationError("Channel name cannot be empty")
@@ -64,14 +96,31 @@ def sanitize_player_args(player_args: Optional[str]) -> Optional[str]:
     """
     Sanitize player arguments to prevent command injection attacks.
     
+    Implements comprehensive security validation to prevent shell injection, command 
+    substitution, and other argument-based attacks while preserving legitimate player options.
+    
     Args:
-        player_args: Raw player arguments string
+        player_args (Optional[str]): Raw player arguments string from user input
         
     Returns:
-        Sanitized player arguments or None if invalid
+        Optional[str]: Sanitized player arguments or None if input was empty/invalid
         
     Raises:
-        ValidationError: If arguments contain potentially dangerous content
+        ValidationError: If arguments contain potentially dangerous content or patterns
+        
+    Example:
+        >>> sanitize_player_args("--fullscreen --volume=50")
+        '--fullscreen --volume=50'
+        >>> sanitize_player_args("--volume=100; rm -rf /")  # Raises ValidationError
+        
+    Warning:
+        This function blocks shell metacharacters, command substitution patterns,
+        and redirection operators. Use only for trusted player argument strings.
+        
+    See Also:
+        :func:`validate_file_path`: For validating player executable paths
+        :class:`~src.config_manager.ConfigManager`: Configuration handling with validation
+        :func:`validate_channel_name`: Related input validation function
     """
     if not player_args:
         return None

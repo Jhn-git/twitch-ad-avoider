@@ -47,4 +47,3 @@ config/favorites.json
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-.claude/settings.local.json

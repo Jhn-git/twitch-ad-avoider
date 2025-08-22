@@ -1,6 +1,28 @@
 """
-Simple GUI for TwitchAdAvoider Stream Manager
-Uses tkinter for a lightweight interface
+Tkinter-based GUI for TwitchAdAvoider Stream Manager.
+
+This module provides a lightweight graphical interface for TwitchAdAvoider with:
+    - Real-time input validation and visual feedback
+    - Channel favorites management with persistent storage
+    - Asynchronous status monitoring for favorite channels  
+    - Theme support with light/dark modes
+    - Cross-platform compatibility
+
+The :class:`StreamGUI` class serves as the main interface, integrating with the core
+streaming functionality while providing a user-friendly experience.
+
+Key Features:
+    - Thread-safe operations for non-blocking UI
+    - Comprehensive error handling and user feedback
+    - Integration with the validation system
+    - Status monitoring with visual indicators
+
+See Also:
+    :class:`~src.twitch_viewer.TwitchViewer`: Core streaming functionality
+    :class:`~src.config_manager.ConfigManager`: Configuration management
+    :class:`~gui.favorites_manager.FavoritesManager`: Channel favorites handling
+    :class:`~gui.status_manager.StatusManager`: GUI status management
+    :mod:`src.validators`: Input validation functions
 """
 
 import tkinter as tk

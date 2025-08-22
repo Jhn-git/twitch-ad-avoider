@@ -47,6 +47,8 @@ dev = [
 "Homepage" = "https://github.com/yourusername/TwitchAdAvoider-lite-2"
 "Bug Reports" = "https://github.com/yourusername/TwitchAdAvoider-lite-2/issues"
 "Source" = "https://github.com/yourusername/TwitchAdAvoider-lite-2"
+"Documentation" = "https://yourusername.github.io/TwitchAdAvoider-lite-2/"
+"Changelog" = "https://github.com/yourusername/TwitchAdAvoider-lite-2/releases"
 
 [project.scripts]
 twitchadavoider = "main:main"

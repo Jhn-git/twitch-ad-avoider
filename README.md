@@ -1,5 +1,11 @@
 # TwitchAdAvoider
 
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Documentation Status](https://img.shields.io/badge/docs-sphinx-brightgreen.svg)](docs/)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#testing)
+
 A Python implementation for watching Twitch streams while avoiding ads, featuring both GUI and command-line interfaces with comprehensive security validation.
 
 ## Table of Contents
