@@ -156,12 +156,28 @@ class StreamGUI:
         - Status display
         - Player configuration
         """
-        # Main frame
+        # Create main frame
+        main_frame = self._create_main_frame()
+        
+        # Setup sections
+        input_frame = self._setup_stream_input_section(main_frame)
+        fav_frame, list_frame, fav_btn_frame = self._setup_favorites_section(main_frame)
+        settings_frame = self._setup_settings_section(main_frame)
+        self._setup_status_section(main_frame)
+        
+        # Configure layout and theme management
+        self._configure_grid_layout(main_frame, input_frame, fav_frame, list_frame, settings_frame)
+        self._register_themed_widgets(main_frame, input_frame, fav_frame, list_frame, fav_btn_frame, settings_frame)
+
+    def _create_main_frame(self) -> ttk.Frame:
+        """Create and configure the main container frame."""
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        return main_frame
 
-        # Stream input section
-        input_frame = ttk.LabelFrame(main_frame, text="Watch Stream", padding="10")
+    def _setup_stream_input_section(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        """Setup the stream input section with channel entry and quality selection."""
+        input_frame = ttk.LabelFrame(parent, text="Watch Stream", padding="10")
         input_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         # Channel input
@@ -190,15 +206,27 @@ class StreamGUI:
         self.watch_btn = ttk.Button(input_frame, text="Watch Stream", command=self.watch_stream)
         self.watch_btn.grid(row=2, column=0, columnspan=2, pady=(15, 5))
 
-        # Favorites section
-        fav_frame = ttk.LabelFrame(main_frame, text="Favorites", padding="10")
+        return input_frame
+
+    def _setup_favorites_section(self, parent: ttk.Frame) -> tuple[ttk.LabelFrame, ttk.Frame, ttk.Frame]:
+        """Setup the favorites section with list display and management buttons."""
+        fav_frame = ttk.LabelFrame(parent, text="Favorites", padding="10")
         fav_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
 
-        # Favorites listbox with scrollbar
-        list_frame = ttk.Frame(fav_frame)
+        # Create and configure favorites list
+        list_frame = self._create_favorites_list(fav_frame)
+        
+        # Create favorites management buttons
+        fav_btn_frame = self._create_favorites_buttons(fav_frame)
+
+        return fav_frame, list_frame, fav_btn_frame
+
+    def _create_favorites_list(self, parent: ttk.LabelFrame) -> ttk.Frame:
+        """Create the favorites list widget with scrollbar."""
+        list_frame = ttk.Frame(parent)
         list_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-        # Configure favorites text widget with emoji-supporting font (replacing listbox)
+        # Configure favorites text widget with emoji-supporting font
         emoji_font_config = get_emoji_font()
         if emoji_font_config:
             family, size = emoji_font_config
@@ -233,7 +261,7 @@ class StreamGUI:
         self.favorites_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
 
-        # Add selection tracking variables
+        # Initialize selection tracking
         self.selected_favorite_line = None
         self.canvas_widgets = []  # Track Canvas widgets for dynamic background updates
 
@@ -241,8 +269,11 @@ class StreamGUI:
         self.favorites_listbox.bind("<Button-1>", self._on_favorite_click)
         self.favorites_listbox.bind("<Double-Button-1>", lambda e: self.watch_favorite())
 
-        # Favorites buttons
-        fav_btn_frame = ttk.Frame(fav_frame)
+        return list_frame
+
+    def _create_favorites_buttons(self, parent: ttk.LabelFrame) -> ttk.Frame:
+        """Create the favorites management buttons."""
+        fav_btn_frame = ttk.Frame(parent)
         fav_btn_frame.grid(row=1, column=0, columnspan=3, pady=(10, 0))
 
         ttk.Button(fav_btn_frame, text="Add Current", command=self.add_favorite).pack(
@@ -256,8 +287,11 @@ class StreamGUI:
         )
         ttk.Button(fav_btn_frame, text="🔄 Refresh", command=self.refresh_status).pack(side=tk.LEFT)
 
-        # Settings section
-        settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding="10")
+        return fav_btn_frame
+
+    def _setup_settings_section(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        """Setup the settings section with player and mode controls."""
+        settings_frame = ttk.LabelFrame(parent, text="Settings", padding="10")
         settings_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         # Player selection
@@ -288,12 +322,18 @@ class StreamGUI:
         )
         dark_mode_check.grid(row=0, column=3, pady=5, sticky=tk.W)
 
-        # Status bar with enhanced message history
-        self.status_text = tk.Text(main_frame)
+        return settings_frame
+
+    def _setup_status_section(self, parent: ttk.Frame) -> None:
+        """Setup the status display section."""
+        self.status_text = tk.Text(parent)
         self.status_manager = StatusManager(self.status_text, max_history=100)
         self.status_text.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
 
-        # Configure grid weights for responsive layout
+    def _configure_grid_layout(self, main_frame: ttk.Frame, input_frame: ttk.LabelFrame, 
+                              fav_frame: ttk.LabelFrame, list_frame: ttk.Frame, 
+                              settings_frame: ttk.LabelFrame) -> None:
+        """Configure grid weights for responsive layout."""
         # Root window
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -323,7 +363,10 @@ class StreamGUI:
         settings_frame.columnconfigure(2, weight=1)
         settings_frame.columnconfigure(3, weight=1)
 
-        # Store widgets for theme management
+    def _register_themed_widgets(self, main_frame: ttk.Frame, input_frame: ttk.LabelFrame,
+                                fav_frame: ttk.LabelFrame, list_frame: ttk.Frame,
+                                fav_btn_frame: ttk.Frame, settings_frame: ttk.LabelFrame) -> None:
+        """Register widgets for theme management."""
         self.themed_widgets.extend(
             [
                 main_frame,
