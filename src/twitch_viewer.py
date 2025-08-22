@@ -224,68 +224,75 @@ class TwitchViewer:
             str: Name of the detected player or 'auto' for streamlink auto-detection
         """
         debug = self.config.get("debug", False)
-
         if debug:
-            logger.debug("Starting simplified player detection...")
+            logger.debug("Starting player detection...")
 
-        # Priority 1: Determine player choice from GUI or configuration
-        # The GUI selection (self.selected_player) takes precedence over config file
-        # This allows users to override the saved preference temporarily
-        player_choice = self.selected_player or self.config.get("player", "vlc")
+        # Get player choice (GUI selection takes precedence)
+        player_choice = self._get_player_choice(debug)
 
-        if debug:
-            logger.debug(f"Player choice: {player_choice}")
-
-        # Priority 2: Check for manual player path in settings
-        # If user has specified an explicit path, use it without further detection
-        # This path has already been validated for security during configuration
-        manual_result = self._check_manual_player(debug)
-        if manual_result:
+        # Try different detection methods in priority order
+        if self._try_manual_player_detection(debug, player_choice):
             return player_choice
 
-        # Priority 3: Handle 'auto' choice - delegate to streamlink
-        # When 'auto' is selected, we don't set a specific player path
-        # Streamlink will use its own detection algorithm to find available players
+        if self._try_auto_detection(debug, player_choice):
+            return "auto"
+
+        if self._try_specific_player_detection(debug, player_choice):
+            return player_choice
+
+        if self._try_environment_player_detection(debug):
+            return self._check_environment_player(debug)
+
+        # Final fallback
+        return self._fallback_to_streamlink_detection(debug, player_choice)
+
+    def _get_player_choice(self, debug: bool) -> str:
+        """Get the preferred player choice from GUI or configuration."""
+        player_choice = self.selected_player or self.config.get("player", "vlc")
+        if debug:
+            logger.debug(f"Player choice: {player_choice}")
+        return player_choice
+
+    def _try_manual_player_detection(self, debug: bool, player_choice: str) -> bool:
+        """Try to use manually configured player path."""
+        manual_result = self._check_manual_player(debug)
+        return manual_result is not None
+
+    def _try_auto_detection(self, debug: bool, player_choice: str) -> bool:
+        """Try auto detection if selected."""
         if player_choice == "auto":
             if debug:
                 logger.debug("Using streamlink auto-detection")
             self.player_path = None
-            return "auto"
+            return True
+        return False
 
-        # Priority 4: Search for the selected player using multiple detection methods
-        # This implements a comprehensive search strategy to maximize player detection success
-        players = self._get_supported_players()  # Get executable names for each player
-        common_paths = self._get_common_player_paths()  # Get OS-specific installation paths
+    def _try_specific_player_detection(self, debug: bool, player_choice: str) -> bool:
+        """Try to detect a specific player using multiple methods."""
+        players = self._get_supported_players()
+        common_paths = self._get_common_player_paths()
 
-        if player_choice in players:
-            # Sub-priority 4a: Search system PATH first
-            # PATH search is fastest and most reliable for properly installed software
-            # Uses shutil.which() which respects OS-specific executable extensions
-            result = self._check_player_in_path(player_choice, players[player_choice], debug)
-            if result:
-                return result
+        if player_choice not in players:
+            return False
 
-            # Sub-priority 4b: Search common installation directories
-            # Fallback for players installed in standard locations but not in PATH
-            # Covers cases where installers don't modify PATH environment variable
-            if player_choice in common_paths:
-                result = self._check_player_common_paths(
-                    player_choice, common_paths[player_choice], debug
-                )
-                if result:
-                    return result
+        # Search system PATH first
+        if self._check_player_in_path(player_choice, players[player_choice], debug):
+            return True
 
-        # Priority 5: Check environment variables (PowerShell integration)
-        # Allows PowerShell scripts to override player detection by setting
-        # TWITCH_PLAYER_PATH and TWITCH_PLAYER_NAME environment variables
-        # This provides a bridge for advanced users and automation scripts
-        result = self._check_environment_player(debug)
-        if result:
-            return result
+        # Search common installation directories
+        if player_choice in common_paths:
+            return self._check_player_common_paths(
+                player_choice, common_paths[player_choice], debug
+            ) is not None
 
-        # Final fallback: Delegate to streamlink's built-in detection
-        # When all our detection methods fail, let streamlink try its own algorithms
-        # Streamlink has its own player detection logic that may succeed where ours failed
+        return False
+
+    def _try_environment_player_detection(self, debug: bool) -> bool:
+        """Try to detect player from environment variables."""
+        return self._check_environment_player(debug) is not None
+
+    def _fallback_to_streamlink_detection(self, debug: bool, player_choice: str) -> str:
+        """Fallback to streamlink's built-in player detection."""
         if debug:
             logger.debug(f"Could not find {player_choice}, using streamlink auto-detection")
         self.player_path = None

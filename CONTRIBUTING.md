@@ -95,6 +95,9 @@ python main.py --help
 black --check .
 flake8 .
 python -m coverage run -m unittest discover tests/ && python -m coverage report
+
+# Build documentation
+cd docs && make html
 ```
 
 ## Code Style Guidelines
@@ -332,6 +335,9 @@ flake8 src/ gui/ tests/
 
 # Type checking (if using mypy)
 mypy src/ gui/
+
+# Build and check documentation
+cd docs && make html
 ```
 
 ### 4. Commit Changes
