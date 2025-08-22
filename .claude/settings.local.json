@@ -13,7 +13,8 @@
       "Bash(export:*)",
       "Bash(black:*)",
       "Bash(flake8:*)",
-      "Bash(mypy:*)"
+      "Bash(mypy:*)",
+      "Bash(make:*)"
     ],
     "deny": [],
     "ask": [],

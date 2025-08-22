@@ -1,5 +1,19 @@
 """
-Main module for TwitchViewer functionality
+Main module for TwitchViewer functionality.
+
+This module provides the core streaming functionality for TwitchAdAvoider, including:
+    - Stream detection and quality selection
+    - Video player auto-detection and management  
+    - Process control and monitoring
+    - Integration with streamlink for ad avoidance
+
+The :class:`TwitchViewer` class serves as the primary interface for stream operations,
+coordinating between configuration management, input validation, and external processes.
+
+See Also:
+    :mod:`src.config_manager`: Configuration and settings management
+    :mod:`src.validators`: Input validation and security functions
+    :mod:`gui.stream_gui`: Graphical user interface integration
 """
 
 import json
@@ -30,14 +44,48 @@ logger = get_logger(__name__)
 
 
 class TwitchViewer:
-    """Main class for watching Twitch streams with ad avoidance."""
+    """
+    Main class for watching Twitch streams with ad avoidance.
+    
+    This class provides the core functionality for stream detection, player management,
+    and process control. It integrates with streamlink for ad-free streaming and 
+    supports multiple video players with automatic detection.
+    
+    The class handles the complete streaming workflow:
+        1. Input validation via :mod:`src.validators`
+        2. Stream detection and quality selection
+        3. Player detection and configuration
+        4. Process launching and monitoring
+    
+    Attributes:
+        config (:class:`~src.config_manager.ConfigManager`): Configuration manager instance
+        player_path (Optional[str]): Path to detected video player executable
+        selected_player (Optional[str]): Name of currently selected player
+        session (streamlink.Streamlink): Streamlink session for stream operations
+    
+    Example:
+        >>> from src.config_manager import ConfigManager
+        >>> config = ConfigManager()
+        >>> viewer = TwitchViewer(config)
+        >>> viewer.watch_stream("ninja", "720p")
+        
+    See Also:
+        :class:`~src.config_manager.ConfigManager`: Configuration management
+        :func:`~src.validators.validate_channel_name`: Channel name validation
+        :class:`~gui.stream_gui.StreamGUI`: GUI integration
+    """
 
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
-        Initialize the TwitchViewer.
+        Initialize the TwitchViewer with configuration and streamlink session.
 
         Args:
-            config_manager: Configuration manager instance
+            config_manager (Optional[ConfigManager]): Configuration manager instance.
+                If None, a new ConfigManager will be created with default settings.
+                
+        Note:
+            The streamlink session is configured with timeout settings from the
+            configuration manager's network_timeout setting.
         """
         self.config = config_manager or ConfigManager()
         self.player_path: Optional[str] = None

@@ -1,6 +1,24 @@
 """
-Configuration management for TwitchAdAvoider
-Handles loading, saving, and validation of application settings.
+Configuration management for TwitchAdAvoider.
+
+This module handles loading, saving, and validation of application settings using a 
+JSON-based configuration system with comprehensive validation and secure defaults.
+
+The :class:`ConfigManager` provides:
+    - Atomic configuration saves with error recovery
+    - Comprehensive validation of all settings
+    - Default value merging and migration
+    - UTF-8 encoding support for international users
+    - Integration with the validation system
+
+Configuration files are stored in JSON format and validated against predefined 
+schemas to ensure security and data integrity.
+
+See Also:
+    :mod:`src.validators`: Validation functions used by ConfigManager  
+    :mod:`src.constants`: Default settings and validation constants
+    :class:`~src.twitch_viewer.TwitchViewer`: Primary consumer of configuration
+    :mod:`gui.stream_gui`: GUI configuration interface
 """
 
 import json
