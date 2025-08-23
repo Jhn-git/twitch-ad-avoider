@@ -47,3 +47,9 @@ config/favorites.json
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# AI Assistant configurations
+.claude/
+.anthropic/
+.cursor/
+.copilot/
