@@ -41,15 +41,22 @@ class StatusMonitor:
 
         self._monitor_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._cancel_event = threading.Event()
         self._last_check_time: Optional[datetime] = None
         self._is_running = False
+        self._current_operation_cancellable = False
 
         # Status cache to avoid unnecessary updates
         self._status_cache: Dict[str, bool] = {}
         self._cache_timestamp: Optional[datetime] = None
 
-    def start_monitoring(self) -> None:
-        """Start the background monitoring thread"""
+    def start_monitoring(self, delayed_start: bool = True) -> None:
+        """
+        Start the background monitoring thread
+        
+        Args:
+            delayed_start: Whether to apply startup delay before initial checks
+        """
         if self._is_running:
             logger.warning("Status monitoring is already running")
             return
@@ -62,12 +69,18 @@ class StatusMonitor:
             logger.warning("Streamlink is not available, status monitoring disabled")
             return
 
-        logger.info("Starting stream status monitoring")
+        startup_delay = self.config.get("startup_status_check_delay", 2) if delayed_start else 0
+        
+        if startup_delay > 0:
+            logger.info(f"Starting stream status monitoring with {startup_delay}s startup delay")
+        else:
+            logger.info("Starting stream status monitoring")
+            
         self._stop_event.clear()
         self._is_running = True
 
         self._monitor_thread = threading.Thread(
-            target=self._monitor_loop, name="StatusMonitor", daemon=True
+            target=self._monitor_loop, name="StatusMonitor", daemon=True, args=(startup_delay,)
         )
         self._monitor_thread.start()
 
@@ -90,14 +103,51 @@ class StatusMonitor:
             return
 
         logger.info("Forcing immediate status refresh")
+        self._current_operation_cancellable = True
+        self._cancel_event.clear()
+        
         try:
             self._check_all_favorites()
         except Exception as e:
             logger.error(f"Error during forced refresh: {e}")
+        finally:
+            self._current_operation_cancellable = False
+            
+    def cancel_current_operation(self) -> bool:
+        """
+        Cancel the current network operation if possible
+        
+        Returns:
+            True if cancellation was requested, False if no operation is cancellable
+        """
+        if self._current_operation_cancellable:
+            logger.info("Cancelling current status check operation")
+            self._cancel_event.set()
+            return True
+        else:
+            logger.debug("No cancellable operation in progress")
+            return False
+            
+    def is_operation_cancellable(self) -> bool:
+        """Check if the current operation can be cancelled"""
+        return self._current_operation_cancellable
 
-    def _monitor_loop(self) -> None:
-        """Main monitoring loop running in background thread"""
+    def _monitor_loop(self, startup_delay: int = 0) -> None:
+        """
+        Main monitoring loop running in background thread
+        
+        Args:
+            startup_delay: Initial delay in seconds before starting status checks
+        """
         logger.info("Status monitoring loop started")
+        
+        # Apply startup delay if configured
+        if startup_delay > 0:
+            logger.debug(f"Applying startup delay of {startup_delay} seconds")
+            if self._stop_event.wait(timeout=startup_delay):
+                # Monitoring was stopped during delay
+                logger.info("Status monitoring stopped during startup delay")
+                return
 
         while not self._stop_event.is_set():
             try:
@@ -180,8 +230,24 @@ class StatusMonitor:
         logger.debug(f"Checking status for {len(favorites)} favorite channels")
 
         try:
-            # Get status for all channels using streamlink
-            status_results = self.status_checker.check_multiple_streams(favorites)
+            # Check for cancellation before starting
+            if self._cancel_event.is_set():
+                logger.info("Status check cancelled before starting")
+                return
+                
+            # Get status for all channels using streamlink (concurrent or sequential)
+            use_concurrent = self.config.get("enable_concurrent_status_checks", True) if self.config else True
+            
+            if use_concurrent and len(favorites) > 1:
+                max_workers = self.config.get("concurrent_max_workers", 3) if self.config else 3
+                status_results = self.status_checker.check_multiple_streams_concurrent(
+                    favorites, self._cancel_event, max_workers
+                )
+            else:
+                # Use sequential method for single channels or when concurrent is disabled
+                status_results = self.status_checker.check_multiple_streams_cancellable(
+                    favorites, self._cancel_event
+                )
 
             # Update status for each channel
             updated_channels = []

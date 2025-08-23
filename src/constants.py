@@ -35,6 +35,17 @@ DEFAULT_SETTINGS = {
     "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
     "retry_delay": 5,  # Delay between retry attempts in seconds
     "enable_network_diagnostics": True,  # Enable network connectivity diagnostics
+    # Startup optimization settings
+    "startup_status_check_delay": 2,  # Delay before initial status checking in seconds
+    "enable_progressive_loading": True,  # Load favorites first, then update status
+    "show_startup_progress": True,  # Show progress indicator during startup operations
+    # Concurrent processing settings
+    "enable_concurrent_status_checks": True,  # Use concurrent processing for status checks
+    "concurrent_max_workers": 3,  # Maximum concurrent threads for status checking
+    # Error handling and recovery settings
+    "enable_error_recovery": True,  # Enable automatic error recovery strategies
+    "network_error_threshold": 3,  # Number of network errors before triggering recovery
+    "enable_adaptive_timeouts": True,  # Adjust timeouts based on network conditions
 }
 
 # Stream quality options
@@ -104,6 +115,9 @@ MIN_RETRY_ATTEMPTS = 1
 MAX_RETRY_ATTEMPTS = 10
 MIN_RETRY_DELAY = 1
 MAX_RETRY_DELAY = 30
+# Startup optimization constants
+MIN_STARTUP_DELAY = 0
+MAX_STARTUP_DELAY = 30
 
 # Error messages
 ERROR_MESSAGES = {
@@ -141,4 +155,5 @@ VALIDATION_ERROR_MESSAGES = {
     "network_timeout_invalid": "Network timeout must be between {} and {} seconds",
     "retry_attempts_invalid": "Retry attempts must be between {} and {} attempts",
     "retry_delay_invalid": "Retry delay must be between {} and {} seconds",
+    "startup_delay_invalid": "Startup delay must be between {} and {} seconds",
 }

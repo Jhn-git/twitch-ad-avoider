@@ -73,7 +73,7 @@ class StreamGUI:
         self.favorites_manager = FavoritesManager()
         
         # Initialize status monitoring
-        self.status_checker = StreamlinkStatusChecker(self.config)
+        self.status_checker = StreamlinkStatusChecker(self.config, progress_callback=self._on_progress_update)
         self.status_manager = StatusManager()
         self.status_monitor = StatusMonitor(
             status_checker=self.status_checker,
@@ -170,7 +170,8 @@ class StreamGUI:
         self.favorites_panel.set_callbacks(
             on_channel_selected=self._on_favorite_channel_selected,
             on_watch_favorite=self._on_watch_favorite_requested,
-            on_refresh_status=self._on_refresh_status_requested
+            on_refresh_status=self._on_refresh_status_requested,
+            on_cancel_operation=self._on_cancel_operation_requested
         )
         
         # Stream controller callbacks
@@ -194,17 +195,46 @@ class StreamGUI:
         # Apply initial theme
         self.theme_controller.apply_theme()
         
-        # Refresh favorites display
-        self.favorites_panel.refresh_favorites_list()
+        # Implement progressive loading based on configuration
+        enable_progressive_loading = self.config.get("enable_progressive_loading", True)
+        show_startup_progress = self.config.get("show_startup_progress", True)
+        
+        if enable_progressive_loading:
+            # Phase 1: Load favorites display first (immediate)
+            self.favorites_panel.refresh_favorites_list()
+            
+            if show_startup_progress:
+                self.status_manager.add_status_message("Favorites loaded. Preparing status monitoring...")
+            
+            # Phase 2: Initialize status monitoring with delay (background)
+            self.root.after(100, self._initialize_status_monitoring_delayed)
+        else:
+            # Traditional loading: everything at once
+            self.favorites_panel.refresh_favorites_list()
+            self._initialize_status_monitoring_delayed()
+            
+        logger.info("Refactored StreamGUI initialized successfully")
+        
+    def _initialize_status_monitoring_delayed(self) -> None:
+        """Initialize status monitoring with optional startup feedback"""
+        show_startup_progress = self.config.get("show_startup_progress", True)
         
         # Check streamlink dependency
         self._check_streamlink_dependency()
         
         # Start status monitoring if available
         if self.status_checker.is_available():
-            self.status_monitor.start_monitoring()
+            if show_startup_progress:
+                startup_delay = self.config.get("startup_status_check_delay", 2)
+                if startup_delay > 0:
+                    self.status_manager.add_status_message(
+                        f"Starting status monitoring in {startup_delay} seconds..."
+                    )
             
-        logger.info("Refactored StreamGUI initialized successfully")
+            self.status_monitor.start_monitoring(delayed_start=True)
+            
+            if show_startup_progress:
+                self.status_manager.add_status_message("Status monitoring active")
 
     # Event Handlers
     def _on_watch_stream_requested(self, channel: str, quality: str) -> None:
@@ -236,6 +266,10 @@ class StreamGUI:
         """Handle status refresh request"""
         self.status_manager.add_status_message("Refreshing stream status...")
         self.status_monitor.force_refresh()
+
+    def _on_cancel_operation_requested(self) -> bool:
+        """Handle cancel operation request"""
+        return self.status_monitor.cancel_current_operation()
 
     def _on_stream_started(self) -> None:
         """Handle stream start event"""
@@ -280,6 +314,9 @@ class StreamGUI:
         # Schedule GUI update on main thread
         self.root.after(0, self.favorites_panel.refresh_favorites_list)
         
+        # Notify favorites panel that refresh is completed
+        self.root.after(0, self.favorites_panel.on_refresh_completed)
+        
         # Provide user feedback
         if len(updated_channels) == 1:
             self.status_manager.add_status_message(
@@ -289,6 +326,21 @@ class StreamGUI:
             self.status_manager.add_status_message(
                 f"Status updated for {len(updated_channels)} channels"
             )
+
+    def _on_progress_update(self, message: str, current: int, total: int) -> None:
+        """Handle progress updates from network operations"""
+        # Schedule progress update on main thread
+        self.root.after(0, lambda: self._update_progress_display(message, current, total))
+        
+    def _update_progress_display(self, message: str, current: int, total: int) -> None:
+        """Update progress display on main thread"""
+        if total > 1:  # Only show progress for multiple operations
+            percentage = int((current / total) * 100)
+            progress_message = f"{message} ({current}/{total} - {percentage}%)"
+        else:
+            progress_message = message
+            
+        self.status_manager.add_status_message(progress_message)
 
     # Simplified UI creation methods (for sections not yet componentized)
     def _create_status_section(self, parent: ttk.Frame) -> None:
@@ -350,7 +402,17 @@ class StreamGUI:
             variable=self.dark_mode_var,
             command=self._on_theme_toggle
         )
-        dark_mode_check.grid(row=0, column=3, sticky=tk.W)
+        dark_mode_check.grid(row=0, column=3, sticky=tk.W, padx=(0, 20))
+        
+        # Status monitoring checkbox
+        self.status_monitoring_var = tk.BooleanVar(value=self.config.get("enable_status_monitoring", True))
+        status_monitoring_check = ttk.Checkbutton(
+            settings_frame,
+            text="Auto Status", 
+            variable=self.status_monitoring_var,
+            command=self._on_status_monitoring_toggle
+        )
+        status_monitoring_check.grid(row=0, column=4, sticky=tk.W)
 
     def _on_debug_toggle(self) -> None:
         """Handle debug mode toggle"""
@@ -365,6 +427,27 @@ class StreamGUI:
         if self.theme_controller.change_theme(theme_name, animate=True):
             # Save to configuration
             self.config_controller.change_theme(theme_name)
+            
+    def _on_status_monitoring_toggle(self) -> None:
+        """Handle status monitoring toggle"""
+        enabled = self.status_monitoring_var.get()
+        success = self.config.set("enable_status_monitoring", enabled)
+        
+        if success:
+            self.config.save_settings()
+            if enabled:
+                if self.status_checker.is_available():
+                    self.status_monitor.start_monitoring()
+                    self.status_manager.add_status_message("Automatic status monitoring enabled")
+                else:
+                    self.status_manager.add_warning("Streamlink not available for status monitoring")
+            else:
+                self.status_monitor.stop_monitoring()
+                self.status_manager.add_status_message("Automatic status monitoring disabled")
+        else:
+            # Reset checkbox if config update failed
+            self.status_monitoring_var.set(not enabled)
+            self.status_manager.add_error("Failed to update status monitoring setting")
 
     def _check_streamlink_dependency(self) -> None:
         """Check streamlink availability and warn if not found"""
