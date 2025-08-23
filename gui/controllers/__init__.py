@@ -14,5 +14,6 @@ Controllers:
 from .stream_controller import StreamController
 from .config_controller import ConfigController
 from .validation_controller import ValidationController, ValidationState
+from .theme_controller import ThemeController
 
-__all__ = ['StreamController', 'ConfigController', 'ValidationController', 'ValidationState']
+__all__ = ['StreamController', 'ConfigController', 'ValidationController', 'ValidationState', 'ThemeController']
