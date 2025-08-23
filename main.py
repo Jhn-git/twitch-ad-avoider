@@ -13,27 +13,20 @@ sys.path.insert(0, str(current_dir))
 
 def setup_application():
     """Setup logging and configuration for the application."""
-    from src.logging_config import setup_logging
+    from src.logging_config import configure_logging_from_config
     from src.config_manager import ConfigManager
     
     # Load configuration
     config = ConfigManager()
     
-    # Setup logging with debug information
-    debug_enabled = config.get('debug', False)
-    log_level = config.get('log_level', 'INFO')
-    log_to_file = config.get('log_to_file', False)
-    
-    logger = setup_logging(
-        level=log_level,
-        log_to_file=log_to_file,
-        enable_debug=debug_enabled
-    )
+    # Setup logging using centralized configuration
+    logger = configure_logging_from_config(config)
     
     logger.info("TwitchAdAvoider application starting")
-    if debug_enabled:
-        logger.debug(f"Debug mode enabled via config (debug={debug_enabled})")
-        logger.debug(f"Configuration: log_level={log_level}, log_to_file={log_to_file}")
+    if config.get('debug', False):
+        logger.debug("Debug mode enabled via configuration")
+        logger.debug(f"Logging configured from settings: debug={config.get('debug')}, "
+                    f"log_level={config.get('log_level')}, log_to_file={config.get('log_to_file')}")
     
     return config, logger
 

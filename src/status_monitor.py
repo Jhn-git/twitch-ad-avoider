@@ -101,8 +101,8 @@ class StatusMonitor:
 
         while not self._stop_event.is_set():
             try:
-                # Check if it's time for an update
-                interval = self.config.get("status_check_interval", 300)  # 5 minutes default
+                # Calculate dynamic interval based on channel status
+                interval = self._calculate_next_check_interval()
 
                 if (
                     self._last_check_time is None
@@ -123,6 +123,52 @@ class StatusMonitor:
                 self._stop_event.wait(timeout=60)
 
         logger.info("Status monitoring loop stopped")
+
+    def _calculate_next_check_interval(self) -> int:
+        """Calculate the next check interval based on channel status mix"""
+        if not self.config.get("enable_smart_polling", True):
+            return self.config.get("status_check_interval", 300)
+        
+        favorites = self.favorites_manager.get_favorites_with_status()
+        if not favorites:
+            return self.config.get("status_check_interval", 300)
+        
+        live_count = sum(1 for fav in favorites if fav.is_live)
+        total_count = len(favorites)
+        offline_count = total_count - live_count
+        
+        # Get intervals from config
+        live_interval = self.config.get("status_check_interval_live", 150)      # 2.5 min
+        offline_interval = self.config.get("status_check_interval_offline", 600)  # 10 min
+        fallback_interval = self.config.get("status_check_interval", 300)       # 5 min
+        
+        if total_count == 0:
+            return fallback_interval
+        elif live_count == total_count:
+            # All channels are live - use short interval
+            logger.debug(f"All {total_count} channels live, using {live_interval}s interval")
+            return live_interval
+        elif offline_count == total_count:
+            # All channels are offline - use long interval
+            logger.debug(f"All {total_count} channels offline, using {offline_interval}s interval")
+            return offline_interval
+        else:
+            # Mixed status - weighted average favoring live channels
+            live_weight = 0.7  # Bias toward checking live channels more frequently
+            offline_weight = 0.3
+            
+            live_ratio = live_count / total_count
+            offline_ratio = offline_count / total_count
+            
+            weighted_interval = (
+                live_ratio * live_weight * live_interval +
+                offline_ratio * offline_weight * offline_interval +
+                (1 - live_weight - offline_weight) * fallback_interval
+            )
+            
+            interval = int(weighted_interval)
+            logger.debug(f"Mixed status ({live_count} live, {offline_count} offline), using {interval}s interval")
+            return interval
 
     def _check_all_favorites(self) -> None:
         """Check status for all favorite channels"""
