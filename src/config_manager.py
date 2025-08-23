@@ -36,6 +36,8 @@ from .constants import (
     MAX_RETRY_ATTEMPTS,
     MIN_RETRY_DELAY,
     MAX_RETRY_DELAY,
+    MIN_STARTUP_DELAY,
+    MAX_STARTUP_DELAY,
     VALIDATION_ERROR_MESSAGES,
 )
 from .logging_config import get_logger
@@ -297,18 +299,27 @@ class ConfigManager:
                 return True
 
             elif key == "network_timeout":
+                # Network settings should be strict about type (only accept actual integers)
+                if not isinstance(value, int):
+                    raise ValidationError("Network timeout must be an integer")
                 validate_numeric_range(
                     value, min_val=MIN_NETWORK_TIMEOUT, max_val=MAX_NETWORK_TIMEOUT, data_type=int
                 )
                 return True
 
             elif key == "connection_retry_attempts":
+                # Network settings should be strict about type (only accept actual integers)
+                if not isinstance(value, int):
+                    raise ValidationError("Connection retry attempts must be an integer")
                 validate_numeric_range(
                     value, min_val=MIN_RETRY_ATTEMPTS, max_val=MAX_RETRY_ATTEMPTS, data_type=int
                 )
                 return True
 
             elif key == "retry_delay":
+                # Network settings should be strict about type (only accept actual integers)
+                if not isinstance(value, int):
+                    raise ValidationError("Retry delay must be an integer")
                 validate_numeric_range(
                     value, min_val=MIN_RETRY_DELAY, max_val=MAX_RETRY_DELAY, data_type=int
                 )
@@ -317,6 +328,51 @@ class ConfigManager:
             elif key == "enable_network_diagnostics":
                 if not isinstance(value, bool):
                     raise ValidationError("Network diagnostics setting must be a boolean")
+                return True
+
+            elif key == "startup_status_check_delay":
+                if not isinstance(value, int):
+                    raise ValidationError("Startup delay must be an integer")
+                validate_numeric_range(
+                    value, min_val=MIN_STARTUP_DELAY, max_val=MAX_STARTUP_DELAY, data_type=int
+                )
+                return True
+
+            elif key == "enable_progressive_loading":
+                if not isinstance(value, bool):
+                    raise ValidationError("Progressive loading setting must be a boolean")
+                return True
+
+            elif key == "show_startup_progress":
+                if not isinstance(value, bool):
+                    raise ValidationError("Startup progress setting must be a boolean")
+                return True
+
+            elif key == "enable_concurrent_status_checks":
+                if not isinstance(value, bool):
+                    raise ValidationError("Concurrent status checks setting must be a boolean")
+                return True
+
+            elif key == "concurrent_max_workers":
+                if not isinstance(value, int):
+                    raise ValidationError("Concurrent max workers must be an integer")
+                validate_numeric_range(value, min_val=1, max_val=10, data_type=int)
+                return True
+
+            elif key == "enable_error_recovery":
+                if not isinstance(value, bool):
+                    raise ValidationError("Error recovery setting must be a boolean")
+                return True
+
+            elif key == "network_error_threshold":
+                if not isinstance(value, int):
+                    raise ValidationError("Network error threshold must be an integer")
+                validate_numeric_range(value, min_val=1, max_val=10, data_type=int)
+                return True
+
+            elif key == "enable_adaptive_timeouts":
+                if not isinstance(value, bool):
+                    raise ValidationError("Adaptive timeouts setting must be a boolean")
                 return True
 
             else:

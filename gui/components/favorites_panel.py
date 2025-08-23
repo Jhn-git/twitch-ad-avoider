@@ -62,14 +62,20 @@ class FavoritesPanel:
         self.selected_favorite_line: Optional[int] = None
         self.canvas_widgets: List[tk.Canvas] = []
         
+        # Spinner state
+        self._refresh_spinner_running = False
+        self._refresh_spinner_index = 0
+        
         # UI references
         self.favorites_listbox: Optional[tk.Text] = None
         self.refresh_btn: Optional[ttk.Button] = None
+        self.cancel_btn: Optional[ttk.Button] = None
         
         # Callbacks (set by parent components)
         self.on_channel_selected: Optional[Callable[[str], None]] = None
         self.on_watch_favorite: Optional[Callable[[str], None]] = None
         self.on_refresh_status: Optional[Callable[[], None]] = None
+        self.on_cancel_operation: Optional[Callable[[], bool]] = None
         
         # Create the favorites section
         self.main_frame = self._create_favorites_section()
@@ -77,7 +83,8 @@ class FavoritesPanel:
     def set_callbacks(self,
                      on_channel_selected: Optional[Callable[[str], None]] = None,
                      on_watch_favorite: Optional[Callable[[str], None]] = None,
-                     on_refresh_status: Optional[Callable[[], None]] = None) -> None:
+                     on_refresh_status: Optional[Callable[[], None]] = None,
+                     on_cancel_operation: Optional[Callable[[], bool]] = None) -> None:
         """
         Set callback functions for user interactions.
         
@@ -85,10 +92,12 @@ class FavoritesPanel:
             on_channel_selected: Called when a channel is selected
             on_watch_favorite: Called when user wants to watch a favorite
             on_refresh_status: Called when user requests status refresh
+            on_cancel_operation: Called when user wants to cancel current operation
         """
         self.on_channel_selected = on_channel_selected
         self.on_watch_favorite = on_watch_favorite
         self.on_refresh_status = on_refresh_status
+        self.on_cancel_operation = on_cancel_operation
 
     def set_theme(self, theme: Dict[str, Any]) -> None:
         """
@@ -177,7 +186,11 @@ class FavoritesPanel:
             side=tk.LEFT, padx=(0, 5)
         )
         self.refresh_btn = ttk.Button(fav_btn_frame, text="🔄 Refresh", command=self.refresh_status)
-        self.refresh_btn.pack(side=tk.LEFT)
+        self.refresh_btn.pack(side=tk.LEFT, padx=(5, 0))
+        
+        self.cancel_btn = ttk.Button(fav_btn_frame, text="⏹ Cancel", command=self.cancel_operation)
+        self.cancel_btn.pack(side=tk.LEFT, padx=(5, 0))
+        self.cancel_btn.config(state="disabled")  # Initially disabled
 
     def _on_favorite_click(self, event) -> None:
         """Handle click events in the favorites list"""
@@ -268,9 +281,87 @@ class FavoritesPanel:
             self.selected_favorite_line = None
 
     def refresh_status(self) -> None:
-        """Refresh favorites status"""
-        if self.on_refresh_status:
-            self.on_refresh_status()
+        """Refresh favorites status with improved feedback"""
+        if not self.on_refresh_status:
+            return
+            
+        # Start spinner on refresh button
+        if self.refresh_btn:
+            self._start_refresh_spinner()
+            
+        # Add status message
+        if self.status_manager:
+            self.status_manager.add_status_message("Refreshing stream status...")
+            
+        # Execute refresh callback
+        self.on_refresh_status()
+        
+        # Schedule spinner stop (will be overridden by actual completion)
+        self._schedule_spinner_stop()
+        
+    def cancel_operation(self) -> None:
+        """Cancel the current operation"""
+        if self.on_cancel_operation:
+            success = self.on_cancel_operation()
+            if success:
+                if self.status_manager:
+                    self.status_manager.add_status_message("Operation cancelled")
+                self._stop_refresh_spinner()
+            else:
+                if self.status_manager:
+                    self.status_manager.add_warning("No operation to cancel")
+        
+    def _start_refresh_spinner(self) -> None:
+        """Start spinner animation on refresh button"""
+        if not self.refresh_btn:
+            return
+            
+        self._refresh_spinner_running = True
+        self._refresh_spinner_index = 0
+        self.refresh_btn.config(state="disabled")
+        
+        # Enable cancel button
+        if self.cancel_btn:
+            self.cancel_btn.config(state="normal")
+            
+        self._update_refresh_spinner()
+        
+    def _update_refresh_spinner(self) -> None:
+        """Update refresh spinner animation frame"""
+        if not self._refresh_spinner_running or not self.refresh_btn:
+            return
+            
+        # Use spinner characters for animation
+        spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        spinner_char = spinner_chars[self._refresh_spinner_index]
+        self.refresh_btn.config(text=f"{spinner_char} Refreshing...")
+        
+        self._refresh_spinner_index = (self._refresh_spinner_index + 1) % len(spinner_chars)
+        
+        # Schedule next update
+        if self.main_frame:
+            self.main_frame.after(150, self._update_refresh_spinner)
+            
+    def _stop_refresh_spinner(self) -> None:
+        """Stop refresh spinner animation"""
+        self._refresh_spinner_running = False
+        if self.refresh_btn:
+            self.refresh_btn.config(state="normal", text="🔄 Refresh")
+            
+        # Disable cancel button
+        if self.cancel_btn:
+            self.cancel_btn.config(state="disabled")
+            
+    def _schedule_spinner_stop(self, delay: int = 3000) -> None:
+        """Schedule spinner stop after delay"""
+        if self.main_frame:
+            self.main_frame.after(delay, self._stop_refresh_spinner)
+            
+    def on_refresh_completed(self) -> None:
+        """Called when refresh operation is completed"""
+        self._stop_refresh_spinner()
+        if self.status_manager:
+            self.status_manager.add_status_message("Status refresh completed")
 
     def _add_channel_to_favorites(self, channel_name: str) -> None:
         """

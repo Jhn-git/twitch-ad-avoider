@@ -135,7 +135,7 @@ class StreamGUI:
         self.favorites_manager = FavoritesManager()
 
         # Initialize status checker and monitor
-        self.status_checker = StreamlinkStatusChecker(self.config)
+        self.status_checker = StreamlinkStatusChecker(self.config, progress_callback=self._on_progress_update)
         self.status_monitor = StatusMonitor(
             status_checker=self.status_checker,
             favorites_manager=self.favorites_manager,
@@ -165,17 +165,48 @@ class StreamGUI:
         # Create GUI components
         self.setup_gui()
         self.apply_theme()  # Apply initial theme
-        self.refresh_favorites_list()
+        
+        # Implement progressive loading based on configuration
+        enable_progressive_loading = self.config.get("enable_progressive_loading", True)
+        show_startup_progress = self.config.get("show_startup_progress", True)
+        
+        if enable_progressive_loading:
+            # Phase 1: Load favorites display first (immediate)
+            self.refresh_favorites_list()
+            
+            if show_startup_progress:
+                self.status_manager.add_status_message("Favorites loaded. Preparing status monitoring...")
+            
+            # Phase 2: Initialize status monitoring with delay (background)
+            self.root.after(100, self._initialize_status_monitoring_delayed)
+        else:
+            # Traditional loading: everything at once
+            self.refresh_favorites_list()
+            self._initialize_status_monitoring_delayed()
 
+        # Handle window closing
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+    def _initialize_status_monitoring_delayed(self) -> None:
+        """Initialize status monitoring with optional startup feedback"""
+        show_startup_progress = self.config.get("show_startup_progress", True)
+        
         # Check streamlink availability and warn user if not available
         self._check_streamlink_dependency()
 
         # Start status monitoring if streamlink is available
         if self.status_checker.is_available():
-            self.status_monitor.start_monitoring()
-
-        # Handle window closing
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            if show_startup_progress:
+                startup_delay = self.config.get("startup_status_check_delay", 2)
+                if startup_delay > 0:
+                    self.status_manager.add_status_message(
+                        f"Starting status monitoring in {startup_delay} seconds..."
+                    )
+            
+            self.status_monitor.start_monitoring(delayed_start=True)
+            
+            if show_startup_progress:
+                self.status_manager.add_status_message("Status monitoring active")
 
     def setup_gui(self) -> None:
         """
@@ -353,7 +384,17 @@ class StreamGUI:
             variable=self.dark_mode_var,
             command=self._on_theme_toggle,
         )
-        dark_mode_check.grid(row=0, column=3, pady=5, sticky=tk.W)
+        dark_mode_check.grid(row=0, column=3, pady=5, sticky=tk.W, padx=(0, 10))
+
+        # Status monitoring toggle
+        self.status_monitoring_var = tk.BooleanVar(value=self.config.get("enable_status_monitoring", True))
+        status_monitoring_check = ttk.Checkbutton(
+            settings_frame,
+            text="Auto Status",
+            variable=self.status_monitoring_var,
+            command=self._on_status_monitoring_toggle,
+        )
+        status_monitoring_check.grid(row=0, column=4, pady=5, sticky=tk.W)
 
         return settings_frame
 
@@ -704,6 +745,27 @@ class StreamGUI:
 
         logger.info(f"Switched to {new_theme_name} theme")
 
+    def _on_status_monitoring_toggle(self) -> None:
+        """Handle status monitoring toggle"""
+        enabled = self.status_monitoring_var.get()
+        success = self.config.set("enable_status_monitoring", enabled)
+        
+        if success:
+            self.config.save_settings()
+            if enabled:
+                if self.status_checker.is_available():
+                    self.status_monitor.start_monitoring()
+                    self.status_manager.add_status_message("Automatic status monitoring enabled")
+                else:
+                    self.add_error("Streamlink not available for status monitoring")
+            else:
+                self.status_monitor.stop_monitoring()
+                self.status_manager.add_status_message("Automatic status monitoring disabled")
+        else:
+            # Reset checkbox if config update failed
+            self.status_monitoring_var.set(not enabled)
+            self.add_error("Failed to update status monitoring setting")
+
     def refresh_favorites_list(self) -> None:
         """
         Refresh the favorites text widget with status information.
@@ -997,6 +1059,10 @@ class StreamGUI:
         """Callback for when stream status is updated"""
         # Schedule GUI update on main thread
         self.root.after(0, self.refresh_favorites_list)
+        
+        # Stop refresh spinner if it's running
+        if hasattr(self, 'refresh_spinner_running') and self.refresh_spinner_running:
+            self.root.after(0, self._stop_refresh_spinner)
 
         # Update status message
         if len(updated_channels) == 1:
@@ -1013,6 +1079,21 @@ class StreamGUI:
                     f"Status updated for {len(updated_channels)} channels"
                 ),
             )
+
+    def _on_progress_update(self, message: str, current: int, total: int) -> None:
+        """Handle progress updates from network operations"""
+        # Schedule progress update on main thread
+        self.root.after(0, lambda: self._update_progress_display(message, current, total))
+        
+    def _update_progress_display(self, message: str, current: int, total: int) -> None:
+        """Update progress display on main thread"""
+        if total > 1:  # Only show progress for multiple operations
+            percentage = int((current / total) * 100)
+            progress_message = f"{message} ({current}/{total} - {percentage}%)"
+        else:
+            progress_message = message
+            
+        self.status_manager.add_status_message(progress_message)
 
     def _on_debug_toggle(self):
         """Handle debug mode checkbox toggle"""
