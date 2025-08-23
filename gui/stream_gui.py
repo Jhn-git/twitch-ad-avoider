@@ -45,7 +45,7 @@ from src.twitch_viewer import TwitchViewer
 from src.exceptions import TwitchStreamError, ValidationError
 from src.config_manager import ConfigManager
 from src.validators import validate_channel_name
-from src.logging_config import get_logger, reconfigure_logging
+from src.logging_config import get_logger, reconfigure_logging_from_config
 from src.streamlink_status import StreamlinkStatusChecker
 from src.status_monitor import StatusMonitor
 from src.constants import GUI_GEOMETRY, GUI_MIN_SIZE
@@ -146,6 +146,16 @@ class StreamGUI:
         # Current stream process and thread
         self.current_stream_thread = None
         self.current_stream_process = None
+        
+        # Loading spinner state
+        self.spinner_running = False
+        self.refresh_spinner_running = False
+        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.spinner_index = 0
+        self.refresh_spinner_index = 0
+        
+        # Theme animation state
+        self.theme_animation_active = False
 
         # Theme management
         self.current_theme_name = self.config.get("current_theme", "light")
@@ -307,7 +317,8 @@ class StreamGUI:
         ttk.Button(fav_btn_frame, text="Remove", command=self.remove_favorite).pack(
             side=tk.LEFT, padx=(0, 5)
         )
-        ttk.Button(fav_btn_frame, text="🔄 Refresh", command=self.refresh_status).pack(side=tk.LEFT)
+        self.refresh_btn = ttk.Button(fav_btn_frame, text="🔄 Refresh", command=self.refresh_status)
+        self.refresh_btn.pack(side=tk.LEFT)
 
         return fav_btn_frame
 
@@ -438,7 +449,56 @@ class StreamGUI:
 
         Restores watch functionality after a stream process completes.
         """
+        self._stop_spinner()
         self.watch_btn.config(state="normal", text="Watch Stream")
+    
+    def _start_spinner(self, message: str = "Starting...") -> None:
+        """Start the loading spinner animation on the watch button"""
+        if not self.spinner_running:
+            self.spinner_running = True
+            self.spinner_index = 0
+            self._update_spinner(message)
+    
+    def _stop_spinner(self) -> None:
+        """Stop the loading spinner animation"""
+        self.spinner_running = False
+    
+    def _update_spinner(self, base_message: str) -> None:
+        """Update spinner animation frame"""
+        if not self.spinner_running:
+            return
+        
+        spinner_char = self.spinner_chars[self.spinner_index]
+        self.watch_btn.config(text=f"{spinner_char} {base_message}")
+        self.spinner_index = (self.spinner_index + 1) % len(self.spinner_chars)
+        
+        # Schedule next frame (update every 100ms for smooth animation)
+        self.root.after(100, lambda: self._update_spinner(base_message))
+    
+    def _start_refresh_spinner(self) -> None:
+        """Start the refresh spinner animation"""
+        if not self.refresh_spinner_running:
+            self.refresh_spinner_running = True
+            self.refresh_spinner_index = 0
+            self.refresh_btn.config(state="disabled")
+            self._update_refresh_spinner()
+    
+    def _stop_refresh_spinner(self) -> None:
+        """Stop the refresh spinner animation"""
+        self.refresh_spinner_running = False
+        self.refresh_btn.config(state="normal", text="🔄 Refresh")
+    
+    def _update_refresh_spinner(self) -> None:
+        """Update refresh spinner animation frame"""
+        if not self.refresh_spinner_running:
+            return
+        
+        spinner_char = self.spinner_chars[self.refresh_spinner_index]
+        self.refresh_btn.config(text=f"{spinner_char} Refreshing...")
+        self.refresh_spinner_index = (self.refresh_spinner_index + 1) % len(self.spinner_chars)
+        
+        # Schedule next frame (update every 150ms for refresh button)
+        self.root.after(150, self._update_refresh_spinner)
 
     def _create_status_circle(self, parent, is_live: bool, size: int = 12) -> tk.Canvas:
         """
@@ -560,6 +620,69 @@ class StreamGUI:
 
         logger.debug(f"Applied theme: {self.current_theme_name}")
 
+    def apply_theme_with_animation(self, duration_ms: int = 250) -> None:
+        """
+        Apply theme with a smooth transition animation.
+        
+        Args:
+            duration_ms: Duration of the transition in milliseconds
+        """
+        if self.theme_animation_active:
+            return  # Prevent overlapping animations
+        
+        self.theme_animation_active = True
+        
+        # Create a semi-transparent overlay for smooth transition effect
+        overlay = tk.Toplevel(self.root)
+        overlay.withdraw()  # Hide initially
+        overlay.overrideredirect(True)  # Remove window decorations
+        overlay.attributes('-topmost', True)  # Keep on top
+        
+        # Position overlay over main window
+        self.root.update_idletasks()  # Ensure geometry is updated
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        
+        overlay.geometry(f"{width}x{height}+{x}+{y}")
+        overlay.configure(bg="white")
+        
+        # Show overlay with fade-in effect
+        overlay.deiconify()
+        overlay.attributes('-alpha', 0.6)  # Semi-transparent
+        
+        # Apply the new theme after brief delay
+        def apply_theme_delayed():
+            self.apply_theme()
+            # Fade out overlay
+            self._fade_out_overlay(overlay, duration_ms // 2)
+        
+        self.root.after(duration_ms // 4, apply_theme_delayed)
+
+    def _fade_out_overlay(self, overlay: tk.Toplevel, duration_ms: int) -> None:
+        """Fade out the transition overlay"""
+        steps = 10
+        step_delay = duration_ms // steps
+        alpha_step = 0.6 / steps
+        current_alpha = 0.6
+        
+        def fade_step():
+            nonlocal current_alpha
+            current_alpha -= alpha_step
+            if current_alpha <= 0:
+                overlay.destroy()
+                self.theme_animation_active = False
+            else:
+                try:
+                    overlay.attributes('-alpha', current_alpha)
+                    self.root.after(step_delay, fade_step)
+                except tk.TclError:
+                    # Handle case where overlay was destroyed
+                    self.theme_animation_active = False
+        
+        fade_step()
+
     def switch_theme(self) -> None:
         """
         Switch between light and dark themes.
@@ -580,11 +703,11 @@ class StreamGUI:
         self.config.set("current_theme", new_theme_name)
         self.config.save_settings()
 
-        # Apply new theme
-        self.apply_theme()
+        # Apply new theme with animation
+        self.apply_theme_with_animation(duration_ms=300)
 
-        # Refresh favorites list to update Canvas circles
-        self.refresh_favorites_list()
+        # Refresh favorites list to update Canvas circles (after animation delay)
+        self.root.after(200, self.refresh_favorites_list)
 
         logger.info(f"Switched to {new_theme_name} theme")
 
@@ -599,6 +722,10 @@ class StreamGUI:
         self.favorites_listbox.configure(state=tk.NORMAL)
         self.favorites_listbox.delete(1.0, tk.END)
         self.selected_favorite_line = None
+        
+        # Properly destroy Canvas widgets before clearing to prevent memory leaks
+        for canvas in self.canvas_widgets:
+            canvas.destroy()
         self.canvas_widgets.clear()  # Clear Canvas widget tracking
 
         # Get favorites with status info
@@ -711,7 +838,7 @@ class StreamGUI:
 
         # Start stream in separate thread - disable all watch buttons
         self._disable_watch_buttons()
-        self.watch_btn.config(text="Starting...")
+        self._start_spinner("Starting stream...")
         self.status_manager.add_stream_message(f"Starting stream for {channel}...")
 
         def stream_worker():
@@ -868,8 +995,12 @@ class StreamGUI:
 
     def refresh_status(self):
         """Manually refresh stream status"""
+        self._start_refresh_spinner()
         self.status_manager.add_status_message("Refreshing stream status...")
         self.status_monitor.force_refresh()
+        
+        # Stop spinner after a short delay to show completion
+        self.root.after(2000, self._stop_refresh_spinner)
 
     def _on_status_updated(self, updated_channels):
         """Callback for when stream status is updated"""
@@ -899,6 +1030,7 @@ class StreamGUI:
 
         if old_debug != new_debug:
             self.config.set("debug", new_debug)
+            self.config.save_settings()  # Persist debug setting to JSON file
             self._reconfigure_logging()
 
             if new_debug:
@@ -925,11 +1057,11 @@ class StreamGUI:
             self.config.set("current_theme", new_theme_name)
             self.config.save_settings()
 
-            # Apply new theme
-            self.apply_theme()
+            # Apply new theme with animation
+            self.apply_theme_with_animation(duration_ms=300)
 
-            # Refresh favorites list to update Canvas circles
-            self.refresh_favorites_list()
+            # Refresh favorites list to update Canvas circles (after animation delay)
+            self.root.after(200, self.refresh_favorites_list)
 
             self.status_manager.add_system_message(f"Switched to {new_theme_name} theme")
             logger.info(f"Theme changed via GUI checkbox: {old_theme} -> {new_theme_name}")
@@ -937,25 +1069,14 @@ class StreamGUI:
     def _reconfigure_logging(self):
         """Reconfigure logging based on current settings"""
         try:
+            # Use centralized reconfiguration function
+            # Logger reconfiguration happens globally - no need to reassign module logger
+            reconfigure_logging_from_config(self.config)
+
             debug_enabled = self.config.get("debug", False)
-            log_level = self.config.get(
-                "log_level", "INFO"
-            )  # Don't override here, let setup_logging handle it
-            log_to_file = self.config.get("log_to_file", False)
-
-            # Use same logic as main.py - enable_debug parameter will override level
-            reconfigure_logging(
-                level=log_level, log_to_file=log_to_file, enable_debug=debug_enabled
-            )
-
-            # Update global logger reference
-            global logger
-            logger = get_logger(__name__)
-
             if debug_enabled:
                 logger.debug("Logging reconfigured via GUI - debug mode enabled")
-                logger.debug(f"Configuration: log_level={log_level}, log_to_file={log_to_file}")
-                logger.debug("Debug logs will be saved to logs/twitch_ad_avoider.log")
+                logger.debug("Debug logs will be automatically saved to logs/twitch_ad_avoider.log")
             else:
                 logger.info("Logging reconfigured via GUI - debug mode disabled")
 

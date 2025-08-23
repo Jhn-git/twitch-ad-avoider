@@ -14,7 +14,8 @@
       "Bash(black:*)",
       "Bash(flake8:*)",
       "Bash(mypy:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": [],
     "ask": [],

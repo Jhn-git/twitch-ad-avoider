@@ -26,12 +26,13 @@ def setup_logging(
     Returns:
         Configured logger instance
     """
-    # When debug is enabled, override level to DEBUG regardless of level parameter
+    # When debug is enabled, override level to DEBUG and enable file logging
     if enable_debug:
         effective_level = "DEBUG"
-        log_to_file = True  # Auto-enable file logging in debug mode
+        effective_log_to_file = True  # Auto-enable file logging in debug mode
     else:
         effective_level = level
+        effective_log_to_file = log_to_file
     
     # Convert level string to logging constant
     numeric_level = getattr(logging, effective_level.upper(), logging.INFO)
@@ -62,7 +63,7 @@ def setup_logging(
     logger.addHandler(console_handler)
     
     # File handler (optional)
-    if log_to_file:
+    if effective_log_to_file:
         if log_file_path is None:
             log_file_path = Path("logs/twitch_ad_avoider.log")
         
@@ -105,6 +106,55 @@ def reconfigure_logging(
     
     # Reconfigure with new settings using the same logic as setup_logging
     return setup_logging(level, log_to_file, log_file_path, enable_debug)
+
+
+def configure_logging_from_config(config_manager) -> logging.Logger:
+    """
+    Configure logging based on settings from ConfigManager.
+    
+    This is the centralized logging configuration function that eliminates
+    duplicate parameter handling across the application.
+    
+    Args:
+        config_manager: ConfigManager instance containing logging settings
+        
+    Returns:
+        Configured logger instance
+    """
+    # Get settings from config
+    debug_enabled = config_manager.get('debug', False)
+    log_level = config_manager.get('log_level', 'INFO')
+    log_to_file = config_manager.get('log_to_file', False)
+    
+    # Configure logging with simplified logic
+    return setup_logging(
+        level=log_level,
+        log_to_file=log_to_file,
+        enable_debug=debug_enabled
+    )
+
+
+def reconfigure_logging_from_config(config_manager) -> logging.Logger:
+    """
+    Reconfigure logging based on settings from ConfigManager.
+    
+    Args:
+        config_manager: ConfigManager instance containing logging settings
+        
+    Returns:
+        Reconfigured logger instance
+    """
+    # Get settings from config
+    debug_enabled = config_manager.get('debug', False)
+    log_level = config_manager.get('log_level', 'INFO')
+    log_to_file = config_manager.get('log_to_file', False)
+    
+    # Reconfigure logging with simplified logic
+    return reconfigure_logging(
+        level=log_level,
+        log_to_file=log_to_file,
+        enable_debug=debug_enabled
+    )
 
 
 def get_logger(name: str = "twitch_ad_avoider") -> logging.Logger:

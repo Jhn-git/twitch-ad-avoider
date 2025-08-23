@@ -22,8 +22,12 @@ DEFAULT_SETTINGS = {
     "player_args": None,
     # Stream status monitoring settings
     "enable_status_monitoring": True,
-    "status_check_interval": 300,  # 5 minutes in seconds
+    "status_check_interval": 300,  # 5 minutes in seconds (fallback for mixed status)
     "status_cache_duration": 60,  # 1 minute in seconds
+    # Smart polling intervals
+    "status_check_interval_live": 150,  # 2.5 minutes for live channels
+    "status_check_interval_offline": 600,  # 10 minutes for offline channels
+    "enable_smart_polling": True,  # Enable adaptive polling intervals
     # GUI theme settings
     "current_theme": "light",  # light or dark theme
     # Network settings
