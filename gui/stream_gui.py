@@ -421,13 +421,6 @@ class StreamGUI:
         Displays an error dialog and disables functionality if streamlink is not available.
         """
         if not self.viewer.is_streamlink_available():
-            error_msg = (
-                "Streamlink is not available or not working properly.\n\n"
-                "Please ensure streamlink is installed:\n"
-                "pip install streamlink\n\n"
-                "The application may not function correctly without streamlink."
-            )
-            messagebox.showerror("Streamlink Not Available", error_msg)
             self.status_manager.add_error(
                 "Streamlink not available - install with 'pip install streamlink'",
                 StatusCategory.SYSTEM,
@@ -806,19 +799,19 @@ class StreamGUI:
         """
         channel = self.channel_var.get().strip()
         if not channel:
-            messagebox.showerror("Error", "Please enter a channel name")
+            self.status_manager.add_error("Please enter a channel name", StatusCategory.STREAM)
             return
 
         # Validate channel before proceeding
         try:
             validate_channel_name(channel)
         except ValidationError as e:
-            messagebox.showerror("Validation Error", str(e))
+            self.status_manager.add_error(str(e), StatusCategory.STREAM)
             return
 
         # Prevent concurrent streams
         if self.current_stream_process and self.current_stream_process.poll() is None:
-            messagebox.showwarning("Warning", "A stream is already running. Please close it first.")
+            self.status_manager.add_warning("A stream is already running. Please close it first.", StatusCategory.STREAM)
             return
 
         # Update configuration
@@ -895,7 +888,7 @@ class StreamGUI:
     def watch_favorite(self):
         """Watch selected favorite channel"""
         if not self.selected_favorite_line:
-            messagebox.showwarning("Warning", "Please select a favorite channel")
+            self.status_manager.add_warning("Please select a favorite channel", StatusCategory.FAVORITES)
             return
 
         # Extract channel name from formatted display text in the selected line
@@ -904,7 +897,7 @@ class StreamGUI:
         display_text = self.favorites_listbox.get(line_start, line_end).strip()
 
         if not display_text:
-            messagebox.showwarning("Warning", "No channel selected")
+            self.status_manager.add_warning("No channel selected", StatusCategory.FAVORITES)
             return
 
         channel = self._extract_channel_name(display_text)
@@ -926,14 +919,14 @@ class StreamGUI:
         """
         channel_name = channel_name.strip()
         if not channel_name:
-            messagebox.showerror("Error", "Please enter a channel name")
+            self.status_manager.add_error("Please enter a channel name", StatusCategory.FAVORITES)
             return
 
         # Validate channel name
         try:
             validated_channel = validate_channel_name(channel_name)
         except ValidationError as e:
-            messagebox.showerror("Validation Error", str(e))
+            self.status_manager.add_error(str(e), StatusCategory.FAVORITES)
             return
 
         channel_name = validated_channel
@@ -943,9 +936,8 @@ class StreamGUI:
             self.status_monitor.add_channel_to_monitoring(channel_name)
             self.refresh_favorites_list()
             self.status_manager.add_favorites_message(f"Added {channel_name} to favorites")
-            messagebox.showinfo("Success", f"Added {channel_name} to favorites")
         else:
-            messagebox.showwarning("Warning", f"{channel_name} is already in favorites")
+            self.status_manager.add_warning(f"{channel_name} is already in favorites", StatusCategory.FAVORITES)
 
     def add_favorite(self):
         """Add current channel to favorites"""
@@ -961,7 +953,7 @@ class StreamGUI:
     def remove_favorite(self):
         """Remove selected favorite"""
         if not self.selected_favorite_line:
-            messagebox.showwarning("Warning", "Please select a favorite to remove")
+            self.status_manager.add_warning("Please select a favorite to remove", StatusCategory.FAVORITES)
             return
 
         # Extract channel name from formatted display text in the selected line
@@ -970,7 +962,7 @@ class StreamGUI:
         display_text = self.favorites_listbox.get(line_start, line_end).strip()
 
         if not display_text:
-            messagebox.showwarning("Warning", "No channel selected")
+            self.status_manager.add_warning("No channel selected", StatusCategory.FAVORITES)
             return
 
         channel = self._extract_channel_name(display_text)
@@ -991,7 +983,6 @@ class StreamGUI:
         """Handle stream error"""
         self._enable_watch_buttons()
         self.status_manager.add_stream_message(message, StatusLevel.ERROR)
-        messagebox.showerror("Stream Error", message)
 
     def refresh_status(self):
         """Manually refresh stream status"""
@@ -1029,8 +1020,16 @@ class StreamGUI:
         old_debug = self.config.get("debug", False)
 
         if old_debug != new_debug:
+            # Update debug flag
             self.config.set("debug", new_debug)
-            self.config.save_settings()  # Persist debug setting to JSON file
+            
+            # Synchronize log_level setting to match debug state
+            if new_debug:
+                self.config.set("log_level", "DEBUG")
+            else:
+                self.config.set("log_level", "INFO")  # Reset to default
+            
+            self.config.save_settings()  # Persist debug and log_level settings to JSON file
             self._reconfigure_logging()
 
             if new_debug:

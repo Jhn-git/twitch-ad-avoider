@@ -101,6 +101,9 @@ class ConfigManager:
                 # Validate settings
                 self._validate_settings()
 
+                # Synchronize debug flag and log_level for consistency
+                self._sync_debug_and_log_level()
+
                 logger.info(f"Settings loaded from {self.config_path}")
 
             except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -330,3 +333,30 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Unexpected validation error for {key}={value}: {e}")
             return False
+
+    def _sync_debug_and_log_level(self) -> None:
+        """
+        Synchronize debug flag and log_level setting for consistency.
+        
+        This ensures the JSON configuration accurately reflects the expected behavior:
+        - If debug=true but log_level != "DEBUG", update log_level to "DEBUG"  
+        - If debug=false but log_level == "DEBUG", update log_level to "INFO"
+        """
+        debug_enabled = self._settings.get("debug", False)
+        current_log_level = self._settings.get("log_level", "INFO")
+        
+        needs_save = False
+        
+        if debug_enabled and current_log_level != "DEBUG":
+            self._settings["log_level"] = "DEBUG"
+            logger.debug("Auto-synced log_level to DEBUG (debug mode is enabled)")
+            needs_save = True
+            
+        elif not debug_enabled and current_log_level == "DEBUG":
+            self._settings["log_level"] = "INFO"
+            logger.debug("Auto-synced log_level to INFO (debug mode is disabled)")
+            needs_save = True
+        
+        # Save the synchronized settings back to file if changes were made
+        if needs_save:
+            self.save_settings()

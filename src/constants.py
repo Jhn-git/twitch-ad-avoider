@@ -75,7 +75,7 @@ LOG_FILE = LOG_DIR / "twitch_ad_avoider.log"
 
 # GUI settings
 GUI_TITLE = f"{APP_NAME} - Stream Manager"
-GUI_GEOMETRY = "400x500"
+GUI_GEOMETRY = "600x800"
 GUI_MIN_SIZE = (350, 400)
 
 # Twitch username validation regex
