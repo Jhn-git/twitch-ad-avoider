@@ -46,6 +46,10 @@ DEFAULT_SETTINGS = {
     "enable_error_recovery": True,  # Enable automatic error recovery strategies
     "network_error_threshold": 3,  # Number of network errors before triggering recovery
     "enable_adaptive_timeouts": True,  # Adjust timeouts based on network conditions
+    # Chat settings
+    "chat_auto_connect": True,  # Automatically connect to chat when starting a stream
+    "chat_max_messages": 500,  # Maximum number of chat messages to keep in memory
+    "chat_show_timestamps": True,  # Show timestamps in chat messages
 }
 
 # Stream quality options
