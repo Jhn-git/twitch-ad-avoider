@@ -375,6 +375,23 @@ class ConfigManager:
                     raise ValidationError("Adaptive timeouts setting must be a boolean")
                 return True
 
+            # Chat settings validation
+            elif key == "chat_auto_connect":
+                if not isinstance(value, bool):
+                    raise ValidationError("Chat auto-connect setting must be a boolean")
+                return True
+
+            elif key == "chat_max_messages":
+                if not isinstance(value, int):
+                    raise ValidationError("Chat max messages must be an integer")
+                validate_numeric_range(value, min_val=100, max_val=2000, data_type=int)
+                return True
+
+            elif key == "chat_show_timestamps":
+                if not isinstance(value, bool):
+                    raise ValidationError("Chat show timestamps setting must be a boolean")
+                return True
+
             else:
                 # Unknown setting keys are allowed but logged
                 logger.debug(f"Unknown setting key: {key}")
