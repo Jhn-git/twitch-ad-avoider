@@ -20,32 +20,14 @@ DEFAULT_SETTINGS = {
     "log_level": "INFO",
     "player_path": None,
     "player_args": None,
-    # Stream status monitoring settings
-    "enable_status_monitoring": True,
-    "status_check_interval": 300,  # 5 minutes in seconds (fallback for mixed status)
-    "status_cache_duration": 60,  # 1 minute in seconds
-    # Smart polling intervals
-    "status_check_interval_live": 150,  # 2.5 minutes for live channels
-    "status_check_interval_offline": 600,  # 10 minutes for offline channels
-    "enable_smart_polling": True,  # Enable adaptive polling intervals
     # GUI theme settings
     "current_theme": "light",  # light or dark theme
     # Network settings
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
     "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
     "retry_delay": 5,  # Delay between retry attempts in seconds
-    "enable_network_diagnostics": True,  # Enable network connectivity diagnostics
-    # Startup optimization settings
-    "startup_status_check_delay": 2,  # Delay before initial status checking in seconds
-    "enable_progressive_loading": True,  # Load favorites first, then update status
-    "show_startup_progress": True,  # Show progress indicator during startup operations
-    # Concurrent processing settings
-    "enable_concurrent_status_checks": True,  # Use concurrent processing for status checks
-    "concurrent_max_workers": 3,  # Maximum concurrent threads for status checking
-    # Error handling and recovery settings
-    "enable_error_recovery": True,  # Enable automatic error recovery strategies
-    "network_error_threshold": 3,  # Number of network errors before triggering recovery
-    "enable_adaptive_timeouts": True,  # Adjust timeouts based on network conditions
+    # Authentication settings
+    "twitch_client_id": "",  # Twitch application client ID for OAuth
     # Chat settings
     "chat_auto_connect": True,  # Automatically connect to chat when starting a stream
     "chat_max_messages": 500,  # Maximum number of chat messages to keep in memory

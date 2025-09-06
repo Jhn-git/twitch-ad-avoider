@@ -256,13 +256,6 @@ class ConfigManager:
                 validate_numeric_range(value, min_val=0, max_val=3600, data_type=int)
                 return True
 
-            elif key == "status_check_interval":
-                validate_numeric_range(value, min_val=10, max_val=86400, data_type=int)
-                return True
-
-            elif key == "status_cache_duration":
-                validate_numeric_range(value, min_val=1, max_val=3600, data_type=int)
-                return True
 
             elif key == "debug":
                 if not isinstance(value, bool):
@@ -274,10 +267,6 @@ class ConfigManager:
                     raise ValidationError("Log to file setting must be a boolean")
                 return True
 
-            elif key == "enable_status_monitoring":
-                if not isinstance(value, bool):
-                    raise ValidationError("Status monitoring setting must be a boolean")
-                return True
 
             elif key == "log_level":
                 validate_log_level(value)
@@ -325,54 +314,13 @@ class ConfigManager:
                 )
                 return True
 
-            elif key == "enable_network_diagnostics":
-                if not isinstance(value, bool):
-                    raise ValidationError("Network diagnostics setting must be a boolean")
-                return True
-
-            elif key == "startup_status_check_delay":
-                if not isinstance(value, int):
-                    raise ValidationError("Startup delay must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_STARTUP_DELAY, max_val=MAX_STARTUP_DELAY, data_type=int
-                )
-                return True
-
-            elif key == "enable_progressive_loading":
-                if not isinstance(value, bool):
-                    raise ValidationError("Progressive loading setting must be a boolean")
-                return True
-
-            elif key == "show_startup_progress":
-                if not isinstance(value, bool):
-                    raise ValidationError("Startup progress setting must be a boolean")
-                return True
-
-            elif key == "enable_concurrent_status_checks":
-                if not isinstance(value, bool):
-                    raise ValidationError("Concurrent status checks setting must be a boolean")
-                return True
-
-            elif key == "concurrent_max_workers":
-                if not isinstance(value, int):
-                    raise ValidationError("Concurrent max workers must be an integer")
-                validate_numeric_range(value, min_val=1, max_val=10, data_type=int)
-                return True
-
-            elif key == "enable_error_recovery":
-                if not isinstance(value, bool):
-                    raise ValidationError("Error recovery setting must be a boolean")
-                return True
-
-            elif key == "network_error_threshold":
-                if not isinstance(value, int):
-                    raise ValidationError("Network error threshold must be an integer")
-                validate_numeric_range(value, min_val=1, max_val=10, data_type=int)
-                return True
-
-            elif key == "enable_adaptive_timeouts":
-                if not isinstance(value, bool):
-                    raise ValidationError("Adaptive timeouts setting must be a boolean")
+            # Authentication settings validation
+            elif key == "twitch_client_id":
+                if not isinstance(value, str):
+                    raise ValidationError("Twitch client ID must be a string")
+                # Allow empty string for initial setup
+                if value and (len(value) < 10 or len(value) > 50):
+                    raise ValidationError("Twitch client ID must be between 10-50 characters when provided")
                 return True
 
             # Chat settings validation

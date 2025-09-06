@@ -54,8 +54,6 @@ class ThemeController:
         self.themed_widgets: List[Any] = []
         self.canvas_widgets: List[tk.Canvas] = []
         
-        # Animation state
-        self.theme_animation_active = False
         
         # Status manager integration (set by parent)
         self.status_manager: Optional[StatusManager] = None
@@ -127,8 +125,8 @@ class ThemeController:
         
         Args:
             theme_name: Name of theme to apply
-            animate: Whether to use animation transition
-            animation_duration: Animation duration in milliseconds
+            animate: Ignored - animations removed for simplicity
+            animation_duration: Ignored - animations removed for simplicity
             
         Returns:
             True if theme was changed, False if already current
@@ -140,11 +138,8 @@ class ThemeController:
         self.current_theme_name = theme_name
         self.current_theme = get_theme(theme_name)
         
-        # Apply theme
-        if animate:
-            self.apply_theme_with_animation(animation_duration)
-        else:
-            self.apply_theme()
+        # Apply theme immediately (no animation)
+        self.apply_theme()
             
         # Notify callback
         if self.on_theme_changed:
@@ -158,13 +153,13 @@ class ThemeController:
         Toggle between light and dark themes.
         
         Args:
-            animate: Whether to use animation transition
+            animate: Ignored - animations removed for simplicity
             
         Returns:
             New theme name after toggle
         """
         new_theme = "dark" if self.current_theme_name == "light" else "light"
-        self.change_theme(new_theme, animate)
+        self.change_theme(new_theme, animate=False)
         return new_theme
 
     def apply_theme(self) -> None:
@@ -186,89 +181,6 @@ class ThemeController:
             
         logger.debug(f"Applied theme: {self.current_theme_name}")
 
-    def apply_theme_with_animation(self, duration_ms: int = 250) -> None:
-        """
-        Apply theme with smooth transition animation.
-        
-        Args:
-            duration_ms: Duration of transition in milliseconds
-        """
-        if self.theme_animation_active:
-            logger.debug("Theme animation already active, skipping")
-            return
-            
-        self.theme_animation_active = True
-        
-        # Create transition overlay
-        overlay = self._create_transition_overlay()
-        if not overlay:
-            # Fallback to direct theme application
-            self.apply_theme()
-            self.theme_animation_active = False
-            return
-            
-        # Apply theme after brief delay
-        self.root.after(duration_ms // 4, lambda: self._apply_theme_with_fade(overlay, duration_ms // 2))
-
-    def _create_transition_overlay(self) -> Optional[tk.Toplevel]:
-        """Create semi-transparent overlay for theme transition"""
-        try:
-            overlay = tk.Toplevel(self.root)
-            overlay.withdraw()  # Hide initially
-            overlay.overrideredirect(True)  # Remove decorations
-            overlay.attributes('-topmost', True)  # Keep on top
-            
-            # Position over main window
-            self.root.update_idletasks()
-            x = self.root.winfo_x()
-            y = self.root.winfo_y()
-            width = self.root.winfo_width()
-            height = self.root.winfo_height()
-            
-            overlay.geometry(f"{width}x{height}+{x}+{y}")
-            overlay.configure(bg="white")
-            
-            # Show with transparency
-            overlay.deiconify()
-            overlay.attributes('-alpha', 0.6)
-            
-            return overlay
-            
-        except tk.TclError as e:
-            logger.warning(f"Could not create transition overlay: {e}")
-            return None
-
-    def _apply_theme_with_fade(self, overlay: tk.Toplevel, fade_duration: int) -> None:
-        """Apply theme and fade out overlay"""
-        self.apply_theme()
-        self._fade_out_overlay(overlay, fade_duration)
-
-    def _fade_out_overlay(self, overlay: tk.Toplevel, duration_ms: int) -> None:
-        """Fade out transition overlay with steps"""
-        steps = 10
-        step_delay = duration_ms // steps
-        alpha_step = 0.6 / steps
-        current_alpha = 0.6
-        
-        def fade_step():
-            nonlocal current_alpha
-            current_alpha -= alpha_step
-            
-            if current_alpha <= 0:
-                try:
-                    overlay.destroy()
-                except tk.TclError:
-                    pass  # Already destroyed
-                self.theme_animation_active = False
-            else:
-                try:
-                    overlay.attributes('-alpha', current_alpha)
-                    self.root.after(step_delay, fade_step)
-                except tk.TclError:
-                    # Overlay destroyed, stop animation
-                    self.theme_animation_active = False
-                    
-        fade_step()
 
     def _apply_theme_to_text_widgets(self, theme: Dict[str, Any]) -> None:
         """Apply theme to text widgets that need direct configuration"""
@@ -358,5 +270,4 @@ class ThemeController:
         """Clean up theme controller resources"""
         self.themed_widgets.clear()
         self.canvas_widgets.clear()
-        self.theme_animation_active = False
         logger.debug("Theme controller cleaned up")

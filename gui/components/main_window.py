@@ -56,7 +56,6 @@ class MainWindow:
         
         # Process tracking for cleanup
         self.current_stream_process: Optional[subprocess.Popen] = None
-        self.status_monitor = None  # Set by parent
         
         # Window close callbacks
         self.on_closing_callbacks: List[Callable[[], None]] = []
@@ -133,14 +132,6 @@ class MainWindow:
         """
         self.current_stream_process = process
 
-    def set_status_monitor(self, monitor: Any) -> None:
-        """
-        Set reference to status monitor for cleanup.
-        
-        Args:
-            monitor: Status monitor instance
-        """
-        self.status_monitor = monitor
 
     def add_closing_callback(self, callback: Callable[[], None]) -> None:
         """
@@ -162,13 +153,6 @@ class MainWindow:
             except Exception as e:
                 logger.error(f"Error in closing callback: {e}")
         
-        # Stop status monitoring
-        if self.status_monitor:
-            try:
-                self.status_monitor.stop_monitoring()
-                logger.debug("Status monitoring stopped")
-            except Exception as e:
-                logger.error(f"Error stopping status monitor: {e}")
 
         # Clean up stream processes
         self._cleanup_stream_process()

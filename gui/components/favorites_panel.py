@@ -42,7 +42,7 @@ class FavoritesPanel:
     def __init__(self, 
                  parent: ttk.Frame,
                  favorites_manager: FavoritesManager,
-                 status_manager: StatusManager,
+                 status_manager: Optional[StatusManager],
                  current_theme: Dict[str, Any]):
         """
         Initialize the FavoritesPanel.
@@ -98,6 +98,15 @@ class FavoritesPanel:
         self.on_watch_favorite = on_watch_favorite
         self.on_refresh_status = on_refresh_status
         self.on_cancel_operation = on_cancel_operation
+
+    def set_status_manager(self, status_manager: StatusManager) -> None:
+        """
+        Set the status manager for user feedback.
+        
+        Args:
+            status_manager: StatusManager instance for logging messages
+        """
+        self.status_manager = status_manager
 
     def set_theme(self, theme: Dict[str, Any]) -> None:
         """
@@ -233,7 +242,8 @@ class FavoritesPanel:
     def watch_favorite(self) -> None:
         """Watch the selected favorite channel"""
         if not self.selected_favorite_line or not self.favorites_listbox:
-            self.status_manager.add_warning("Please select a favorite channel", StatusCategory.FAVORITES)
+            if self.status_manager:
+                self.status_manager.add_warning("Please select a favorite channel", StatusCategory.FAVORITES)
             return
 
         # Extract channel name from selected line
@@ -242,7 +252,8 @@ class FavoritesPanel:
         display_text = self.favorites_listbox.get(line_start, line_end).strip()
 
         if not display_text:
-            self.status_manager.add_warning("No channel selected", StatusCategory.FAVORITES)
+            if self.status_manager:
+                self.status_manager.add_warning("No channel selected", StatusCategory.FAVORITES)
             return
 
         channel = self._extract_channel_name(display_text)
@@ -265,7 +276,8 @@ class FavoritesPanel:
     def remove_favorite(self) -> None:
         """Remove the selected favorite channel"""
         if not self.selected_favorite_line or not self.favorites_listbox:
-            self.status_manager.add_warning("Please select a favorite to remove", StatusCategory.FAVORITES)
+            if self.status_manager:
+                self.status_manager.add_warning("Please select a favorite to remove", StatusCategory.FAVORITES)
             return
 
         # Extract channel name
@@ -275,9 +287,10 @@ class FavoritesPanel:
         
         if display_text:
             channel = self._extract_channel_name(display_text)
-            self.favorites_manager.remove_channel(channel)
+            self.favorites_manager.remove_favorite(channel)
             self.refresh_favorites_list()
-            self.status_manager.add_favorites_message(f"Removed {channel} from favorites")
+            if self.status_manager:
+                self.status_manager.add_favorites_message(f"Removed {channel} from favorites")
             self.selected_favorite_line = None
 
     def refresh_status(self) -> None:
@@ -301,15 +314,10 @@ class FavoritesPanel:
         
     def cancel_operation(self) -> None:
         """Cancel the current operation"""
-        if self.on_cancel_operation:
-            success = self.on_cancel_operation()
-            if success:
-                if self.status_manager:
-                    self.status_manager.add_status_message("Operation cancelled")
-                self._stop_refresh_spinner()
-            else:
-                if self.status_manager:
-                    self.status_manager.add_warning("No operation to cancel")
+        # Since we no longer have background operations, just stop the spinner
+        self._stop_refresh_spinner()
+        if self.status_manager:
+            self.status_manager.add_status_message("Refresh stopped")
         
     def _start_refresh_spinner(self) -> None:
         """Start spinner animation on refresh button"""
@@ -371,7 +379,8 @@ class FavoritesPanel:
             channel_name: Channel name to add
         """
         if not channel_name:
-            self.status_manager.add_error("Please enter a channel name", StatusCategory.FAVORITES)
+            if self.status_manager:
+                self.status_manager.add_error("Please enter a channel name", StatusCategory.FAVORITES)
             return
 
         try:
@@ -379,17 +388,20 @@ class FavoritesPanel:
             from src.validators import validate_channel_name
             validated_channel = validate_channel_name(channel_name)
             
-            if self.favorites_manager.add_channel(validated_channel):
+            if self.favorites_manager.add_favorite(validated_channel):
                 self.refresh_favorites_list()
-                self.status_manager.add_favorites_message(f"Added {validated_channel} to favorites")
+                if self.status_manager:
+                    self.status_manager.add_favorites_message(f"Added {validated_channel} to favorites")
             else:
-                self.status_manager.add_warning(
-                    f"{validated_channel} is already in favorites", 
-                    StatusCategory.FAVORITES
-                )
+                if self.status_manager:
+                    self.status_manager.add_warning(
+                        f"{validated_channel} is already in favorites", 
+                        StatusCategory.FAVORITES
+                    )
                 
         except ValidationError as e:
-            self.status_manager.add_error(str(e), StatusCategory.FAVORITES)
+            if self.status_manager:
+                self.status_manager.add_error(str(e), StatusCategory.FAVORITES)
 
     def _extract_channel_name(self, display_text: str) -> str:
         """Extract channel name from formatted display text"""
@@ -407,7 +419,7 @@ class FavoritesPanel:
         self.canvas_widgets.clear()
 
         # Get favorites data
-        favorites = self.favorites_manager.get_all_channels()
+        favorites = self.favorites_manager.get_favorites_with_status()
         
         if not favorites:
             self.favorites_listbox.insert(tk.END, "No favorites added yet")
@@ -426,17 +438,18 @@ class FavoritesPanel:
             return
             
         # Create status circle
-        canvas = self._create_status_canvas(fav.status)
+        status = "online" if fav.is_live else "offline"
+        canvas = self._create_status_canvas(status)
         self.canvas_widgets.append(canvas)
         
         # Insert canvas widget
         self.favorites_listbox.window_create(tk.END, window=canvas)
         
         # Add channel name with spacing
-        self.favorites_listbox.insert(tk.END, f" {fav.channel}")
+        self.favorites_listbox.insert(tk.END, f" {fav.channel_name}")
         
         # Add newline for next entry (except last)
-        if line_num < len(self.favorites_manager.get_all_channels()):
+        if line_num < len(self.favorites_manager.get_favorites_with_status()):
             self.favorites_listbox.insert(tk.END, "\n")
 
     def _create_status_canvas(self, status: str) -> tk.Canvas:

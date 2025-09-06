@@ -19,12 +19,14 @@ Key Features:
 
 import tkinter as tk
 import threading
+import time
 from typing import Optional, Callable
 
 from ..status_manager import StatusManager, StatusLevel, StatusCategory
 from ..components.chat_panel import ChatPanel
 from src.twitch_chat_client import TwitchChatClient, ChatMessage
 from src.config_manager import ConfigManager
+from src.auth_manager import AuthManager
 from src.validators import validate_channel_name
 from src.exceptions import ValidationError
 from src.logging_config import get_logger
@@ -61,8 +63,9 @@ class ChatController:
         self.config = config
         self.status_manager = status_manager
 
-        # Chat client
+        # Chat client and authentication
         self.chat_client = TwitchChatClient()
+        self.auth_manager = None  # Will be initialized when client ID is available
         self.current_channel = None
         self.is_connecting = False
 
@@ -71,11 +74,25 @@ class ChatController:
         self.max_messages = self.config.get("chat_max_messages", 500)
         self.show_timestamps = self.config.get("chat_show_timestamps", True)
 
+        # Initialize authentication if client ID is available
+        client_id = self.config.get("twitch_client_id", "")
+        if client_id:
+            self.auth_manager = AuthManager(client_id)
+            self._setup_auth_callbacks()
+            
+            # Check if already authenticated
+            if self.auth_manager.is_authenticated():
+                username = self.auth_manager.get_username()
+                access_token = self.auth_manager.get_access_token()
+                self.chat_client.set_authentication(username, access_token)
+                self.chat_panel.set_authentication_status(True, username)
+
         # Apply configuration to chat panel
         self.chat_panel.set_max_messages(self.max_messages)
 
-        # Setup chat client callbacks
+        # Setup callbacks
         self._setup_chat_callbacks()
+        self._setup_chat_panel_callbacks()
 
         # Callbacks for external events (set by parent)
         self.on_chat_connected: Optional[Callable[[str], None]] = None
@@ -89,7 +106,25 @@ class ChatController:
         self.chat_client.on_connect = self._on_chat_connected
         self.chat_client.on_disconnect = self._on_chat_disconnected
         self.chat_client.on_message = self._on_chat_message
+        self.chat_client.on_send_success = self._on_message_sent
+        self.chat_client.on_send_error = self._on_message_send_error
         # Note: on_raw_message callback intentionally not set for production
+
+    def _setup_auth_callbacks(self) -> None:
+        """Setup callbacks for the authentication manager"""
+        if self.auth_manager:
+            self.auth_manager.set_callbacks(
+                on_success=self._on_auth_success,
+                on_failure=self._on_auth_failure
+            )
+
+    def _setup_chat_panel_callbacks(self) -> None:
+        """Setup callbacks for the chat panel"""
+        self.chat_panel.set_callbacks(
+            on_auth_login=self._on_auth_login_requested,
+            on_auth_logout=self._on_auth_logout_requested,
+            on_send_message=self._on_send_message_requested
+        )
 
     def _on_chat_connected(self) -> None:
         """Handle chat connection success (called from IRC thread)"""
@@ -314,6 +349,82 @@ class ChatController:
 
         except Exception as e:
             logger.error(f"Error updating chat configuration: {e}")
+
+    # Authentication callback handlers
+    def _on_auth_login_requested(self) -> None:
+        """Handle login request from chat panel"""
+        if not self.auth_manager:
+            client_id = self.config.get("twitch_client_id", "")
+            if not client_id:
+                self.status_manager.add_error("Twitch Client ID not configured. Please set it in settings.")
+                return
+            
+            # Initialize auth manager if needed
+            self.auth_manager = AuthManager(client_id)
+            self._setup_auth_callbacks()
+        
+        # Start OAuth flow
+        if not self.auth_manager.start_oauth_flow():
+            self.status_manager.add_error("Failed to start authentication flow")
+
+    def _on_auth_logout_requested(self) -> None:
+        """Handle logout request from chat panel"""
+        if self.auth_manager:
+            self.auth_manager.logout()
+        
+        # Clear chat client authentication
+        self.chat_client.clear_authentication()
+        
+        # Update UI
+        self.chat_panel.set_authentication_status(False)
+        
+        # Disconnect from chat if connected
+        if self.chat_client.is_connected():
+            self.disconnect_from_chat()
+        
+        self.status_manager.add_status_message("Logged out successfully")
+
+    def _on_auth_success(self, username: str) -> None:
+        """Handle successful authentication"""
+        if self.auth_manager:
+            access_token = self.auth_manager.get_access_token()
+            
+            # Set authentication on chat client
+            self.chat_client.set_authentication(username, access_token)
+            
+            # Update UI
+            self.chat_panel.set_authentication_status(True, username)
+            
+            self.status_manager.add_status_message(f"Logged in as {username}")
+            logger.info(f"Successfully authenticated as {username}")
+
+    def _on_auth_failure(self, error_message: str) -> None:
+        """Handle authentication failure"""
+        self.chat_panel.set_authentication_status(False)
+        self.status_manager.add_error(f"Login failed: {error_message}")
+        logger.warning(f"Authentication failed: {error_message}")
+
+    # Message sending callback handlers
+    def _on_send_message_requested(self, message: str) -> None:
+        """Handle send message request from chat panel"""
+        if not self.chat_client.can_send_messages():
+            self.status_manager.add_warning("Cannot send message: not authenticated or not connected")
+            return
+        
+        # Send message via chat client
+        success = self.chat_client.send_message(message)
+        if not success:
+            self.status_manager.add_error("Failed to send message")
+
+    def _on_message_sent(self, message: str) -> None:
+        """Handle successful message send"""
+        # Add our own message to the chat display
+        if self.chat_client.username:
+            self.chat_panel.add_message(self.chat_client.username, message, time.time())
+
+    def _on_message_send_error(self, error_message: str) -> None:
+        """Handle message send error"""
+        self.status_manager.add_error(f"Message send error: {error_message}")
 
     def cleanup(self) -> None:
         """Clean up chat resources"""

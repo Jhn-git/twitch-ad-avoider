@@ -77,7 +77,7 @@ def main():
     except ImportError as e:
         print(f"Import Error: {e}")
         print("Please ensure all dependencies are installed:")
-        print("  pip install -r requirements.txt")
+        print("  pip install -e .")
         return 1
     except KeyboardInterrupt:
         print("\nApplication closed by user")

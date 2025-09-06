@@ -20,7 +20,6 @@ except ImportError:
 from .exceptions import StreamlinkError
 from .logging_config import get_logger
 from .constants import ERROR_MESSAGES, NETWORK_TEST_ENDPOINTS
-from .error_recovery import ErrorRecoveryManager
 
 logger = get_logger(__name__)
 
@@ -40,14 +39,9 @@ class StreamlinkStatusChecker:
         self.progress_callback = progress_callback
         self.session = streamlink.Streamlink()
         
-        # Initialize error recovery manager
-        self.error_recovery = ErrorRecoveryManager(config_manager)
-
         # Configure session timeouts if config is available
         if self.config:
-            base_timeout = self.config.get("network_timeout", 30)
-            # Use adaptive timeout from error recovery
-            timeout = self.error_recovery.get_adaptive_timeout(base_timeout)
+            timeout = self.config.get("network_timeout", 30)
             # Configure streamlink session options
             self.session.set_option("http-timeout", timeout)
             logger.debug(f"Streamlink configured with {timeout}s timeout (adaptive)")
@@ -60,7 +54,8 @@ class StreamlinkStatusChecker:
         
     def get_error_statistics(self) -> Dict:
         """Get current error statistics and network condition"""
-        return self.error_recovery.get_error_statistics()
+        # Simplified - no complex error tracking
+        return {"total": 0, "by_type": {}, "consecutive": 0, "condition": "good"}
 
     def check_stream_status(self, channel_name: str) -> bool:
         """
@@ -87,8 +82,7 @@ class StreamlinkStatusChecker:
                 streams = self.session.streams(url)
                 is_live = len(streams) > 0
 
-                # Record successful operation
-                self.error_recovery.record_success("stream_check", channel_name)
+                # Success - no error tracking needed
                 
                 logger.debug(f"Stream {channel_name}: {'LIVE' if is_live else 'OFFLINE'}")
                 return is_live
@@ -96,8 +90,7 @@ class StreamlinkStatusChecker:
             except streamlink.StreamlinkError as e:
                 error_msg = str(e)
                 
-                # Record error for recovery analysis
-                self.error_recovery.record_error(e, "stream_check", channel_name)
+                # Simple error logging - no complex recovery tracking
 
                 # Check if this is a timeout/network error that should be retried
                 is_network_error = any(
@@ -121,8 +114,7 @@ class StreamlinkStatusChecker:
                     return False
 
             except Exception as e:
-                # Record error for recovery analysis
-                self.error_recovery.record_error(e, "stream_check", channel_name)
+                # Simple error logging - no complex recovery tracking
                 
                 if attempt < max_attempts - 1:
                     logger.warning(

@@ -141,3 +141,62 @@ def is_valid_theme(theme_name: str) -> bool:
         True if theme name is valid, False otherwise
     """
     return theme_name in THEMES
+
+
+def get_emoji_font() -> tuple[str, int] | None:
+    """
+    Get emoji-supporting font configuration for the current platform.
+    
+    Returns:
+        Tuple of (font_family, font_size) for emoji support, or None if unavailable
+    """
+    import platform
+    import tkinter.font as tkfont
+    
+    system = platform.system().lower()
+    
+    # Platform-specific emoji fonts with fallback sizes
+    font_candidates = []
+    
+    if system == "windows":
+        font_candidates = [
+            ("Segoe UI Emoji", 10),
+            ("Segoe UI", 10),
+            ("Arial", 10)
+        ]
+    elif system == "darwin":  # macOS
+        font_candidates = [
+            ("Apple Color Emoji", 12),
+            ("SF Pro Display", 12),
+            ("Helvetica", 12)
+        ]
+    elif system == "linux":
+        font_candidates = [
+            ("Noto Color Emoji", 10),
+            ("DejaVu Sans", 10),
+            ("Liberation Sans", 10)
+        ]
+    else:
+        # Generic fallback for other systems
+        font_candidates = [
+            ("Arial", 10),
+            ("Helvetica", 10),
+            ("Sans-serif", 10)
+        ]
+    
+    # Try each font candidate to see if it's available
+    for family, size in font_candidates:
+        try:
+            # Test if the font family is available
+            test_font = tkfont.Font(family=family, size=size)
+            actual_family = test_font.actual("family")
+            
+            # If the actual family matches or is close to what we requested, use it
+            if family.lower() in actual_family.lower() or actual_family != "TkDefaultFont":
+                return (family, size)
+        except Exception:
+            # Font not available, try next candidate
+            continue
+    
+    # If no specific font found, return None for graceful fallback
+    return None

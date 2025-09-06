@@ -70,10 +70,11 @@ class ChatMessage:
 
 class TwitchChatClient:
     """
-    Simple Twitch IRC chat client for real-time message receiving.
+    Twitch IRC chat client for real-time messaging and receiving.
 
-    This client connects anonymously to Twitch IRC servers and provides
-    callback-based event handling for integration with GUI components.
+    This client supports both anonymous and authenticated connections to Twitch IRC,
+    providing callback-based event handling for integration with GUI components.
+    When authenticated, it can send messages to chat.
     """
 
     def __init__(self):
@@ -82,16 +83,49 @@ class TwitchChatClient:
         self.running = False
         self.current_channel = None
 
+        # Authentication state
+        self.is_authenticated = False
+        self.username = None
+        self.oauth_token = None
+
         # Callbacks
         self.on_message: Optional[Callable[[ChatMessage], None]] = None
         self.on_connect: Optional[Callable[[], None]] = None
         self.on_disconnect: Optional[Callable[[], None]] = None
         self.on_raw_message: Optional[Callable[[str], None]] = None
+        self.on_send_success: Optional[Callable[[str], None]] = None
+        self.on_send_error: Optional[Callable[[str], None]] = None
 
         # IRC settings
         self.server = "irc.chat.twitch.tv"
         self.port = 6667
-        self.nickname = f"justinfan{int(time.time() % 100000)}"  # Anonymous user
+        self.nickname = f"justinfan{int(time.time() % 100000)}"  # Default anonymous user
+
+    def set_authentication(self, username: str, oauth_token: str) -> None:
+        """
+        Set authentication credentials for the chat client.
+        
+        Args:
+            username: Twitch username
+            oauth_token: OAuth access token
+        """
+        self.username = username.lower()
+        self.oauth_token = oauth_token
+        self.nickname = self.username
+        self.is_authenticated = True
+        logger.info(f"Authentication set for user: {self.username}")
+
+    def clear_authentication(self) -> None:
+        """Clear authentication credentials and return to anonymous mode"""
+        self.username = None
+        self.oauth_token = None
+        self.nickname = f"justinfan{int(time.time() % 100000)}"
+        self.is_authenticated = False
+        logger.info("Cleared authentication, using anonymous mode")
+
+    def can_send_messages(self) -> bool:
+        """Check if the client can send messages (requires authentication)"""
+        return self.is_authenticated and self.connected
 
     def connect(self, channel: str) -> bool:
         """
@@ -110,8 +144,14 @@ class TwitchChatClient:
             logger.info(f"Connecting to {self.server}:{self.port}")
             self.socket.connect((self.server, self.port))
 
-            # Send IRC handshake
-            self.socket.send(f"PASS SCHMOOPIIE\r\n".encode("utf-8"))
+            # Send IRC handshake (use OAuth token if authenticated)
+            if self.is_authenticated and self.oauth_token:
+                self.socket.send(f"PASS oauth:{self.oauth_token}\r\n".encode("utf-8"))
+                logger.debug("Using authenticated connection")
+            else:
+                self.socket.send(f"PASS SCHMOOPIIE\r\n".encode("utf-8"))
+                logger.debug("Using anonymous connection")
+            
             self.socket.send(f"NICK {self.nickname}\r\n".encode("utf-8"))
 
             # Request capabilities for better message parsing
@@ -218,3 +258,77 @@ class TwitchChatClient:
     def get_current_channel(self) -> Optional[str]:
         """Get the currently connected channel."""
         return self.current_channel
+
+    def send_message(self, message: str) -> bool:
+        """
+        Send a message to the current channel.
+        
+        Args:
+            message: Message text to send
+            
+        Returns:
+            True if message was sent successfully, False otherwise
+        """
+        if not self.can_send_messages():
+            error_msg = "Cannot send message: not authenticated or not connected"
+            logger.warning(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+        
+        if not self.current_channel:
+            error_msg = "Cannot send message: no channel joined"
+            logger.warning(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+        
+        # Validate message
+        if not message or not message.strip():
+            error_msg = "Cannot send empty message"
+            logger.warning(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+        
+        message = message.strip()
+        
+        # Check message length (Twitch limit is 500 characters)
+        if len(message) > 500:
+            error_msg = "Message too long (max 500 characters)"
+            logger.warning(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+        
+        try:
+            # Send PRIVMSG command
+            privmsg = f"PRIVMSG {self.current_channel} :{message}\r\n"
+            self.socket.send(privmsg.encode("utf-8"))
+            
+            logger.debug(f"Sent message to {self.current_channel}: {message}")
+            if self.on_send_success:
+                self.on_send_success(message)
+            return True
+            
+        except Exception as e:
+            error_msg = f"Failed to send message: {str(e)}"
+            logger.error(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+
+    def get_authentication_status(self) -> Dict[str, Any]:
+        """
+        Get current authentication status information.
+        
+        Returns:
+            Dictionary with authentication details
+        """
+        return {
+            "authenticated": self.is_authenticated,
+            "username": self.username,
+            "can_send_messages": self.can_send_messages(),
+            "connected": self.connected,
+            "current_channel": self.current_channel
+        }
