@@ -61,9 +61,16 @@ class ChatPanel:
         self.connected_channel = None
         self.message_count = 0
         self.max_messages = 500  # Default, will be configurable
+        
+        # Authentication state
+        self.is_authenticated = False
+        self.username = None
 
         # Callbacks (set by parent)
         self.on_clear_chat: Optional[Callable[[], None]] = None
+        self.on_auth_login: Optional[Callable[[], None]] = None
+        self.on_auth_logout: Optional[Callable[[], None]] = None
+        self.on_send_message: Optional[Callable[[str], None]] = None
 
         # Create the main frame and UI
         self._create_chat_frame()
@@ -94,12 +101,45 @@ class ChatPanel:
         )
         self.chat_display.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
 
+        # Authentication controls frame
+        auth_frame = ttk.Frame(self.chat_frame)
+        auth_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        auth_frame.columnconfigure(1, weight=1)
+
+        # Login status label
+        self.auth_status_label = ttk.Label(
+            auth_frame, text="Not logged in", font=("TkDefaultFont", 8)
+        )
+        self.auth_status_label.grid(row=0, column=0, sticky=tk.W)
+
+        # Login/Logout button
+        self.auth_button = ttk.Button(
+            auth_frame, text="Login", command=self._on_auth_button_clicked, width=10
+        )
+        self.auth_button.grid(row=0, column=2, sticky=tk.E, padx=(5, 0))
+
+        # Message input frame
+        input_frame = ttk.Frame(self.chat_frame)
+        input_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        input_frame.columnconfigure(0, weight=1)
+
+        # Message input field
+        self.message_entry = ttk.Entry(input_frame, state="disabled")
+        self.message_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        self.message_entry.bind("<Return>", self._on_message_entry_return)
+
+        # Send button
+        self.send_button = ttk.Button(
+            input_frame, text="Send", command=self._on_send_button_clicked, width=8, state="disabled"
+        )
+        self.send_button.grid(row=0, column=1, sticky=tk.E)
+
         # Chat controls frame
         controls_frame = ttk.Frame(self.chat_frame)
-        controls_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        controls_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
         controls_frame.columnconfigure(0, weight=1)
 
-        # Status label
+        # Connection status label
         self.status_label = ttk.Label(
             controls_frame, text="Chat disconnected", font=("TkDefaultFont", 8)
         )
@@ -303,6 +343,85 @@ class ChatPanel:
             Main chat panel frame
         """
         return self.chat_frame
+
+    def set_authentication_status(self, authenticated: bool, username: str = None) -> None:
+        """
+        Update authentication status and UI state.
+        
+        Args:
+            authenticated: Whether user is authenticated
+            username: Username if authenticated
+        """
+        self.is_authenticated = authenticated
+        self.username = username
+        
+        # Update UI based on authentication status
+        if authenticated and username:
+            self.auth_status_label.config(text=f"Logged in as: {username}")
+            self.auth_button.config(text="Logout")
+            self.message_entry.config(state="normal")
+            self.send_button.config(state="normal")
+        else:
+            self.auth_status_label.config(text="Not logged in")
+            self.auth_button.config(text="Login")
+            self.message_entry.config(state="disabled")
+            self.send_button.config(state="disabled")
+            self.message_entry.delete(0, tk.END)
+
+    def _on_auth_button_clicked(self) -> None:
+        """Handle authentication button click"""
+        if self.is_authenticated:
+            # Logout
+            if self.on_auth_logout:
+                self.on_auth_logout()
+        else:
+            # Login
+            if self.on_auth_login:
+                self.on_auth_login()
+
+    def _on_send_button_clicked(self) -> None:
+        """Handle send button click"""
+        self._send_current_message()
+
+    def _on_message_entry_return(self, event) -> None:
+        """Handle Enter key in message entry"""
+        self._send_current_message()
+        return "break"  # Prevent default behavior
+
+    def _send_current_message(self) -> None:
+        """Send the current message from the entry field"""
+        if not self.is_authenticated:
+            return
+            
+        message = self.message_entry.get().strip()
+        if not message:
+            return
+            
+        # Clear the entry field
+        self.message_entry.delete(0, tk.END)
+        
+        # Send message via callback
+        if self.on_send_message:
+            self.on_send_message(message)
+
+    def set_callbacks(self, 
+                     on_clear_chat: Optional[Callable[[], None]] = None,
+                     on_auth_login: Optional[Callable[[], None]] = None,
+                     on_auth_logout: Optional[Callable[[], None]] = None,
+                     on_send_message: Optional[Callable[[str], None]] = None) -> None:
+        """
+        Set callback functions for chat panel interactions.
+        
+        Args:
+            on_clear_chat: Called when user wants to clear chat
+            on_auth_login: Called when user wants to login
+            on_auth_logout: Called when user wants to logout  
+            on_send_message: Called when user sends a message
+        """
+        self.on_clear_chat = on_clear_chat
+        self.on_auth_login = on_auth_login
+        self.on_auth_logout = on_auth_logout
+        self.on_send_message = on_send_message
 
     def cleanup(self) -> None:
         """Clean up chat panel resources"""

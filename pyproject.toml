@@ -16,6 +16,9 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Topic :: Multimedia :: Video",
     "Topic :: Internet",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -26,6 +29,8 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "streamlink>=5.0.0",
+    "requests>=2.28.0",
+    "cryptography>=3.4.0",
     "typing-extensions>=4.0.0; python_version<'3.9'"
 ]
 
