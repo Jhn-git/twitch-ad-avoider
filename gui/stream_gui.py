@@ -7,7 +7,7 @@ with separated concerns and improved maintainability.
 The refactored :class:`StreamGUI` now uses:
     - Component-based UI architecture (MainWindow, FavoritesPanel, StreamControlPanel)
     - Controller-based business logic (StreamController, ConfigController, etc.)
-    - Utility classes for common functionality (SpinnerManager, DateTimeUtility)
+    - Utility classes for common functionality (SpinnerManager)
     - Observer pattern for loose coupling between components
 
 Key Improvements:

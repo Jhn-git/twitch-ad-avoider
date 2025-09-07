@@ -10,34 +10,24 @@ This guide covers how to package TwitchAdAvoider into standalone Windows executa
 .\build.ps1
 
 # Or with options
-.\build.ps1 -Type optimized
+.\build.ps1 -NoClean
 ```
 
 
 ## Build Options
 
-### Windows Build Types
+### Windows Build
 
-1. **Full Windows Build** (`twitchadavoider.spec`)
-   - Includes all features and dependencies
-   - Larger file size (~45MB)
-   - Maximum compatibility
-   - Use when you need all streamlink plugins
-
-2. **Optimized Windows Build** (`twitchadavoider_optimized.spec`)
-   - Essential features only
-   - Smaller file size (~30MB)
-   - Optimized for Twitch streaming
-   - Recommended for most Windows users
+The build system creates a single Windows executable (`twitchadavoider.spec`):
+   - Includes all necessary features and dependencies
+   - File size (~30MB)
+   - Configured for Twitch streaming
 
 ### Build Script Options
 
 ```powershell
-# Build both Windows versions
-.\build.ps1 -Type both
-
-# Build only optimized Windows version
-.\build.ps1 -Type optimized
+# Build Windows executable
+.\build.ps1
 
 # Skip dependency check
 .\build.ps1 -SkipDeps
@@ -48,11 +38,8 @@ This guide covers how to package TwitchAdAvoider into standalone Windows executa
 
 Or using Python directly:
 ```bash
-# Build both versions
-python build_executable.py --type both
-
-# Build only optimized version
-python build_executable.py --type optimized
+# Build executable
+python build_executable.py
 ```
 
 ## Manual Windows Building
@@ -60,11 +47,8 @@ python build_executable.py --type optimized
 If you prefer to build manually:
 
 ```bash
-# Full Windows build
+# Windows build
 pyinstaller twitchadavoider.spec
-
-# Optimized Windows build
-pyinstaller twitchadavoider_optimized.spec
 ```
 
 ## Build Requirements
@@ -92,19 +76,17 @@ After building, you'll find:
 
 ```
 dist/
-├── TwitchAdAvoider.exe          # Full Windows build executable
-├── TwitchAdAvoider_Optimized.exe # Optimized Windows build executable  
+├── TwitchAdAvoider.exe          # Windows build executable
 └── launch.bat                   # Windows launcher script
 ```
 
-## Windows Build Sizes
+## Windows Build Size
 
 | Build Type | Windows |
 |------------|--------|
-| Full       | ~45MB  |
-| Optimized  | ~30MB  |
+| Standard   | ~30MB  |
 
-*Sizes are approximate and may vary based on system configuration*
+*Size is approximate and may vary based on system configuration*
 
 ## Troubleshooting
 
@@ -121,7 +103,6 @@ dist/
    - Verify Python path includes the project directory
 
 3. **Large Executable Size**
-   - Use the optimized build (`--type optimized`)
    - Check excludes list in spec file
    - Consider using directory distribution instead of single file
 
@@ -263,18 +244,18 @@ exe = EXE(..., icon='app_icon.ico')
 - Test on multiple antivirus engines before release
 - Document known false positives
 
-## Performance Optimization
+## Performance Notes
 
-1. **Reduce Import Time**
-   - Use lazy imports where possible
-   - Avoid importing unused modules
+1. **Import Optimization**
+   - Lazy imports used where appropriate
+   - Unnecessary modules excluded
 
-2. **Optimize Spec File**
-   - Exclude unnecessary packages
-   - Use specific hidden imports instead of wildcards
+2. **Spec File Configuration**
+   - Excludes unnecessary packages
+   - Uses specific hidden imports
 
 3. **UPX Compression**
-   - Already enabled in optimized build
+   - Enabled to reduce file size
    - Can reduce file size by 30-50%
    - May trigger antivirus warnings
 
@@ -291,4 +272,4 @@ For build issues:
 
 ---
 
-*This Windows packaging system was designed for TwitchAdAvoider v2.0.0 and tested with PyInstaller 6.14.1 on Windows 10/11*
+*This packaging system was designed for TwitchAdAvoider v2.0.0 and tested with PyInstaller 6.14.1 on Windows 10/11*

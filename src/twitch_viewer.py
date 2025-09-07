@@ -115,6 +115,31 @@ class TwitchViewer:
         self.player_path = None
         logger.debug(f"Player choice set to: {player_name}")
 
+    def _get_streamlink_executable(self) -> str:
+        """
+        Get the streamlink executable path, preferring the virtual environment version.
+        
+        Returns:
+            Path to streamlink executable
+        """
+        # First, try to find streamlink in the current virtual environment
+        import sys
+        import platform
+        
+        if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
+            # We are in a virtual environment
+            if platform.system() == "Windows":
+                venv_streamlink = Path(sys.prefix) / "Scripts" / "streamlink.exe"
+            else:
+                venv_streamlink = Path(sys.prefix) / "bin" / "streamlink"
+                
+            if venv_streamlink.exists():
+                logger.debug(f"Using virtual environment streamlink: {venv_streamlink}")
+                return str(venv_streamlink)
+        
+        # Fallback to system streamlink
+        return "streamlink"
+
     def _check_streamlink_availability(self) -> bool:
         """
         Check if streamlink is available and working
@@ -419,8 +444,9 @@ class TwitchViewer:
             # Get stream quality
             quality = self.config.get("preferred_quality", "best")
 
-            # Build streamlink command
-            cmd = ["streamlink", f"twitch.tv/{channel_name}", quality]
+            # Build streamlink command with proper executable path
+            streamlink_exe = self._get_streamlink_executable()
+            cmd = [streamlink_exe, f"twitch.tv/{channel_name}", quality]
 
             # Add player if we found one, otherwise let streamlink auto-detect
             if self.player_path:
