@@ -271,7 +271,59 @@ After updating your Twitch app settings:
 
 **Root Cause Confirmed**: Virtual environment corruption with hardcoded paths from old project directory name `TwitchAdAvoider-lite-2`
 
-**Next Steps**: Update Twitch application redirect URI settings to match the fixed code
+## Chat Message Sending Issues
+
+### Problem: Messages Don't Appear in Local Chat
+
+If your messages appear on the streamer's chat but don't show up in your local application chat, or you see timeout errors like:
+```
+Message timed out without confirmation from Twitch IRC: [your message]
+```
+
+**Root Cause**: The application was incorrectly waiting for PRIVMSG echoes instead of USERSTATE messages for confirmation.
+
+### Solution Applied ✅
+
+1. **Updated IRC Capabilities**: Now requests `twitch.tv/tags` and `twitch.tv/commands` for proper message confirmation
+2. **USERSTATE Message Handling**: Messages are now confirmed via USERSTATE messages (the correct Twitch IRC method)
+3. **Enhanced Logging**: Added detailed debug logging to track message sending and confirmation
+4. **Message Tracking**: Implements proper pending message tracking for reliable confirmation
+
+**What to Expect**: 
+- Messages appear exactly once in local chat after Twitch confirms them via USERSTATE
+- No more timeout errors for successfully sent messages  
+- Clean logging without spurious warnings
+- Messages appear on both the actual stream and in your local chat consistently
+
+## Complete Resolution Status ✅
+
+### All Issues Resolved Successfully
+
+**✅ OAuth Authentication**: 
+- Fixed redirect URI mismatch (`http://localhost:8080` → `http://localhost:8080/auth/callback`)
+- Added proper client_secret support for token exchange
+- OAuth flow now works completely end-to-end
+
+**✅ Chat Message Sending**: 
+- Implemented proper USERSTATE message confirmation (instead of PRIVMSG echoes)
+- Messages appear exactly once in local chat after Twitch confirms them
+- Messages appear on actual streams consistently
+- Eliminated timeout errors and duplicate message displays
+
+**✅ Logging and Diagnostics**:
+- Clean production logging without spurious warnings
+- Proper debug logging available when needed
+- USERSTATE timing issues resolved
+
+### System Architecture
+
+The chat system now uses the correct Twitch IRC message confirmation flow:
+1. **Send Message** → IRC PRIVMSG command sent to Twitch
+2. **Twitch Processing** → Message appears on actual stream 
+3. **USERSTATE Confirmation** → Twitch sends USERSTATE to confirm delivery
+4. **Local Display** → Message added to application chat panel
+
+This follows Twitch's official IRC specifications and provides reliable message delivery confirmation.
 
 ---
 
