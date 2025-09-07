@@ -28,8 +28,8 @@ Installation Steps
 
 1. **Clone the repository**::
 
-    git clone https://github.com/yourusername/TwitchAdAvoider-lite-2.git
-    cd TwitchAdAvoider-lite-2
+    git clone https://github.com/yourusername/twitch-viewer.git
+    cd twitch-viewer
 
 2. **Create virtual environment**::
 

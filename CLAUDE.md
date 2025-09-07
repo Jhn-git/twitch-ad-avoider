@@ -82,6 +82,17 @@ python -m coverage run -m unittest discover tests/
 python -m coverage report
 ```
 
+### Building Executable
+```bash
+# Build Windows executable (includes pycparser fix)
+python build_executable.py
+
+# Build with options
+python build_executable.py --skip-deps --no-clean
+```
+
+**PyInstaller pycparser Fix**: The build process automatically generates pycparser parser tables before building to prevent "Unable to build parser" runtime errors. This fix ensures that the cryptography library (used for OAuth token encryption) works correctly in the compiled executable.
+
 ### Configuration
 - Configuration file: `config/settings.json`
 - Favorites file: `config/favorites.json`
