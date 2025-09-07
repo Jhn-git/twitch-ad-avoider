@@ -184,6 +184,7 @@ class ChatController:
         """Handle chat message on main thread"""
         try:
             # Add message to chat panel
+            logger.debug(f"Received chat message from {message.username}")
             self.chat_panel.add_message(message.username, message.message, message.timestamp)
 
         except Exception as e:
@@ -453,6 +454,7 @@ class ChatController:
         
         # Add our own message to the chat display now that it's confirmed
         if self.chat_client.username:
+            logger.debug(f"Adding confirmed message to chat display: '{message}'")
             self.chat_panel.add_message(self.chat_client.username, message, time.time())
         
         # Clear any pending status messages

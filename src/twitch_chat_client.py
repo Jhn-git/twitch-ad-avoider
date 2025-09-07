@@ -87,6 +87,9 @@ class TwitchChatClient:
         self.is_authenticated = False
         self.username = None
         self.oauth_token = None
+        
+        # Message tracking for USERSTATE confirmation
+        self.pending_messages = []  # List of recently sent messages awaiting confirmation
 
         # Callbacks
         self.on_message: Optional[Callable[[ChatMessage], None]] = None
@@ -152,14 +155,16 @@ class TwitchChatClient:
             if self.is_authenticated and self.oauth_token:
                 self.socket.send(f"PASS oauth:{self.oauth_token}\r\n".encode("utf-8"))
                 logger.info(f"Using authenticated connection for user: {self.username}")
+                logger.debug(f"OAuth token provided: {self.oauth_token[:20]}...")
             else:
                 self.socket.send(f"PASS SCHMOOPIIE\r\n".encode("utf-8"))
-                logger.info("Using anonymous connection (read-only)")
+                logger.info("Using anonymous connection (read-only mode)")
             
             self.socket.send(f"NICK {self.nickname}\r\n".encode("utf-8"))
 
-            # Request capabilities for better message parsing
-            self.socket.send(b"CAP REQ :twitch.tv/tags\r\n")
+            # Request capabilities for better message parsing and USERSTATE messages
+            self.socket.send(b"CAP REQ :twitch.tv/tags twitch.tv/commands\r\n")
+            logger.info("Requested IRC capabilities: twitch.tv/tags twitch.tv/commands")
 
             # Join the channel
             channel = channel.lower()
@@ -257,6 +262,9 @@ class TwitchChatClient:
 
     def _handle_message(self, raw_message: str):
         """Handle incoming IRC messages."""
+        # Enhanced debug logging for all IRC messages
+        logger.debug(f"RAW IRC: {raw_message}")
+        
         # Call raw message callback for debugging
         if self.on_raw_message:
             self.on_raw_message(raw_message)
@@ -266,28 +274,73 @@ class TwitchChatClient:
             pong_response = raw_message.replace("PING", "PONG")
             self.socket.send(f"{pong_response}\r\n".encode("utf-8"))
             return
+        
+        # Handle USERSTATE messages (confirm our own messages were sent)
+        if "USERSTATE" in raw_message and self.is_authenticated:
+            logger.debug(f"🔄 USERSTATE received (pending: {len(self.pending_messages)})")
+            # USERSTATE is sent by Twitch to confirm our message was processed
+            # This is the proper way to confirm message delivery on Twitch IRC
+            # We'll use this instead of waiting for PRIVMSG echoes
+            self._handle_userstate_message(raw_message)
+            return
 
-        # Handle PRIVMSG (chat messages)
+        # Handle PRIVMSG (chat messages from other users)
         if "PRIVMSG" in raw_message:
             message = ChatMessage(raw_message)
             if message.username and message.message:
-                # Check if this is our own message being echoed back
-                if self.is_authenticated and message.username.lower() == self.username:
-                    logger.info(f"Received confirmation of our own message: {message.message}")
-                    # Call success callback now that Twitch has confirmed the message
-                    if self.on_send_success:
-                        self.on_send_success(message.message)
-                else:
+                # Only process messages from other users (not our own)
+                # Our own messages are confirmed via USERSTATE, not PRIVMSG echoes
+                if not (self.is_authenticated and message.username.lower() == self.username):
                     logger.debug(f"Received chat message from {message.username}: {message.message}")
-                
-                if self.on_message:
-                    self.on_message(message)
+                    
+                    if self.on_message:
+                        self.on_message(message)
+                else:
+                    logger.debug(f"Ignoring our own PRIVMSG echo (using USERSTATE for confirmation): {message.username}")
             else:
                 # Debug failed parsing
                 logger.debug(f"Failed to parse chat message: {raw_message}")
 
         # Log other messages for debugging
         logger.debug(f"IRC: {raw_message}")
+
+    def _handle_userstate_message(self, raw_message: str):
+        """Handle USERSTATE messages that confirm our messages were sent"""
+        try:
+            logger.debug("🔍 Processing USERSTATE message for confirmation")
+            
+            # USERSTATE is sent by Twitch for various reasons:
+            # 1. After sending a message (what we want to confirm)
+            # 2. When joining a channel 
+            # 3. When capabilities change
+            # We only care about message confirmations
+            
+            # Find the most recent unconfirmed message
+            confirmed_any = False
+            for pending in self.pending_messages:
+                if not pending['confirmed']:
+                    message = pending['message']
+                    pending['confirmed'] = True
+                    confirmed_any = True
+                    
+                    logger.info(f"✅ CONFIRMED via USERSTATE: Message successfully sent to Twitch: '{message}'")
+                    
+                    # Call success callback
+                    if self.on_send_success:
+                        self.on_send_success(message)
+                    
+                    break
+            
+            # Only warn if we're actively sending messages but can't confirm any
+            if not confirmed_any and len(self.pending_messages) == 0:
+                # This is normal - USERSTATE can be sent for non-message events
+                logger.debug("Received USERSTATE (likely for channel join or capability change, not message confirmation)")
+            elif not confirmed_any:
+                # This might indicate a timing issue
+                logger.debug(f"Received USERSTATE but all {len(self.pending_messages)} pending messages already confirmed")
+                
+        except Exception as e:
+            logger.error(f"Error handling USERSTATE message: {e}")
 
     def is_connected(self) -> bool:
         """Check if currently connected."""
@@ -342,14 +395,25 @@ class TwitchChatClient:
         try:
             # Send PRIVMSG command
             privmsg = f"PRIVMSG {self.current_channel} :{message}\r\n"
-            self.socket.send(privmsg.encode("utf-8"))
+            bytes_sent = self.socket.send(privmsg.encode("utf-8"))
             
-            logger.info(f"Message sent to IRC server for {self.current_channel}: {message}")
+            logger.info(f"Message sent to {self.current_channel}: {message}")
+            logger.debug(f"Sent {bytes_sent} bytes to Twitch IRC")
             logger.debug(f"Raw IRC command sent: {privmsg.strip()}")
             
-            # Note: We don't call on_send_success here anymore
-            # Success will be confirmed when we see our own message echoed back from Twitch IRC
-            # This prevents messages from appearing locally before being confirmed by Twitch
+            # Add message to pending list for USERSTATE confirmation
+            import time
+            self.pending_messages.append({
+                'message': message,
+                'timestamp': time.time(),
+                'confirmed': False
+            })
+            logger.debug(f"Added message to pending confirmation list")
+            
+            # Keep only last 10 pending messages to prevent memory issues
+            if len(self.pending_messages) > 10:
+                self.pending_messages.pop(0)
+            
             return True
             
         except Exception as e:

@@ -12,7 +12,10 @@ TwitchAdAvoider is a security-focused Python application for watching Twitch str
 - **`src/twitch_viewer.py`**: Main streaming logic and player detection
 - **`src/config_manager.py`**: JSON configuration with comprehensive validation
 - **`src/validators.py`**: Security-focused input validation (channel names, file paths, player args)
+- **`src/auth_manager.py`**: OAuth authentication manager for Twitch API integration
+- **`src/twitch_chat_client.py`**: Twitch IRC chat client with USERSTATE message confirmation
 - **`gui/stream_gui.py`**: Tkinter GUI with real-time validation
+- **`gui/controllers/chat_controller.py`**: Chat management and lifecycle controller
 - **`gui/favorites_manager.py`**: Channel favorites persistence and management
 
 ### Security Architecture
@@ -30,6 +33,14 @@ Multi-priority detection algorithm in `TwitchViewer._detect_player()`:
 4. Common installation directory search
 5. Environment variables (`TWITCH_PLAYER_PATH`, `TWITCH_PLAYER_NAME`)
 6. Fallback to streamlink auto-detection
+
+### Chat System Architecture
+The Twitch chat integration follows official IRC specifications:
+- **OAuth Authentication**: Secure token-based authentication via `AuthManager`
+- **IRC Connection**: Authenticated connection to `irc.chat.twitch.tv` with capabilities `twitch.tv/tags` and `twitch.tv/commands`
+- **Message Confirmation**: Uses USERSTATE messages (not PRIVMSG echoes) for delivery confirmation
+- **Thread-safe UI**: IRC communication runs in background threads with main-thread UI updates
+- **Message Tracking**: Pending message system ensures reliable confirmation and prevents timeouts
 
 ## Development Commands
 
