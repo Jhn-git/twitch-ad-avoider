@@ -69,10 +69,24 @@ class MainWindow:
     def _setup_window(self) -> None:
         """Configure the main window properties"""
         self.root.title("TwitchAdAvoider - Stream Manager")
-        self.root.geometry(GUI_GEOMETRY)
+        
+        # Load saved window size from config or use defaults
+        width = self.config.get("window_width", 640)
+        height = self.config.get("window_height", 650)
+        is_maximized = self.config.get("window_maximized", False)
+        
+        # Set window geometry
+        self.root.geometry(f"{width}x{height}")
         self.root.resizable(True, True)
         self.root.minsize(*GUI_MIN_SIZE)
         self.root.maxsize(1200, 900)  # Set reasonable maximum size
+        
+        # Apply maximized state if saved
+        if is_maximized:
+            self.root.state('zoomed')  # Windows/Linux
+        
+        # Bind window resize event to save size
+        self.root.bind('<Configure>', self._on_window_configure)
         
         # Handle window closing
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -142,9 +156,44 @@ class MainWindow:
         """
         self.on_closing_callbacks.append(callback)
 
+    def _on_window_configure(self, event) -> None:
+        """Handle window resize/move events"""
+        # Only save size if the event is for the root window (not child widgets)
+        if event.widget == self.root:
+            # Use after_idle to debounce rapid resize events
+            self.root.after_idle(self._save_window_state)
+
+    def _save_window_state(self) -> None:
+        """Save current window state to configuration"""
+        try:
+            # Get current window state
+            is_maximized = self.root.state() == 'zoomed'
+            
+            # If not maximized, save current size
+            if not is_maximized:
+                width = self.root.winfo_width()
+                height = self.root.winfo_height()
+                
+                # Validate dimensions before saving
+                if width >= GUI_MIN_SIZE[0] and height >= GUI_MIN_SIZE[1]:
+                    self.config.set("window_width", width)
+                    self.config.set("window_height", height)
+            
+            # Always save maximized state
+            self.config.set("window_maximized", is_maximized)
+            
+            # Save config to file
+            self.config.save_settings()
+            
+        except Exception as e:
+            logger.debug(f"Error saving window state: {e}")
+
     def on_closing(self) -> None:
         """Handle window closing with robust cleanup"""
         logger.info("Application closing - performing cleanup")
+        
+        # Save final window state
+        self._save_window_state()
         
         # Call registered closing callbacks
         for callback in self.on_closing_callbacks:

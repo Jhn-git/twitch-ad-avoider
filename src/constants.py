@@ -22,6 +22,10 @@ DEFAULT_SETTINGS = {
     "player_args": None,
     # GUI theme settings
     "current_theme": "light",  # light or dark theme
+    # Window settings
+    "window_width": 640,  # Main window width in pixels
+    "window_height": 650,  # Main window height in pixels
+    "window_maximized": False,  # Whether window is maximized
     # Network settings
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
     "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
@@ -105,6 +109,12 @@ MAX_RETRY_DELAY = 30
 MIN_STARTUP_DELAY = 0
 MAX_STARTUP_DELAY = 30
 
+# Window size validation constants
+MIN_WINDOW_WIDTH = 300
+MAX_WINDOW_WIDTH = 1920
+MIN_WINDOW_HEIGHT = 200
+MAX_WINDOW_HEIGHT = 1080
+
 # Error messages
 ERROR_MESSAGES = {
     "empty_channel": "Channel name cannot be empty",
@@ -142,4 +152,7 @@ VALIDATION_ERROR_MESSAGES = {
     "retry_attempts_invalid": "Retry attempts must be between {} and {} attempts",
     "retry_delay_invalid": "Retry delay must be between {} and {} seconds",
     "startup_delay_invalid": "Startup delay must be between {} and {} seconds",
+    "window_width_invalid": "Window width must be between {} and {} pixels",
+    "window_height_invalid": "Window height must be between {} and {} pixels",
+    "window_maximized_invalid": "Window maximized setting must be a boolean",
 }

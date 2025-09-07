@@ -51,8 +51,8 @@ TwitchAdAvoider is a security-focused application for watching Twitch streams wh
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/yourusername/TwitchAdAvoider-lite-2.git
-cd TwitchAdAvoider-lite-2
+git clone https://github.com/yourusername/twitch-viewer.git
+cd twitch-viewer
 ```
 
 ### 2. Create Virtual Environment

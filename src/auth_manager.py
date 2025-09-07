@@ -32,13 +32,7 @@ try:
 except ImportError:
     requests = None
 
-try:
-    from cryptography.fernet import Fernet
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    import base64
-except ImportError:
-    Fernet = None
+# Use lazy imports for cryptography to avoid PyInstaller issues with pycparser
 
 from .logging_config import get_logger
 from .exceptions import ValidationError
@@ -61,7 +55,7 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Handle GET request for OAuth callback"""
-        if self.path.startswith("/auth/callback"):
+        if self.path.startswith("/auth/callback") or ("code=" in self.path or "error=" in self.path):
             # Parse the callback URL
             parsed_url = urlparse(self.path)
             query_params = parse_qs(parsed_url.query)
@@ -109,14 +103,16 @@ class AuthManager:
     and authentication state management.
     """
     
-    def __init__(self, client_id: str):
+    def __init__(self, client_id: str, client_secret: str):
         """
         Initialize the authentication manager.
         
         Args:
             client_id: Twitch application client ID
+            client_secret: Twitch application client secret
         """
         self.client_id = client_id
+        self.client_secret = client_secret
         self.access_token: Optional[str] = None
         self.refresh_token: Optional[str] = None
         self.token_expires: Optional[datetime] = None
@@ -436,12 +432,17 @@ class AuthManager:
             # Exchange code for token
             token_data = {
                 "client_id": self.client_id,
+                "client_secret": self.client_secret,
                 "code": auth_code,
                 "grant_type": "authorization_code",
                 "redirect_uri": REDIRECT_URI
             }
             
-            response = requests.post(TWITCH_TOKEN_URL, data=token_data, timeout=30)
+            headers = {
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            
+            response = requests.post(TWITCH_TOKEN_URL, data=token_data, headers=headers, timeout=30)
             
             if response.status_code == 200:
                 token_info = response.json()
@@ -467,8 +468,17 @@ class AuthManager:
                     if self.on_auth_failure:
                         self.on_auth_failure(error_msg)
             else:
-                error_msg = f"Token exchange failed: {response.status_code}"
-                logger.error(error_msg)
+                # Get detailed error information
+                try:
+                    error_details = response.json()
+                    error_msg = f"Token exchange failed: {response.status_code} - {error_details.get('message', 'Unknown error')}"
+                    logger.error(f"Token exchange failed: {response.status_code}")
+                    logger.error(f"Response body: {error_details}")
+                except:
+                    error_msg = f"Token exchange failed: {response.status_code} - {response.text}"
+                    logger.error(f"Token exchange failed: {response.status_code}")
+                    logger.error(f"Response body: {response.text}")
+                
                 if self.on_auth_failure:
                     self.on_auth_failure(error_msg)
                     
@@ -480,7 +490,12 @@ class AuthManager:
     
     def _get_encryption_key(self) -> bytes:
         """Generate encryption key from system-specific data"""
-        if not Fernet:
+        try:
+            from cryptography.fernet import Fernet
+            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+            import base64
+        except ImportError:
             raise ImportError("cryptography library required for token encryption")
         
         # Use a combination of system-specific data as password
@@ -502,25 +517,31 @@ class AuthManager:
     
     def _encrypt_token_data(self, data: str) -> bytes:
         """Encrypt token data"""
-        if not Fernet:
+        try:
+            from cryptography.fernet import Fernet
+            import base64
+            key = self._get_encryption_key()
+            f = Fernet(key)
+            return f.encrypt(data.encode())
+        except ImportError:
             # Fallback to base64 encoding if cryptography not available
             logger.warning("Cryptography not available, using basic encoding")
+            import base64
             return base64.b64encode(data.encode())
-        
-        key = self._get_encryption_key()
-        f = Fernet(key)
-        return f.encrypt(data.encode())
     
     def _decrypt_token_data(self, encrypted_data: bytes) -> Optional[str]:
         """Decrypt token data"""
         try:
-            if not Fernet:
+            # Try cryptography first
+            try:
+                from cryptography.fernet import Fernet
+                key = self._get_encryption_key()
+                f = Fernet(key)
+                return f.decrypt(encrypted_data).decode()
+            except ImportError:
                 # Fallback to base64 decoding
+                import base64
                 return base64.b64decode(encrypted_data).decode()
-            
-            key = self._get_encryption_key()
-            f = Fernet(key)
-            return f.decrypt(encrypted_data).decode()
             
         except Exception as e:
             logger.warning(f"Failed to decrypt token data: {e}")

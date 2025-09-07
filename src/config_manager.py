@@ -38,6 +38,10 @@ from .constants import (
     MAX_RETRY_DELAY,
     MIN_STARTUP_DELAY,
     MAX_STARTUP_DELAY,
+    MIN_WINDOW_WIDTH,
+    MAX_WINDOW_WIDTH,
+    MIN_WINDOW_HEIGHT,
+    MAX_WINDOW_HEIGHT,
     VALIDATION_ERROR_MESSAGES,
 )
 from .logging_config import get_logger
@@ -338,6 +342,28 @@ class ConfigManager:
             elif key == "chat_show_timestamps":
                 if not isinstance(value, bool):
                     raise ValidationError("Chat show timestamps setting must be a boolean")
+                return True
+
+            # Window settings validation
+            elif key == "window_width":
+                if not isinstance(value, int):
+                    raise ValidationError("Window width must be an integer")
+                validate_numeric_range(
+                    value, min_val=MIN_WINDOW_WIDTH, max_val=MAX_WINDOW_WIDTH, data_type=int
+                )
+                return True
+
+            elif key == "window_height":
+                if not isinstance(value, int):
+                    raise ValidationError("Window height must be an integer")
+                validate_numeric_range(
+                    value, min_val=MIN_WINDOW_HEIGHT, max_val=MAX_WINDOW_HEIGHT, data_type=int
+                )
+                return True
+
+            elif key == "window_maximized":
+                if not isinstance(value, bool):
+                    raise ValidationError("Window maximized setting must be a boolean")
                 return True
 
             else:

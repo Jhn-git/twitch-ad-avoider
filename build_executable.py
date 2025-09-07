@@ -32,7 +32,7 @@ def run_command(cmd, description):
 
 def clean_build():
     """Clean previous build artifacts."""
-    print("🧹 Cleaning previous builds...")
+    print("[CLEAN] Cleaning previous builds...")
     
     dirs_to_clean = ['build', 'dist', '__pycache__']
     for dir_name in dirs_to_clean:
@@ -48,7 +48,7 @@ def clean_build():
 
 def check_dependencies():
     """Verify all required dependencies are installed."""
-    print("🔍 Checking dependencies...")
+    print("[CHECK] Checking dependencies...")
     
     # Package mapping: name -> (import_name, is_command_tool)
     required_packages = {
@@ -77,7 +77,7 @@ def check_dependencies():
                 missing_packages.append(package)
     
     if missing_packages:
-        print(f"\n❌ Missing packages: {', '.join(missing_packages)}")
+        print(f"\n[ERROR] Missing packages: {', '.join(missing_packages)}")
         print("Install them with: pip install " + " ".join(missing_packages))
         return False
     
@@ -88,7 +88,7 @@ def build_executable(spec_file, build_type):
     print(f"🔨 Building {build_type} executable...")
     
     if not os.path.exists(spec_file):
-        print(f"❌ Spec file not found: {spec_file}")
+        print(f"[ERROR] Spec file not found: {spec_file}")
         return False
     
     cmd = f"pyinstaller {spec_file}"
@@ -110,7 +110,7 @@ def show_results():
     print("="*60)
     
     if not os.path.exists('dist'):
-        print("❌ No dist/ directory found")
+        print("[ERROR] No dist/ directory found")
         return
     
     for item in os.listdir('dist'):
@@ -158,6 +158,28 @@ pause
         print(f"  ✗ Failed to create Windows launcher: {e}")
         return False
 
+def generate_pycparser_tables():
+    """Generate pycparser tables before building."""
+    print("[BUILD] Generating pycparser parser tables...")
+    
+    try:
+        import subprocess
+        result = subprocess.run([
+            sys.executable, 
+            'scripts/generate_pycparser_tables.py'
+        ], capture_output=True, text=True, cwd='.')
+        
+        if result.returncode == 0:
+            print("[OK] pycparser tables generated successfully")
+            return True
+        else:
+            print(f"[ERROR] Failed to generate pycparser tables:")
+            print(result.stderr)
+            return False
+    except Exception as e:
+        print(f"[ERROR] Error running table generation script: {e}")
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description='Build TwitchAdAvoider executable')
     parser.add_argument('--no-clean', action='store_true', 
@@ -175,24 +197,28 @@ def main():
     if not args.skip_deps and not check_dependencies():
         sys.exit(1)
     
+    # Generate pycparser tables to fix cryptography runtime issues
+    if not generate_pycparser_tables():
+        print("[WARN] Warning: pycparser table generation failed, build may have runtime issues")
+    
     # Clean previous builds
     if not args.no_clean:
         clean_build()
     
-    # Build single optimized executable
-    success = build_executable('twitchadavoider_optimized.spec', 'Optimized')
+    # Build executable
+    success = build_executable('twitchadavoider.spec', 'Windows')
     
     if success:
         create_launcher_script()
         show_results()
-        print("\n✅ Build completed successfully!")
+        print("\n[OK] Build completed successfully!")
         print("\n📋 Next steps:")
         print("  1. Test the Windows executable in dist/")
         print("  2. Check that GUI launches properly on Windows")
         print("  3. Verify streaming functionality")
         print("  4. Test with different Windows video players")
     else:
-        print("\n❌ Build failed!")
+        print("\n[ERROR] Build failed!")
         sys.exit(1)
 
 if __name__ == "__main__":

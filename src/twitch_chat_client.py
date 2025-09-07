@@ -137,6 +137,10 @@ class TwitchChatClient:
         Returns:
             True if connection successful, False otherwise
         """
+        # Close any existing connection
+        if self.socket:
+            self.disconnect()
+        
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(10.0)
@@ -147,10 +151,10 @@ class TwitchChatClient:
             # Send IRC handshake (use OAuth token if authenticated)
             if self.is_authenticated and self.oauth_token:
                 self.socket.send(f"PASS oauth:{self.oauth_token}\r\n".encode("utf-8"))
-                logger.debug("Using authenticated connection")
+                logger.info(f"Using authenticated connection for user: {self.username}")
             else:
                 self.socket.send(f"PASS SCHMOOPIIE\r\n".encode("utf-8"))
-                logger.debug("Using anonymous connection")
+                logger.info("Using anonymous connection (read-only)")
             
             self.socket.send(f"NICK {self.nickname}\r\n".encode("utf-8"))
 
@@ -186,13 +190,22 @@ class TwitchChatClient:
     def disconnect(self):
         """Disconnect from Twitch IRC."""
         self.running = False
+        self.connected = False
+        
         if self.socket:
+            try:
+                # Try to close the socket gracefully
+                self.socket.shutdown(socket.SHUT_RDWR)
+            except Exception as e:
+                logger.debug(f"Error shutting down socket: {e}")
+            
             try:
                 self.socket.close()
             except Exception as e:
                 logger.debug(f"Error closing socket: {e}")
+            
+            self.socket = None
 
-        self.connected = False
         if self.on_disconnect:
             self.on_disconnect()
 
@@ -204,8 +217,12 @@ class TwitchChatClient:
 
         while self.running and self.connected:
             try:
+                if not self.socket:
+                    break
+                    
                 data = self.socket.recv(4096).decode("utf-8", errors="ignore")
                 if not data:
+                    logger.debug("Received empty data, connection closed by server")
                     break
 
                 buffer += data
@@ -217,14 +234,26 @@ class TwitchChatClient:
                         self._handle_message(line)
 
             except socket.timeout:
+                # Timeout is expected, continue listening
                 continue
+            except OSError as e:
+                # Handle socket errors specifically
+                if e.errno == 10038:  # WSAENOTSOCK on Windows
+                    logger.debug("Socket operation attempted on non-socket object")
+                else:
+                    logger.error(f"Socket error in chat listen loop: {e}")
+                break
             except Exception as e:
                 logger.error(f"Error in chat listen loop: {e}")
                 break
 
+        # Clean up connection state
         self.connected = False
         if self.on_disconnect:
-            self.on_disconnect()
+            try:
+                self.on_disconnect()
+            except Exception as e:
+                logger.debug(f"Error in disconnect callback: {e}")
 
     def _handle_message(self, raw_message: str):
         """Handle incoming IRC messages."""
@@ -242,6 +271,15 @@ class TwitchChatClient:
         if "PRIVMSG" in raw_message:
             message = ChatMessage(raw_message)
             if message.username and message.message:
+                # Check if this is our own message being echoed back
+                if self.is_authenticated and message.username.lower() == self.username:
+                    logger.info(f"Received confirmation of our own message: {message.message}")
+                    # Call success callback now that Twitch has confirmed the message
+                    if self.on_send_success:
+                        self.on_send_success(message.message)
+                else:
+                    logger.debug(f"Received chat message from {message.username}: {message.message}")
+                
                 if self.on_message:
                     self.on_message(message)
             else:
@@ -306,9 +344,12 @@ class TwitchChatClient:
             privmsg = f"PRIVMSG {self.current_channel} :{message}\r\n"
             self.socket.send(privmsg.encode("utf-8"))
             
-            logger.debug(f"Sent message to {self.current_channel}: {message}")
-            if self.on_send_success:
-                self.on_send_success(message)
+            logger.info(f"Message sent to IRC server for {self.current_channel}: {message}")
+            logger.debug(f"Raw IRC command sent: {privmsg.strip()}")
+            
+            # Note: We don't call on_send_success here anymore
+            # Success will be confirmed when we see our own message echoed back from Twitch IRC
+            # This prevents messages from appearing locally before being confirmed by Twitch
             return True
             
         except Exception as e:

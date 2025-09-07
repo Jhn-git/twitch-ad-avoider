@@ -68,16 +68,20 @@ class ChatController:
         self.auth_manager = None  # Will be initialized when client ID is available
         self.current_channel = None
         self.is_connecting = False
+        
+        # Track pending messages for timeout detection
+        self.pending_messages = {}  # message_id -> (message, timestamp)
 
         # Configuration
         self.auto_connect = self.config.get("chat_auto_connect", True)
         self.max_messages = self.config.get("chat_max_messages", 500)
         self.show_timestamps = self.config.get("chat_show_timestamps", True)
 
-        # Initialize authentication if client ID is available
+        # Initialize authentication if client ID and secret are available
         client_id = self.config.get("twitch_client_id", "")
-        if client_id:
-            self.auth_manager = AuthManager(client_id)
+        client_secret = self.config.get("twitch_client_secret", "")
+        if client_id and client_secret:
+            self.auth_manager = AuthManager(client_id, client_secret)
             self._setup_auth_callbacks()
             
             # Check if already authenticated
@@ -355,12 +359,13 @@ class ChatController:
         """Handle login request from chat panel"""
         if not self.auth_manager:
             client_id = self.config.get("twitch_client_id", "")
-            if not client_id:
-                self.status_manager.add_error("Twitch Client ID not configured. Please set it in settings.")
+            client_secret = self.config.get("twitch_client_secret", "")
+            if not client_id or not client_secret:
+                self.status_manager.add_error("Twitch Client ID and Secret not configured. Please set them in settings.")
                 return
             
             # Initialize auth manager if needed
-            self.auth_manager = AuthManager(client_id)
+            self.auth_manager = AuthManager(client_id, client_secret)
             self._setup_auth_callbacks()
         
         # Start OAuth flow
@@ -415,12 +420,54 @@ class ChatController:
         success = self.chat_client.send_message(message)
         if not success:
             self.status_manager.add_error("Failed to send message")
+        else:
+            # Message sent to IRC server, but we won't add it to local display yet
+            # It will appear when Twitch IRC echoes it back, confirming it was processed
+            logger.info(f"Message sent to IRC server, awaiting confirmation: {message}")
+            
+            # Track this message for timeout detection
+            message_id = f"{message}_{time.time()}"
+            self.pending_messages[message_id] = (message, time.time())
+            
+            # Schedule timeout check (10 seconds)
+            self.root.after(10000, lambda: self._check_message_timeout(message_id))
+            
+            self.status_manager.add_status_message("Message sent, awaiting confirmation...")
 
     def _on_message_sent(self, message: str) -> None:
-        """Handle successful message send"""
-        # Add our own message to the chat display
+        """Handle successful message send confirmation from Twitch IRC
+        
+        This callback is now triggered only when Twitch IRC echoes back our message,
+        confirming it was successfully processed by their servers.
+        """
+        logger.info(f"Message confirmed by Twitch IRC: {message}")
+        
+        # Remove from pending messages (find by message content)
+        to_remove = []
+        for msg_id, (pending_msg, timestamp) in self.pending_messages.items():
+            if pending_msg == message:
+                to_remove.append(msg_id)
+        
+        for msg_id in to_remove:
+            del self.pending_messages[msg_id]
+        
+        # Add our own message to the chat display now that it's confirmed
         if self.chat_client.username:
             self.chat_panel.add_message(self.chat_client.username, message, time.time())
+        
+        # Clear any pending status messages
+        self.status_manager.add_status_message("Message sent successfully!")
+        
+    def _check_message_timeout(self, message_id: str) -> None:
+        """Check if a message has timed out without confirmation"""
+        if message_id in self.pending_messages:
+            message, timestamp = self.pending_messages[message_id]
+            del self.pending_messages[message_id]
+            
+            logger.warning(f"Message timed out without confirmation from Twitch IRC: {message}")
+            self.status_manager.add_warning(f"Message may not have been sent - no confirmation received: {message[:50]}...")
+            
+            # This indicates a potential issue with the IRC connection or authentication
 
     def _on_message_send_error(self, error_message: str) -> None:
         """Handle message send error"""
