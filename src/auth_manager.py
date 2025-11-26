@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 
 try:
     import requests
@@ -414,8 +414,8 @@ class AuthManager:
             "scope": " ".join(REQUIRED_SCOPES),
             "state": self.oauth_state
         }
-        
-        param_string = "&".join(f"{k}={v}" for k, v in params.items())
+
+        param_string = urlencode(params)
         return f"{TWITCH_OAUTH_URL}?{param_string}"
     
     def _exchange_code_for_token(self, auth_code: str, state: str) -> None:
