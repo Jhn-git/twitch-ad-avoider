@@ -3,12 +3,11 @@
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Documentation Status](https://img.shields.io/badge/docs-sphinx-brightgreen.svg)](docs/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#testing)
 
 A Python implementation for watching Twitch streams while avoiding ads, featuring a modern Qt GUI and command-line interface with comprehensive security validation.
 
-📖 **[Complete Documentation Map](DOCS-MAP.md)** | 🚀 **[Quick Start Guide](QUICKSTART.md)** | 🔧 **[Installation Guide](INSTALLATION.md)**
+🔧 **[Installation Guide](INSTALLATION.md)**
 
 ---
 
@@ -46,7 +45,7 @@ A Python implementation for watching Twitch streams while avoiding ads, featurin
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/twitch-viewer.git
+git clone <your-repo-url>
 cd twitch-viewer
 
 # Create virtual environment
@@ -83,8 +82,6 @@ python main.py --channel shroud --quality 720p
 python main.py --channel pokimane --debug
 ```
 
-**🚀 For complete usage guide**, see **[QUICKSTART.md](QUICKSTART.md)**.
-
 ---
 
 ## Documentation
@@ -94,7 +91,6 @@ python main.py --channel pokimane --debug
 | Document | Description |
 |----------|-------------|
 | **[INSTALLATION.md](INSTALLATION.md)** | Complete installation guide for all platforms |
-| **[QUICKSTART.md](QUICKSTART.md)** | Getting started with GUI and CLI |
 | **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)** | Complete configuration options reference (16+ settings) |
 | **[PLAYER-CONFIG.md](PLAYER-CONFIG.md)** | Player setup and optimization guide |
 | **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Solutions for common problems |
@@ -107,10 +103,6 @@ python main.py --channel pokimane --debug
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contribution guidelines and development workflow |
 | **[CLAUDE.md](CLAUDE.md)** | Architecture reference and development commands |
 | **[PACKAGING.md](PACKAGING.md)** | Building Windows executables with PyInstaller |
-
-### Navigation
-
-**[📖 DOCS-MAP.md](DOCS-MAP.md)** - Complete documentation navigation guide with user and developer journeys
 
 ---
 
@@ -298,11 +290,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Getting Help
 
-- **📖 Documentation**: Start with [DOCS-MAP.md](DOCS-MAP.md) for navigation
-- **🐛 Issues**: [GitHub Issues](https://github.com/yourusername/twitch-viewer/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/yourusername/twitch-viewer/discussions)
+- **📖 Documentation**: See documentation files listed above
 - **🔒 Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
 
 ---
 
-**Last Updated**: 2025-11-27 | **Documentation**: [DOCS-MAP.md](DOCS-MAP.md)
+**Last Updated**: 2025-11-27

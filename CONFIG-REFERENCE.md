@@ -33,7 +33,7 @@ TwitchAdAvoider stores its configuration in `config/settings.json`. The file is 
     "log_to_file": false,
     "log_level": "INFO",
     "player_path": null,
-    "player_args": null,
+    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
     "enable_status_monitoring": true,
     "status_check_interval": 300,
     "status_cache_duration": 60
@@ -184,18 +184,23 @@ TwitchAdAvoider stores its configuration in `config/settings.json`. The file is 
 
 ### `player_args`
 
-**Type**: String or null  
-**Default**: `null`  
-**Description**: Additional arguments to pass to the video player  
+**Type**: String or null
+**Default**: `"--network-caching=10000 --file-caching=10000 --live-caching=10000"`
+**Description**: Additional arguments to pass to the video player
+
+**Default Behavior**:
+- The default buffering arguments (10 second cache) help VLC handle stream discontinuities caused by Twitch ads
+- These prevent visual corruption/artifacts when ads are inserted into the stream
+- Streamlink also uses `--twitch-disable-ads` to minimize ad interruptions
 
 **Valid Values**:
-- `null` - No additional arguments
 - String containing valid player arguments
+- Empty string to disable all player arguments
 
 **Examples**:
 ```json
 {
-    "player_args": "--fullscreen --volume=50"
+    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000 --fullscreen --volume=50"
 }
 ```
 
@@ -476,7 +481,7 @@ python main.py --channel ninja
     "preferred_quality": "best",
     "player": "vlc",
     "player_path": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
-    "player_args": "--fullscreen --volume=75 --cache=10000",
+    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000 --fullscreen --volume=75",
     "cache_duration": 60
 }
 ```
