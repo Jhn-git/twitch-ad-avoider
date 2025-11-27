@@ -8,122 +8,72 @@
 
 A Python implementation for watching Twitch streams while avoiding ads, featuring a modern Qt GUI and command-line interface with comprehensive security validation.
 
-## Table of Contents
+📖 **[Complete Documentation Map](DOCS-MAP.md)** | 🚀 **[Quick Start Guide](QUICKSTART.md)** | 🔧 **[Installation Guide](INSTALLATION.md)**
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [GUI Mode](#gui-mode)
-  - [Command Line Mode](#command-line-mode)
-- [Configuration](#configuration)
-- [Security Features](#security-features)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+---
 
 ## Features
 
-- **Stream Viewing**: Watch Twitch streams through external players (VLC, MPV, MPC-HC)
-- **Ad Avoidance**: Utilizes streamlink to bypass advertisements
-- **Modern Qt GUI**: Professional PySide6-based interface with tabbed panels
-- **Command-Line Interface**: Full CLI support for headless operation
-- **Player Auto-Detection**: Automatically detects installed video players
-- **Favorites Management**: Save and manage favorite channels with live status monitoring
-- **Twitch Chat Integration**: Real-time IRC chat with OAuth authentication
+### Stream Viewing
+- **Ad Avoidance**: Watch Twitch streams through external players (VLC, MPV, MPC-HC) via streamlink
 - **Quality Selection**: Choose stream quality (best, worst, 720p, 480p, 360p, 160p)
-- **Security Validation**: Comprehensive input validation and sanitization
-- **Real-time Validation**: GUI provides immediate feedback on input validity
+- **Player Auto-Detection**: Automatically finds installed video players
+- **Favorites Management**: Save channels with live status monitoring
+
+### User Interfaces
+- **Modern Qt GUI**: Professional PySide6 tabbed interface with Stream and Settings tabs
+- **Command-Line Interface**: Full CLI support for headless operation and scripting
+- **Real-time Validation**: Immediate feedback on input validity with visual indicators
 - **Theming Support**: Light and dark themes with custom QSS stylesheets
-- **Flexible Configuration**: JSON-based configuration with validation
 
-## Prerequisites
+### Chat & Integration
+- **Twitch Chat Integration**: Real-time IRC chat with OAuth authentication
+- **Message Sending**: Send messages directly to Twitch chat from the application
+- **Live Status Monitoring**: Track when favorite streamers go live
 
-- **Python 3.7+** (recommended: Python 3.8 or higher)
-- **Streamlink** (automatically installed via requirements)
-- **Video Player**: At least one of the following:
-  - **VLC Media Player** (recommended)
-  - **MPV**
-  - **MPC-HC** (Windows only)
+### Security & Configuration
+- **Security Validation**: Comprehensive input validation and sanitization ([Details](SECURITY.md))
+- **Flexible Configuration**: JSON-based configuration with 16+ settings ([Reference](CONFIG-REFERENCE.md))
+- **Attack Prevention**: Protection against path traversal, command injection, and other attacks
 
-### Installing Video Players
+---
 
-#### Windows
-- **VLC**: Download from [videolan.org](https://www.videolan.org/vlc/)
-- **MPV**: `choco install mpv` (via Chocolatey) or download from [mpv.io](https://mpv.io/)
-- **MPC-HC**: Download from [mpc-hc.org](https://mpc-hc.org/)
+## Quick Start
 
-#### macOS
-- **VLC**: `brew install --cask vlc` or download from [videolan.org](https://www.videolan.org/vlc/)
-- **MPV**: `brew install mpv`
+### Installation
 
-#### Linux
-- **VLC**: `sudo apt install vlc` (Ubuntu/Debian) or `sudo dnf install vlc` (Fedora)
-- **MPV**: `sudo apt install mpv` (Ubuntu/Debian) or `sudo dnf install mpv` (Fedora)
+**Prerequisites**: Python 3.8+, a video player (VLC recommended)
 
-## Installation
+```bash
+# Clone repository
+git clone https://github.com/yourusername/twitch-viewer.git
+cd twitch-viewer
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/yourusername/twitch-viewer.git
-   cd twitch-viewer
-   ```
+# Create virtual environment
+python -m venv venv
 
-2. **Create virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   
-   # Windows
-   venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
-   ```
+# Activate virtual environment
+# Windows:
+venv\Scripts\Activate.ps1
+# macOS/Linux:
+source venv/bin/activate
 
-3. **Install dependencies**:
-   ```bash
-   pip install -e .
-   ```
+# Install dependencies
+pip install -e .
+```
 
-4. **Verify installation**:
-   ```bash
-   python main.py --help
-   ```
+**📖 For detailed installation instructions**, see **[INSTALLATION.md](INSTALLATION.md)**.
 
-## Usage
+### Basic Usage
 
-### GUI Mode
-
-Launch the graphical interface for easy stream management:
-
+**GUI Mode** (Recommended):
 ```bash
 python main.py
 ```
 
-**Qt GUI Features**:
-- Modern tabbed interface with two main tabs:
-  - **Stream Tab**: Channel controls, favorites panel, chat integration, and status display
-  - **Settings Tab**: Comprehensive configuration for all application settings
-- Real-time channel name validation with visual feedback
-- Dropdown quality selection with preferred quality configuration
-- Favorites management with live status monitoring
-- Integrated Twitch chat with OAuth authentication and real-time messaging
-- Complete settings management (player, network, chat, appearance, advanced)
-- Player detection and custom player configuration
-- Light and dark theme support with immediate preview
-- One-click stream launching
-
-### Command Line Mode
-
-Watch a specific channel directly:
-
+**Command Line Mode**:
 ```bash
-python main.py --channel CHANNEL_NAME [OPTIONS]
-```
-
-**Examples**:
-```bash
-# Watch a channel with default settings
+# Watch a channel
 python main.py --channel ninja
 
 # Watch with specific quality
@@ -133,262 +83,226 @@ python main.py --channel shroud --quality 720p
 python main.py --channel pokimane --debug
 ```
 
-**Available Options**:
-- `--channel, -c`: Channel name to watch
-- `--quality, -q`: Stream quality (default: best)
-- `--debug`: Enable debug logging
-- `--help`: Show help message
+**🚀 For complete usage guide**, see **[QUICKSTART.md](QUICKSTART.md)**.
 
-### Running as Module
+---
 
-You can also run TwitchAdAvoider as a Python module:
+## Documentation
 
-```bash
-python -m twitch_ad_avoider --channel ninja
-```
+### For Users
+
+| Document | Description |
+|----------|-------------|
+| **[INSTALLATION.md](INSTALLATION.md)** | Complete installation guide for all platforms |
+| **[QUICKSTART.md](QUICKSTART.md)** | Getting started with GUI and CLI |
+| **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)** | Complete configuration options reference (16+ settings) |
+| **[PLAYER-CONFIG.md](PLAYER-CONFIG.md)** | Player setup and optimization guide |
+| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Solutions for common problems |
+| **[SECURITY.md](SECURITY.md)** | Security features and best practices |
+
+### For Developers
+
+| Document | Description |
+|----------|-------------|
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contribution guidelines and development workflow |
+| **[CLAUDE.md](CLAUDE.md)** | Architecture reference and development commands |
+| **[PACKAGING.md](PACKAGING.md)** | Building Windows executables with PyInstaller |
+
+### Navigation
+
+**[📖 DOCS-MAP.md](DOCS-MAP.md)** - Complete documentation navigation guide with user and developer journeys
+
+---
 
 ## Configuration
 
-TwitchAdAvoider uses a JSON configuration file located at `config/settings.json`. The configuration is automatically created with default values on first run.
+TwitchAdAvoider uses `config/settings.json` for configuration. The file is automatically created with defaults on first run.
 
-### Default Configuration
+**Quick Configuration Examples**:
 
 ```json
 {
     "preferred_quality": "best",
-    "player": "vlc",
+    "player": "auto",
     "cache_duration": 30,
-    "debug": false,
-    "log_to_file": false,
-    "log_level": "INFO",
-    "player_path": null,
-    "player_args": null,
-    "enable_status_monitoring": true,
-    "status_check_interval": 300,
-    "status_cache_duration": 60
+    "current_theme": "dark",
+    "debug": false
 }
 ```
 
-### Configuration Options
+**Common Settings**:
+- `preferred_quality` - Default stream quality (`best`, `720p`, `480p`, etc.)
+- `player` - Player choice (`auto`, `vlc`, `mpv`, `mpc-hc`)
+- `player_path` - Custom player path (leave `null` for auto-detection)
+- `current_theme` - UI theme (`light` or `dark`)
+- `debug` - Enable debug logging
 
-| Setting | Type | Description | Valid Values |
-|---------|------|-------------|--------------|
-| `preferred_quality` | String | Default stream quality | `best`, `worst`, `720p`, `480p`, `360p`, `160p` |
-| `player` | String | Video player choice | `vlc`, `mpv`, `mpc-hc`, `auto` |
-| `cache_duration` | Integer | Stream cache duration (seconds) | 0-3600 |
-| `debug` | Boolean | Enable debug logging | `true`, `false` |
-| `log_to_file` | Boolean | Write logs to file | `true`, `false` |
-| `log_level` | String | Logging verbosity | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `player_path` | String/null | Custom player executable path | Valid file path or `null` |
-| `player_args` | String/null | Additional player arguments | Validated string or `null` |
-| `enable_status_monitoring` | Boolean | Enable stream status monitoring | `true`, `false` |
-| `status_check_interval` | Integer | Status check frequency (seconds) | 10-86400 |
-| `status_cache_duration` | Integer | Status cache duration (seconds) | 1-3600 |
+**For all 16+ configuration options**, see **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)**.
 
-### Manual Player Configuration
+**To configure via GUI**: Launch application → Settings tab → Modify → Apply Settings
 
-If automatic player detection fails, you can manually configure the player:
+---
 
-```json
-{
-    "player": "vlc",
-    "player_path": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
-    "player_args": "--fullscreen --volume=50"
-}
+## Architecture
+
+TwitchAdAvoider follows a modular architecture with clear separation between GUI, core logic, and security layers.
+
+### Component Overview
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│ Qt GUI Layer    │    │   CLI Interface  │    │  Configuration  │
+│ • Stream Tab    │    │ • Arg Parsing    │    │ • Validation    │
+│ • Settings Tab  │    │ • Direct Launch  │    │ • Persistence   │
+└────────┬────────┘    └────────┬─────────┘    └────────┬────────┘
+         │                      │                       │
+         └──────────────────────┼───────────────────────┘
+                                │
+                   ┌────────────▼────────────┐
+                   │     Core Engine         │
+                   │ • Stream Management     │
+                   │ • Player Detection      │
+                   │ • OAuth/Chat Client     │
+                   └────────────┬────────────┘
+                                │
+                   ┌────────────▼────────────┐
+                   │   Security Layer        │
+                   │ • Input Validation      │
+                   │ • Attack Prevention     │
+                   │ • Sanitization          │
+                   └─────────────────────────┘
 ```
 
-**Security Note**: Player arguments are validated to prevent command injection attacks.
+### Key Components
 
-## Security Features
+| Component | Responsibility | File Location |
+|-----------|---------------|---------------|
+| **TwitchViewer** | Stream management, player detection | `src/twitch_viewer.py` |
+| **StreamGUI** | Qt interface orchestration | `gui_qt/stream_gui.py` |
+| **ConfigManager** | Settings validation & persistence | `src/config_manager.py` |
+| **Validators** | Security input validation | `src/validators.py` |
+| **AuthManager** | OAuth authentication | `src/auth_manager.py` |
+| **TwitchChatClient** | IRC chat integration | `src/twitch_chat_client.py` |
 
-TwitchAdAvoider implements comprehensive security measures:
+**For detailed architecture**, see **[CLAUDE.md](CLAUDE.md)**.
 
-### Input Validation
-- **Channel Names**: Validated against Twitch username patterns (4-25 characters, alphanumeric + underscores)
-- **Path Traversal Protection**: File paths are validated to prevent directory traversal attacks
-- **Command Injection Prevention**: Player arguments are sanitized to prevent command execution
-- **Control Character Filtering**: Removes potentially dangerous control characters
+---
 
-### Security Patterns Blocked
-- Path traversal sequences (`../`, `..\\`)
-- Command separators (`;`, `|`, `&`)
-- Command substitution (`$()`, backticks)
-- Redirection operators (`<`, `>`)
-- Script injection patterns
-- Windows reserved names
-- Control characters and null bytes
+## Security
 
-### Real-time Validation
-The GUI provides immediate feedback for:
-- Invalid channel names
-- Malicious input patterns
-- Configuration validation errors
+TwitchAdAvoider implements defense-in-depth security with comprehensive input validation.
+
+**Protected Against**:
+- ✅ Path traversal attacks (`../`, `..\\`)
+- ✅ Command injection (`;`, `|`, `&`, `$()`)
+- ✅ Invalid channel names (pattern validation)
+- ✅ Malicious player arguments
+- ✅ Control character injection
+- ✅ Configuration tampering
+
+**Security Features**:
+- Real-time input validation with GUI feedback
+- Pattern-based attack detection
+- Validated configuration persistence
+- Secure OAuth token encryption
+
+**For complete security documentation**, see **[SECURITY.md](SECURITY.md)**.
+
+---
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### "streamlink command not found"
-**Solution**: Ensure streamlink is installed:
+**"Video player not found"**
+- Install VLC, MPV, or MPC-HC ([Installation Guide](INSTALLATION.md#installing-a-video-player))
+- Set custom player path in Settings tab or `config/settings.json`
+
+**"streamlink command not found"**
 ```bash
-pip install streamlink
+pip install -e .
 ```
 
-#### "Video player not found"
-**Solutions**:
-1. Install a supported video player (see [Prerequisites](#prerequisites))
-2. Set custom player path in configuration
-3. Ensure player is in system PATH
-
-#### "No streams available for channel"
-**Possible Causes**:
-- Channel is offline
-- Channel name is incorrect
-- Network connectivity issues
-- Streamlink version compatibility
-
-**Solutions**:
-1. Verify channel name spelling
-2. Check if channel is live on twitch.tv
-3. Update streamlink: `pip install --upgrade streamlink`
-
-#### GUI Validation Errors
-**Common Issues**:
-- Channel names too short (minimum 4 characters)
-- Invalid characters in channel name
-- Malicious input patterns detected
-
-**Solution**: Use valid Twitch usernames (letters, numbers, underscores only)
-
-### Debug Mode
-
-Enable debug mode for detailed logging:
-
+**GUI won't launch**
 ```bash
-python main.py --debug
+pip install --upgrade --force-reinstall PySide6
 ```
 
-Or set in configuration:
-```json
-{
-    "debug": true,
-    "log_to_file": true
-}
-```
+**Stream buffering/lagging**
+- Lower quality: Try `720p`, `480p`, or `360p`
+- Settings tab → Preferred Quality → Apply
 
-Debug logs are written to `logs/twitch_ad_avoider.log` when file logging is enabled.
+**For detailed troubleshooting**, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** and **[RESOLVED-ISSUES.md](RESOLVED-ISSUES.md)**.
 
-### Getting Help
-
-1. Check this documentation
-2. Review error messages in debug mode
-3. Verify your configuration file
-4. Ensure all dependencies are installed
-
-## Architecture Overview
-
-TwitchAdAvoider follows a modular architecture with clear separation of concerns:
-
-### Core Components
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Qt GUI Layer    │    │   CLI Interface  │    │  Configuration  │
-│                 │    │                  │    │                 │
-│ • StreamGUI     │    │ • main.py        │    │ • ConfigManager │
-│ • MainWindow    │    │ • Argument       │    │ • Validation    │
-│ • Components    │    │   Parsing        │    │ • Persistence   │
-│ • Controllers   │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │     Core Engine         │
-                    │                         │
-                    │ • TwitchViewer          │
-                    │ • Player Detection      │
-                    │ • Stream Management     │
-                    │ • Process Control       │
-                    │ • OAuth Auth Manager    │
-                    │ • Twitch Chat Client    │
-                    └─────────────────────────┘
-                                 │
-               ┌─────────────────┼─────────────────┐
-               │                 │                 │
-    ┌──────────▼──────────┐ ┌────▼────┐ ┌─────────▼─────────┐
-    │   Security Layer    │ │ Logging │ │  External APIs    │
-    │                     │ │         │ │                   │
-    │ • Input Validation  │ │ • Multi │ │ • Streamlink      │
-    │ • Sanitization      │ │   Level │ │ • Twitch OAuth    │
-    │ • Attack Prevention │ │ • File  │ │ • Twitch IRC      │
-    │                     │ │         │ │ • Player Process  │
-    └─────────────────────┘ └─────────┘ └───────────────────┘
-```
-
-### Data Flow
-
-1. **User Input** → Validation → Sanitization → Processing
-2. **Configuration** → Validation → Storage → Runtime Use
-3. **Stream Request** → Channel Validation → Player Detection → Process Launch
-4. **Status Monitoring** → API Calls → Caching → GUI Updates
-
-### Security Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Security Perimeter                       │
-│                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ Input       │  │ Path        │  │ Command Injection   │  │
-│  │ Validation  │  │ Traversal   │  │ Prevention          │  │
-│  │             │  │ Protection  │  │                     │  │
-│  │ • Patterns  │  │ • Absolute  │  │ • Argument          │  │
-│  │ • Length    │  │   Paths     │  │   Sanitization      │  │
-│  │ • Character │  │ • Bounds    │  │ • Shell Parsing     │  │
-│  │   Filtering │  │   Checking  │  │ • Pattern Blocking  │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | Security Role |
-|-----------|---------------|---------------|
-| **TwitchViewer** | Core stream management, player detection | Input validation coordination |
-| **ConfigManager** | Settings persistence and validation | Configuration security enforcement |
-| **Validators** | Input sanitization and security checks | Primary security enforcement |
-| **StreamGUI** | Qt-based user interface and real-time feedback | User input validation and feedback |
-| **AuthManager** | OAuth authentication and token management | Secure credential encryption and storage |
-| **TwitchChatClient** | IRC chat integration | Authenticated messaging with USERSTATE confirmation |
+---
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! TwitchAdAvoider follows modern Python best practices and comprehensive testing standards.
 
-### Development Setup
-
+**Quick Start for Contributors**:
 1. Fork the repository
-2. Create a virtual environment
-3. Install dependencies: `pip install -r requirements.txt`
-4. Run tests: `python -m pytest tests/`
-5. Follow the code style guidelines
+2. Install with dev dependencies: `pip install -e .[dev]`
+3. Run tests: `pytest tests/`
+4. Follow code style: `black . && flake8 . && mypy src/`
+5. Submit PR with tests
 
-### Security Considerations
+**Development Tools**:
+- **pytest** - Testing framework
+- **black** - Code formatter (configured in `pyproject.toml`)
+- **flake8** - Linter
+- **mypy** - Type checker
+- **coverage** - Code coverage analysis
 
-When contributing, please:
-- Validate all user inputs
-- Use the existing validation functions
-- Add tests for security scenarios
-- Document security implications
+**For complete contributing guide**, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+**Security Guidelines**: All user inputs must be validated using `src/validators.py`. See **[SECURITY.md](SECURITY.md)** for security requirements.
+
+---
+
+## Testing
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_validators.py
+
+# Run with coverage
+coverage run -m pytest tests/
+coverage report
+
+# Code quality checks
+black --check .
+flake8 .
+mypy src/
+```
+
+---
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+---
+
 ## Acknowledgments
 
-- **Streamlink**: For providing the core streaming functionality
-- **Python Community**: For excellent libraries and tools
-- **Contributors**: Thank you to all who have contributed to this project
+- **[Streamlink](https://streamlink.github.io/)** - Core streaming functionality
+- **[PySide6](https://doc.qt.io/qtforpython/)** - Modern Qt GUI framework
+- **Python Community** - Excellent libraries and tools
+- **Contributors** - Thank you to everyone who has contributed to this project
+
+---
+
+## Getting Help
+
+- **📖 Documentation**: Start with [DOCS-MAP.md](DOCS-MAP.md) for navigation
+- **🐛 Issues**: [GitHub Issues](https://github.com/yourusername/twitch-viewer/issues)
+- **💬 Discussions**: [GitHub Discussions](https://github.com/yourusername/twitch-viewer/discussions)
+- **🔒 Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
+
+---
+
+**Last Updated**: 2025-11-27 | **Documentation**: [DOCS-MAP.md](DOCS-MAP.md)

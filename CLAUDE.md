@@ -1,202 +1,251 @@
+<!-- Last Updated: 2025-11-27 | Target Audience: AI Assistants, Developers -->
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
 ## Project Overview
 
-TwitchAdAvoider is a security-focused Python application for watching Twitch streams while avoiding ads. It features both GUI and command-line interfaces, with comprehensive input validation and cross-platform video player support.
+TwitchAdAvoider is a **security-focused Python application** for watching Twitch streams while avoiding ads. Features GUI (PySide6 Qt) and CLI interfaces with comprehensive input validation.
 
-## Architecture
+**Key Characteristics**:
+- Security-first design (all inputs validated)
+- Modern Python packaging (`pyproject.toml`)
+- Cross-platform (Windows, macOS, Linux)
+- Modular architecture
 
-### Core Components
-- **`src/twitch_viewer.py`**: Main streaming logic and player detection
-- **`src/config_manager.py`**: JSON configuration with comprehensive validation
-- **`src/validators.py`**: Security-focused input validation (channel names, file paths, player args)
-- **`src/auth_manager.py`**: OAuth authentication manager for Twitch API integration
-- **`src/twitch_chat_client.py`**: Twitch IRC chat client with USERSTATE message confirmation
-- **`gui_qt/stream_gui.py`**: PySide6 Qt GUI orchestrator with component coordination
-- **`gui_qt/main_window.py`**: Main Qt window with tabbed interface (Stream + Settings tabs)
-- **`gui_qt/components/settings_tab.py`**: Comprehensive settings interface with all configuration options
-- **`gui_qt/controllers/chat_controller.py`**: Chat management and lifecycle controller
-- **`gui_qt/components/favorites_panel.py`**: Channel favorites panel with status monitoring
+---
 
-### Security Architecture
-The application implements defense-in-depth security:
-- **Input Validation Layer**: All user inputs validated via `src/validators.py`
-- **Path Traversal Prevention**: File paths validated for `../` sequences and dangerous characters
-- **Command Injection Prevention**: Player arguments sanitized to block shell metacharacters
-- **Pattern-based Attack Detection**: Regex patterns detect various attack vectors
+## Core Components
 
-### Player Detection System
-Multi-priority detection algorithm in `TwitchViewer._detect_player()`:
-1. Manual player path from configuration
-2. GUI selection override
-3. System PATH search
-4. Common installation directory search
-5. Environment variables (`TWITCH_PLAYER_PATH`, `TWITCH_PLAYER_NAME`)
-6. Fallback to streamlink auto-detection
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| **TwitchViewer** | `src/twitch_viewer.py` | Streaming logic, player detection |
+| **ConfigManager** | `src/config_manager.py` | JSON config with validation |
+| **Validators** | `src/validators.py` | **Security input validation** |
+| **AuthManager** | `src/auth_manager.py` | OAuth authentication |
+| **TwitchChatClient** | `src/twitch_chat_client.py` | IRC chat (USERSTATE confirmation) |
+| **StreamGUI** | `gui_qt/stream_gui.py` | Qt GUI orchestrator |
+| **MainWindow** | `gui_qt/main_window.py` | Tabbed interface |
+| **SettingsTab** | `gui_qt/components/settings_tab.py` | Settings interface |
 
-### Chat System Architecture
-The Twitch chat integration follows official IRC specifications:
-- **OAuth Authentication**: Secure token-based authentication via `AuthManager`
-- **IRC Connection**: Authenticated connection to `irc.chat.twitch.tv` with capabilities `twitch.tv/tags` and `twitch.tv/commands`
-- **Message Confirmation**: Uses USERSTATE messages (not PRIVMSG echoes) for delivery confirmation
-- **Thread-safe UI**: IRC communication runs in background threads with main-thread UI updates
-- **Message Tracking**: Pending message system ensures reliable confirmation and prevents timeouts
+**Data Flow**: `User Input → Validators → ConfigManager → TwitchViewer → Player`
+
+---
+
+## Security Architecture
+
+**Defense-in-depth** security via `src/validators.py`:
+
+**Attack Prevention**:
+- **Path Traversal**: Blocks `../`, `..\\` sequences
+- **Command Injection**: Blocks `;`, `|`, `&`, `$()`, backticks
+- **Control Characters**: Filters null bytes, dangerous chars
+- **Pattern Detection**: Regex-based attack detection
+
+**Security Principles** (CRITICAL):
+- ✅ Always use validators from `src/validators.py`
+- ✅ Use subprocess with argument lists (never `shell=True` with user input)
+- ✅ Validate all file paths for traversal
+- ✅ Test with malicious inputs
+- ❌ Never concatenate user input into shell commands
+- ❌ Never trust user input without validation
+
+**For complete security docs**, see [SECURITY.md](SECURITY.md).
+
+---
 
 ## Development Commands
 
-### Running the Application
+### Running
 ```bash
-# GUI mode (default)
-python main.py
-
-# Command-line mode
-python main.py --channel ninja --quality 720p
-
-# Debug mode
-python main.py --debug
-
-# PowerShell launcher (Windows)
-./run.ps1
+python main.py                              # GUI mode
+python main.py --channel ninja --quality 720p  # CLI mode
+python main.py --debug                      # Debug mode
 ```
 
 ### Testing
 ```bash
-# Run all tests
-python -m unittest discover tests/
-
-# Run specific test file
-python -m unittest tests.test_validators
-
-# Run specific test method
-python -m unittest tests.test_validators.TestChannelValidation.test_valid_channel_names
-
-# Alternative: Run tests with pytest
-python -m pytest tests/
-
-# Run specific test with pytest
-python -m pytest tests/test_validators.py::TestChannelValidation::test_valid_channel_names
+python -m pytest tests/                     # All tests
+python -m pytest tests/test_validators.py   # Specific file
+python -m coverage run -m pytest tests/ && python -m coverage report  # Coverage
 ```
 
-### Code Quality Tools
+### Code Quality
 ```bash
-# Format code with Black (configured in pyproject.toml)
-black --check .
+black .                   # Format
+flake8 .                  # Lint
+python -m mypy src/       # Type check
 
-# Lint code with flake8
-flake8 .
-
-# Type checking with mypy
-python -m mypy src/
-
-# Generate coverage report
-python -m coverage run -m unittest discover tests/
-python -m coverage report
+# Before committing:
+black . && flake8 . && mypy src/ && pytest tests/
 ```
 
-### Building Executable
+### Building
 ```bash
-# Build Windows executable (includes pycparser fix)
-python build_executable.py
-
-# Build with options
-python build_executable.py --skip-deps --no-clean
+python build_executable.py  # Windows executable
 ```
 
-**PyInstaller pycparser Fix**: The build process automatically generates pycparser parser tables before building to prevent "Unable to build parser" runtime errors. This fix ensures that the cryptography library (used for OAuth token encryption) works correctly in the compiled executable.
-
-### Configuration
-- Configuration file: `config/settings.json`
-- Favorites file: `config/favorites.json`
-- Log file: `logs/twitch_ad_avoider.log`
-
-### Package Installation
-The project is configured as an installable Python package using `pyproject.toml`:
-
-```bash
-# Install dependencies (production)
-pip install -e .
-
-# Install with development dependencies
-pip install -e .[dev]
-
-# Core dependency: streamlink>=5.0.0
-# Development dependencies: pytest, black, flake8, mypy, coverage, pre-commit
-```
+---
 
 ## Key Implementation Details
 
-### Modern Python Project Structure
-The project follows modern Python packaging standards:
-- **`pyproject.toml`**: Centralized project configuration, dependencies, and tool settings
-- **Editable installation**: `pip install -e .` for development workflow
-- **Tool configuration**: Black, flake8, pytest, coverage, and mypy configured in pyproject.toml
-- **Package metadata**: Version, description, authors, and classifiers defined
-
 ### Configuration System
-The `ConfigManager` class handles JSON-based configuration with:
-- Automatic default value merging
-- Comprehensive validation of all settings
+`ConfigManager` (`src/config_manager.py`):
+- JSON-based (`config/settings.json`)
+- Validates all 16+ settings before save
 - Atomic saves with error recovery
-- UTF-8 encoding support
 
 ### Validation Pipeline
-All inputs flow through `src/validators.py`:
-- Channel names: Twitch username pattern validation + security checks
-- File paths: Path traversal protection + dangerous character filtering
-- Player arguments: Command injection prevention via pattern matching + shell parsing validation
+All inputs through `src/validators.py`:
+
+```python
+from src.validators import validate_channel_name, ValidationError
+
+try:
+    channel = validate_channel_name(user_input)
+except ValidationError as e:
+    logger.error(f"Invalid: {e}")
+```
+
+**Validators**:
+- `validate_channel_name()` - Twitch username + security
+- `validate_player_path()` - Path traversal prevention
+- `validate_player_args()` - Command injection prevention
+- `validate_quality()` - Enum validation
+- `validate_log_level()` - Enum validation
 
 ### Error Handling
-Custom exception hierarchy in `src/exceptions.py`:
-- `ValidationError`: Input validation failures
-- `TwitchStreamError`: Stream-related errors
-- `PlayerError`: Video player issues
-- `StreamlinkError`: Streamlink integration errors
+Custom exceptions in `src/exceptions.py`:
+```
+TwitchAdAvoiderError (base)
+├── ValidationError (input validation)
+├── TwitchStreamError (stream issues)
+├── PlayerError (player issues)
+└── StreamlinkError (streamlink issues)
+```
 
-### GUI Architecture
-The PySide6 Qt GUI implements a modern tabbed interface with two main tabs:
+### File Locations
+- `config/settings.json` - App settings
+- `config/favorites.json` - Favorite channels
+- `logs/twitch_ad_avoider.log` - Logs
 
-**Stream Tab** (Main Interface):
-- Stream control panel with channel input and quality selection
-- Favorites panel (left) with live status monitoring
-- Chat panel (right) with OAuth authentication and real-time messaging
-- Status display showing application logs and events
+---
 
-**Settings Tab** (Comprehensive Configuration):
-- **Stream Settings**: Player selection, quality preferences, cache duration, custom player path/args
-- **Network Settings**: Timeout, retry attempts, retry delay
-- **Chat Settings**: Auto-connect, message limits, timestamps
-- **Appearance**: Dark mode toggle with immediate preview
-- **Advanced**: Debug mode, logging configuration, Twitch client ID
-- Apply and Reset to Defaults buttons for settings management
+## Package Installation
 
-**Key Features**:
-- Modern signal-based architecture for responsive UI
-- Real-time input validation with visual feedback
-- Asynchronous status monitoring for favorite channels
-- Thread-safe operations for non-blocking UI
-- All 16+ configuration options exposed in Settings tab
-- Custom QSS stylesheets for light and dark themes
-- Cross-platform Qt widgets with consistent appearance
-- Settings persistence via ConfigManager with validation
+```bash
+pip install -e .        # Production
+pip install -e .[dev]   # Development (includes pytest, black, flake8, mypy)
+```
 
-## Security Considerations
+**Core Dependencies**: streamlink, PySide6, cryptography, requests
+**Dev Dependencies**: pytest, black, flake8, mypy, coverage
 
-When making changes:
-- Always use existing validation functions from `src/validators.py`
-- Never concatenate user input into shell commands
-- Use subprocess with argument lists instead of shell=True
-- Validate all file paths for traversal attacks
-- Test security scenarios with malicious inputs
-- Use the existing logging system for security events
+**For installation details**, see [INSTALLATION.md](INSTALLATION.md).
+
+---
 
 ## Testing Strategy
 
-The test suite covers:
-- **Unit tests**: Individual function validation
-- **Security tests**: Malicious input patterns
-- **Integration tests**: Component interaction
-- **GUI tests**: User interface functionality
+**Test Coverage** (`tests/`):
+- Unit tests (validation, config, player detection)
+- **Security tests** (malicious inputs, path traversal, command injection)
+- Integration tests (component interaction)
+- GUI tests (UI functionality)
 
-Focus on security test cases when adding new validation or input handling.
+**Security Testing Pattern**:
+```python
+def test_security_validation(self):
+    malicious = ["../../../etc/passwd", "test;whoami", "test`id`"]
+    for bad in malicious:
+        with self.assertRaises(ValidationError):
+            validate_function(bad)
+```
+
+**Security tests are REQUIRED** when adding:
+- New validation functions
+- Input handling code
+- Configuration options
+- File operations
+
+---
+
+## Common Development Patterns
+
+### Adding Configuration Option
+1. Add default in `ConfigManager.DEFAULT_CONFIG`
+2. Add validation in `ConfigManager._validate_config()`
+3. Update Settings tab: `gui_qt/components/settings_tab.py`
+4. Document in `CONFIG-REFERENCE.md`
+5. Add tests in `tests/test_config_validation.py`
+
+### Adding Validator
+1. Create function in `src/validators.py`
+2. Raise `ValidationError` for invalid inputs
+3. Add tests (valid + malicious inputs)
+4. Document in `SECURITY.md` if security-related
+5. Use in appropriate components
+
+### Adding GUI Component
+1. Create in `gui_qt/components/`
+2. Use Qt signals for communication
+3. Validate inputs in real-time
+4. Update main window
+5. Test UI functionality
+
+---
+
+## Architecture Details
+
+### Player Detection
+Priority order (`TwitchViewer._detect_player()`):
+1. Manual config path
+2. GUI selection
+3. System PATH
+4. Common install dirs
+5. Environment variables
+6. Streamlink auto-detect
+
+### Chat System
+- OAuth via `AuthManager`
+- IRC: `irc.chat.twitch.tv`
+- **USERSTATE messages** for confirmation (not PRIVMSG echoes)
+- Thread-safe (background IRC, main thread UI)
+
+### GUI Structure
+- **Stream Tab**: Favorites panel, stream controls, chat panel
+- **Settings Tab**: Stream, network, chat, appearance, advanced settings
+- Signal-based architecture
+- Real-time validation feedback
+
+**For detailed architecture**, see [README.md](README.md#architecture).
+
+---
+
+## Security Checklist
+
+When making changes:
+- [ ] Validate all user inputs via `src/validators.py`
+- [ ] Use subprocess argument lists (not `shell=True`)
+- [ ] Validate file paths for traversal
+- [ ] Test with malicious inputs
+- [ ] Log security events
+- [ ] Add security tests
+- [ ] Update SECURITY.md if needed
+
+---
+
+## See Also
+
+**User Docs**: [CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)
+
+**Dev Docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md)
+
+**Reference**: [README.md](README.md), [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
+---
+
+**Last Updated**: 2025-11-27 | **Target**: AI assistants, developers
