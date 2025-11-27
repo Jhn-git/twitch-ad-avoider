@@ -89,6 +89,32 @@ Get-ItemProperty "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath" -ErrorAction S
 Get-ItemProperty "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath" -ErrorAction SilentlyContinue
 ```
 
+### GUI Not Working
+
+If you encounter issues with the Qt GUI:
+
+1. **Verify PySide6 Installation**:
+   ```bash
+   pip show PySide6
+   ```
+
+2. **Check Qt Platform Plugin**:
+   ```bash
+   # Windows - ensure Qt platform plugin is available
+   python -c "from PySide6.QtWidgets import QApplication; import sys; app = QApplication(sys.argv); print('Qt GUI OK')"
+   ```
+
+3. **Missing Dependencies**:
+   ```bash
+   # Reinstall PySide6
+   pip install --upgrade --force-reinstall PySide6
+   ```
+
+4. **Platform-Specific Issues**:
+   - **Linux**: May need additional packages: `sudo apt install libxcb-xinerama0 libxcb-cursor0`
+   - **Windows**: Ensure Visual C++ Redistributable is installed
+   - **macOS**: May need to install Qt via homebrew: `brew install qt@6`
+
 ### Solution Approaches
 
 #### Quick Fix: Recreate Virtual Environment

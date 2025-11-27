@@ -199,8 +199,6 @@ class FavoritesPanel(QGroupBox):
         self.add_current_btn = QPushButton("Add Current")
         self.add_new_btn = QPushButton("Add New")
         self.remove_btn = QPushButton("Remove")
-        self.refresh_btn = QPushButton("Refresh")
-        self.refresh_btn.setObjectName("refreshButton")
 
         # Disable remove button initially
         self.remove_btn.setEnabled(False)
@@ -208,7 +206,6 @@ class FavoritesPanel(QGroupBox):
         button_layout.addWidget(self.add_current_btn)
         button_layout.addWidget(self.add_new_btn)
         button_layout.addWidget(self.remove_btn)
-        button_layout.addWidget(self.refresh_btn)
 
         layout.addLayout(button_layout)
 
@@ -229,7 +226,6 @@ class FavoritesPanel(QGroupBox):
         self.add_current_btn.clicked.connect(self._on_add_current_clicked)
         self.add_new_btn.clicked.connect(self._on_add_new_clicked)
         self.remove_btn.clicked.connect(self._on_remove_clicked)
-        self.refresh_btn.clicked.connect(self._on_refresh_clicked)
 
     def _on_selection_changed(self) -> None:
         """Handle list selection change."""
@@ -278,11 +274,6 @@ class FavoritesPanel(QGroupBox):
             channel = selected_items[0].text()
             logger.info(f"Remove clicked for: {channel}")
             self.remove_requested.emit(channel)
-
-    def _on_refresh_clicked(self) -> None:
-        """Handle Refresh button click."""
-        logger.info("Refresh clicked")
-        self.refresh_requested.emit()
 
     def add_favorite(self, channel: str, is_live: bool = False) -> None:
         """
@@ -391,16 +382,3 @@ class FavoritesPanel(QGroupBox):
         """
         self.delegate.set_dark_mode(enabled)
         self.list_widget.update()
-
-    def set_refreshing(self, is_refreshing: bool) -> None:
-        """
-        Set the refreshing state (enables/disables refresh button).
-
-        Args:
-            is_refreshing: True if currently refreshing
-        """
-        self.refresh_btn.setEnabled(not is_refreshing)
-        if is_refreshing:
-            self.refresh_btn.setText("Refreshing...")
-        else:
-            self.refresh_btn.setText("Refresh")

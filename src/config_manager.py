@@ -15,10 +15,10 @@ Configuration files are stored in JSON format and validated against predefined
 schemas to ensure security and data integrity.
 
 See Also:
-    :mod:`src.validators`: Validation functions used by ConfigManager  
+    :mod:`src.validators`: Validation functions used by ConfigManager
     :mod:`src.constants`: Default settings and validation constants
     :class:`~src.twitch_viewer.TwitchViewer`: Primary consumer of configuration
-    :mod:`gui.stream_gui`: GUI configuration interface
+    :mod:`gui_qt.stream_gui`: Qt GUI configuration interface
 """
 
 import json
@@ -42,6 +42,10 @@ from .constants import (
     MAX_WINDOW_WIDTH,
     MIN_WINDOW_HEIGHT,
     MAX_WINDOW_HEIGHT,
+    MIN_REFRESH_INTERVAL,
+    MAX_REFRESH_INTERVAL,
+    MIN_CHECK_TIMEOUT,
+    MAX_CHECK_TIMEOUT,
     VALIDATION_ERROR_MESSAGES,
 )
 from .logging_config import get_logger
@@ -342,6 +346,28 @@ class ConfigManager:
             elif key == "chat_show_timestamps":
                 if not isinstance(value, bool):
                     raise ValidationError("Chat show timestamps setting must be a boolean")
+                return True
+
+            # Favorites settings validation
+            elif key == "favorites_auto_refresh":
+                if not isinstance(value, bool):
+                    raise ValidationError("Favorites auto-refresh setting must be a boolean")
+                return True
+
+            elif key == "favorites_refresh_interval":
+                if not isinstance(value, int):
+                    raise ValidationError("Favorites refresh interval must be an integer")
+                validate_numeric_range(
+                    value, min_val=MIN_REFRESH_INTERVAL, max_val=MAX_REFRESH_INTERVAL, data_type=int
+                )
+                return True
+
+            elif key == "favorites_check_timeout":
+                if not isinstance(value, int):
+                    raise ValidationError("Favorites check timeout must be an integer")
+                validate_numeric_range(
+                    value, min_val=MIN_CHECK_TIMEOUT, max_val=MAX_CHECK_TIMEOUT, data_type=int
+                )
                 return True
 
             # Window settings validation
