@@ -19,7 +19,6 @@ Key Features:
 """
 
 from PySide6.QtWidgets import QGroupBox, QTextEdit, QVBoxLayout
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor, QFont
 from datetime import datetime
 from typing import Optional
@@ -32,6 +31,7 @@ logger = get_logger(__name__)
 
 class MessageLevel(Enum):
     """Message severity levels."""
+
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
@@ -49,20 +49,20 @@ class StatusDisplay(QGroupBox):
 
     # Color mapping for message levels (light theme colors)
     LEVEL_COLORS = {
-        MessageLevel.INFO: "#000000",      # Black
-        MessageLevel.WARNING: "#FF8C00",   # Dark Orange
-        MessageLevel.ERROR: "#DC143C",     # Crimson Red
-        MessageLevel.SYSTEM: "#0000FF",    # Blue
-        MessageLevel.STATUS: "#000000",    # Black
+        MessageLevel.INFO: "#000000",  # Black
+        MessageLevel.WARNING: "#FF8C00",  # Dark Orange
+        MessageLevel.ERROR: "#DC143C",  # Crimson Red
+        MessageLevel.SYSTEM: "#0000FF",  # Blue
+        MessageLevel.STATUS: "#000000",  # Black
     }
 
     # Dark theme colors
     LEVEL_COLORS_DARK = {
-        MessageLevel.INFO: "#FFFFFF",      # White
-        MessageLevel.WARNING: "#FFA500",   # Orange
-        MessageLevel.ERROR: "#FF6B6B",     # Light Red
-        MessageLevel.SYSTEM: "#87CEEB",    # Sky Blue
-        MessageLevel.STATUS: "#FFFFFF",    # White
+        MessageLevel.INFO: "#FFFFFF",  # White
+        MessageLevel.WARNING: "#FFA500",  # Orange
+        MessageLevel.ERROR: "#FF6B6B",  # Light Red
+        MessageLevel.SYSTEM: "#87CEEB",  # Sky Blue
+        MessageLevel.STATUS: "#FFFFFF",  # White
     }
 
     def __init__(self, parent=None, max_messages: int = 100):
@@ -110,10 +110,7 @@ class StatusDisplay(QGroupBox):
         self.setLayout(layout)
 
     def add_message(
-        self,
-        message: str,
-        level: MessageLevel = MessageLevel.INFO,
-        category: Optional[str] = None
+        self, message: str, level: MessageLevel = MessageLevel.INFO, category: Optional[str] = None
     ) -> None:
         """
         Add a status message with timestamp and color coding.
@@ -133,15 +130,13 @@ class StatusDisplay(QGroupBox):
         # Build HTML formatted message
         if category:
             html_message = (
-                f'<span style="color: {color};">'
-                f'[{timestamp}] [{category}] {message}'
-                f'</span>'
+                f'<span style="color: {color};">' f"[{timestamp}] [{category}] {message}" f"</span>"
             )
         else:
             html_message = (
                 f'<span style="color: {color};">'
-                f'[{timestamp}] [{level.value}] {message}'
-                f'</span>'
+                f"[{timestamp}] [{level.value}] {message}"
+                f"</span>"
             )
 
         # Append message

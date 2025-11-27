@@ -19,12 +19,16 @@ Key Features:
 """
 
 from PySide6.QtWidgets import (
-    QGroupBox, QLabel, QLineEdit, QComboBox,
-    QPushButton, QFormLayout, QHBoxLayout, QVBoxLayout
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QComboBox,
+    QPushButton,
+    QFormLayout,
+    QHBoxLayout,
+    QVBoxLayout,
 )
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QKeyEvent
-from typing import Optional
+from PySide6.QtCore import Signal
 
 from src.logging_config import get_logger
 

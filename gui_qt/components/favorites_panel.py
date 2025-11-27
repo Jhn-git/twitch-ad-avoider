@@ -18,11 +18,16 @@ Key Features:
 """
 
 from PySide6.QtWidgets import (
-    QGroupBox, QListWidget, QListWidgetItem, QPushButton,
-    QVBoxLayout, QHBoxLayout, QStyledItemDelegate, QStyle,
-    QStyleOptionViewItem, QWidget, QInputDialog, QMessageBox
+    QGroupBox,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
 )
-from PySide6.QtCore import Signal, Qt, QRect, QSize
+from PySide6.QtCore import Signal, Qt, QSize
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush
 from typing import List, Optional, Dict
 
@@ -40,9 +45,9 @@ class FavoriteItemDelegate(QStyledItemDelegate):
     """
 
     # Status circle colors
-    LIVE_FILL = QColor("#E74C3C")      # Red fill for live
-    LIVE_OUTLINE = QColor("#C0392B")   # Darker red outline
-    OFFLINE_FILL = QColor("#95A5A6")   # Gray fill for offline
+    LIVE_FILL = QColor("#E74C3C")  # Red fill for live
+    LIVE_OUTLINE = QColor("#C0392B")  # Darker red outline
+    OFFLINE_FILL = QColor("#95A5A6")  # Gray fill for offline
     OFFLINE_OUTLINE = QColor("#7F8C8D")  # Darker gray outline
 
     # Dark theme colors (brighter)
@@ -92,10 +97,7 @@ class FavoriteItemDelegate(QStyledItemDelegate):
         painter.setBrush(QBrush(fill_color))
         painter.setPen(QPen(outline_color, 1))
         painter.drawEllipse(
-            circle_x - circle_radius,
-            circle_y - circle_radius,
-            circle_radius * 2,
-            circle_radius * 2
+            circle_x - circle_radius, circle_y - circle_radius, circle_radius * 2, circle_radius * 2
         )
 
         painter.restore()
@@ -184,11 +186,13 @@ class FavoritesPanel(QGroupBox):
         self.list_widget.setSpacing(2)
 
         # Indent text to make room for status circle
-        self.list_widget.setStyleSheet("""
+        self.list_widget.setStyleSheet(
+            """
             QListWidget::item {
                 padding-left: 25px;
             }
-        """)
+        """
+        )
 
         layout.addWidget(self.list_widget)
 
@@ -339,10 +343,7 @@ class FavoritesPanel(QGroupBox):
         Returns:
             List of channel names
         """
-        return [
-            self.list_widget.item(i).text()
-            for i in range(self.list_widget.count())
-        ]
+        return [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
 
     def get_selected_favorite(self) -> Optional[str]:
         """

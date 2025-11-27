@@ -20,10 +20,12 @@ Key Features:
 """
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QGridLayout, QVBoxLayout,
-    QHBoxLayout, QApplication, QTabWidget
+    QMainWindow,
+    QWidget,
+    QGridLayout,
+    QVBoxLayout,
+    QTabWidget,
 )
-from PySide6.QtCore import Qt, QSettings, QSize
 from PySide6.QtGui import QCloseEvent
 from typing import Optional, List, Callable
 import subprocess
@@ -165,12 +167,7 @@ class MainWindow(QMainWindow):
         self.main_layout = self.stream_tab_layout  # For backward compatibility
 
     def add_component_to_layout(
-        self,
-        component: QWidget,
-        row: int,
-        column: int,
-        row_span: int = 1,
-        column_span: int = 1
+        self, component: QWidget, row: int, column: int, row_span: int = 1, column_span: int = 1
     ) -> None:
         """
         Add a component to the stream tab grid layout.
@@ -203,7 +200,7 @@ class MainWindow(QMainWindow):
 
         try:
             if stylesheet_path.exists():
-                with open(stylesheet_path, 'r', encoding='utf-8') as f:
+                with open(stylesheet_path, "r", encoding="utf-8") as f:
                     stylesheet = f.read()
                     self.setStyleSheet(stylesheet)
                 logger.info(f"Applied {theme_name} theme")
@@ -244,7 +241,9 @@ class MainWindow(QMainWindow):
         # Save maximized state
         self.config.set("window_maximized", self.isMaximized())
 
-        logger.debug(f"Saved window state: {self.width()}x{self.height()}, maximized={self.isMaximized()}")
+        logger.debug(
+            f"Saved window state: {self.width()}x{self.height()}, maximized={self.isMaximized()}"
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """

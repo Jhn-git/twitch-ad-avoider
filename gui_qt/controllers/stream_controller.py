@@ -42,12 +42,7 @@ class StreamWorker(QObject):
     finished = Signal()
     error = Signal(str)  # error message
 
-    def __init__(
-        self,
-        twitch_viewer: TwitchViewer,
-        channel: str,
-        quality: str
-    ):
+    def __init__(self, twitch_viewer: TwitchViewer, channel: str, quality: str):
         """
         Initialize the StreamWorker.
 
@@ -81,7 +76,7 @@ class StreamWorker(QObject):
 
                 if not self.should_stop:
                     if return_code == 0:
-                        logger.info(f"Stream finished normally")
+                        logger.info("Stream finished normally")
                         self.finished.emit()
                     else:
                         error_msg = f"Stream exited with code {return_code}"
@@ -167,11 +162,7 @@ class StreamController(QObject):
         self.config.set("quality", quality)
 
         # Create worker and thread
-        self.current_worker = StreamWorker(
-            self.twitch_viewer,
-            channel,
-            quality
-        )
+        self.current_worker = StreamWorker(self.twitch_viewer, channel, quality)
         self.current_thread = QThread()
         self.current_channel = channel
 
@@ -218,10 +209,7 @@ class StreamController(QObject):
         Returns:
             True if stream is running, False otherwise
         """
-        return (
-            self.current_thread is not None and
-            self.current_thread.isRunning()
-        )
+        return self.current_thread is not None and self.current_thread.isRunning()
 
     def get_current_channel(self) -> Optional[str]:
         """
