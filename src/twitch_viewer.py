@@ -3,7 +3,7 @@ Main module for TwitchViewer functionality.
 
 This module provides the core streaming functionality for TwitchAdAvoider, including:
     - Stream detection and quality selection
-    - Video player auto-detection and management  
+    - Video player auto-detection and management
     - Process control and monitoring
     - Integration with streamlink for ad avoidance
 
@@ -16,28 +16,23 @@ See Also:
     :mod:`gui_qt.stream_gui`: Qt graphical user interface integration
 """
 
-import json
 import os
-import re
 import subprocess
-import time
 import uuid
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, cast
 import streamlink
 import shutil
 
-from .exceptions import TwitchStreamError, PlayerError, ValidationError, StreamlinkError
+from .exceptions import TwitchStreamError, ValidationError, StreamlinkError
 from .config_manager import ConfigManager
 from .logging_config import get_logger
 from .validators import validate_channel_name
 from .constants import (
     SUPPORTED_PLAYERS,
     COMMON_PLAYER_PATHS,
-    TWITCH_USERNAME_PATTERN,
     ENV_PLAYER_PATH,
     ENV_PLAYER_NAME,
-    ERROR_MESSAGES,
 )
 
 logger = get_logger(__name__)
@@ -46,29 +41,29 @@ logger = get_logger(__name__)
 class TwitchViewer:
     """
     Main class for watching Twitch streams with ad avoidance.
-    
+
     This class provides the core functionality for stream detection, player management,
-    and process control. It integrates with streamlink for ad-free streaming and 
+    and process control. It integrates with streamlink for ad-free streaming and
     supports multiple video players with automatic detection.
-    
+
     The class handles the complete streaming workflow:
         1. Input validation via :mod:`src.validators`
         2. Stream detection and quality selection
         3. Player detection and configuration
         4. Process launching and monitoring
-    
+
     Attributes:
         config (:class:`~src.config_manager.ConfigManager`): Configuration manager instance
         player_path (Optional[str]): Path to detected video player executable
         selected_player (Optional[str]): Name of currently selected player
         session (streamlink.Streamlink): Streamlink session for stream operations
-    
+
     Example:
         >>> from src.config_manager import ConfigManager
         >>> config = ConfigManager()
         >>> viewer = TwitchViewer(config)
         >>> viewer.watch_stream("ninja", "720p")
-        
+
     See Also:
         :class:`~src.config_manager.ConfigManager`: Configuration management
         :func:`~src.validators.validate_channel_name`: Channel name validation
@@ -82,7 +77,7 @@ class TwitchViewer:
         Args:
             config_manager (Optional[ConfigManager]): Configuration manager instance.
                 If None, a new ConfigManager will be created with default settings.
-                
+
         Note:
             The streamlink session is configured with timeout settings from the
             configuration manager's network_timeout setting.
@@ -118,25 +113,25 @@ class TwitchViewer:
     def _get_streamlink_executable(self) -> str:
         """
         Get the streamlink executable path, preferring the virtual environment version.
-        
+
         Returns:
             Path to streamlink executable
         """
         # First, try to find streamlink in the current virtual environment
         import sys
         import platform
-        
-        if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
+
+        if hasattr(sys, "prefix") and sys.prefix != sys.base_prefix:
             # We are in a virtual environment
             if platform.system() == "Windows":
                 venv_streamlink = Path(sys.prefix) / "Scripts" / "streamlink.exe"
             else:
                 venv_streamlink = Path(sys.prefix) / "bin" / "streamlink"
-                
+
             if venv_streamlink.exists():
                 logger.debug(f"Using virtual environment streamlink: {venv_streamlink}")
                 return str(venv_streamlink)
-        
+
         # Fallback to system streamlink
         return "streamlink"
 
@@ -150,7 +145,7 @@ class TwitchViewer:
         try:
             # Try to create a session and check a non-existent stream
             test_channel = f"twitch.tv/test_{uuid.uuid4().hex[:12]}"
-            test_streams = self.session.streams(test_channel)
+            self.session.streams(test_channel)
             # If we get here without exception, streamlink is working
             logger.debug("Streamlink availability check passed")
             return True
@@ -234,7 +229,7 @@ class TwitchViewer:
             if debug:
                 logger.debug(f"Using manual player path: {manual_player_path}")
             self.player_path = manual_player_path
-            return self.config.get("player", "manual")
+            return cast(str, self.config.get("player", "manual"))
         return None
 
     def _check_player_in_path(
@@ -314,7 +309,8 @@ class TwitchViewer:
             return player_choice
 
         if self._try_environment_player_detection(debug):
-            return self._check_environment_player(debug)
+            env_player = self._check_environment_player(debug)
+            return env_player if env_player else "auto"
 
         # Final fallback
         return self._fallback_to_streamlink_detection(debug, player_choice)
@@ -354,9 +350,10 @@ class TwitchViewer:
 
         # Search common installation directories
         if player_choice in common_paths:
-            return self._check_player_common_paths(
-                player_choice, common_paths[player_choice], debug
-            ) is not None
+            return (
+                self._check_player_common_paths(player_choice, common_paths[player_choice], debug)
+                is not None
+            )
 
         return False
 
@@ -393,7 +390,7 @@ class TwitchViewer:
             if quality not in streams:
                 quality = "best"
 
-            return streams[quality].url
+            return cast(str, streams[quality].url)
         except streamlink.StreamlinkError as e:
             error_msg = str(e)
             # Check if this is a network/timeout error
@@ -416,7 +413,8 @@ class TwitchViewer:
             channel_name: Name of the Twitch channel to watch
 
         Returns:
-            Optional[subprocess.Popen]: The streamlink process if started successfully, None if error
+            Optional[subprocess.Popen]: The streamlink process if started
+                successfully, None if error
 
         Raises:
             ValidationError: If channel name is invalid
@@ -425,7 +423,9 @@ class TwitchViewer:
         """
         logger.info(f"Starting stream for channel: {channel_name}")
         logger.debug(
-            f"Configuration: player={self.config.get('player')}, quality={self.config.get('preferred_quality')}, debug={self.config.get('debug')}"
+            f"Configuration: player={self.config.get('player')}, "
+            f"quality={self.config.get('preferred_quality')}, "
+            f"debug={self.config.get('debug')}"
         )
 
         try:
@@ -447,6 +447,19 @@ class TwitchViewer:
             # Build streamlink command with proper executable path
             streamlink_exe = self._get_streamlink_executable()
             cmd = [streamlink_exe, f"twitch.tv/{channel_name}", quality]
+
+            # Add ad-blocking and discontinuity handling flags
+            cmd.extend(
+                [
+                    "--twitch-disable-ads",  # Try to disable ads via proxy
+                    "--stream-segment-attempts",
+                    "5",  # Retry failed segments
+                    "--stream-segment-timeout",
+                    "15",  # Timeout for segments (seconds)
+                    "--hls-playlist-reload-attempts",
+                    "5",  # Retry playlist reloads
+                ]
+            )
 
             # Add player if we found one, otherwise let streamlink auto-detect
             if self.player_path:

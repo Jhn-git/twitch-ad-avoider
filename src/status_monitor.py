@@ -45,9 +45,7 @@ class StatusMonitor:
         """
         self.check_timeout = check_timeout
         self.max_workers = max_workers
-        logger.debug(
-            f"StatusMonitor initialized (timeout={check_timeout}s, workers={max_workers})"
-        )
+        logger.debug(f"StatusMonitor initialized (timeout={check_timeout}s, workers={max_workers})")
 
     def check_channels(self, channels: List[str]) -> Dict[str, bool]:
         """
@@ -70,9 +68,7 @@ class StatusMonitor:
         results = {}
 
         # Use ThreadPoolExecutor for concurrent checks
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.max_workers
-        ) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all checks
             future_to_channel = {
                 executor.submit(self._check_single_channel, channel): channel

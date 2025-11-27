@@ -3,7 +3,6 @@ Constants and default configuration values for TwitchAdAvoider
 """
 
 from pathlib import Path
-from typing import Dict, List, Any
 
 # Application metadata
 APP_NAME = "TwitchAdAvoider"
@@ -19,7 +18,7 @@ DEFAULT_SETTINGS = {
     "log_to_file": False,
     "log_level": "INFO",
     "player_path": None,
-    "player_args": None,
+    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
     # GUI theme settings
     "current_theme": "light",  # light or dark theme
     # Window settings
@@ -131,11 +130,18 @@ ERROR_MESSAGES = {
     "invalid_channel": "Invalid channel name format",
     "no_streams": "No streams available for channel: {}",
     "streamlink_error": "Failed to get stream: {}",
-    "player_not_found": "Video player not found. Please install VLC, MPV, or MPC-HC",
-    "streamlink_not_found": "streamlink command not found. Please ensure streamlink is installed and in PATH",
-    "network_timeout": "Network timeout occurred. Check your internet connection or increase timeout in settings.",
-    "connection_failed": "Failed to connect to Twitch servers. Please check your internet connection.",
-    "retry_exhausted": "Max retry attempts exceeded. Connection to {} failed after {} attempts.",
+    "player_not_found": ("Video player not found. Please install VLC, MPV, or MPC-HC"),
+    "streamlink_not_found": (
+        "streamlink command not found. Please ensure streamlink is " "installed and in PATH"
+    ),
+    "network_timeout": (
+        "Network timeout occurred. Check your internet connection or "
+        "increase timeout in settings."
+    ),
+    "connection_failed": (
+        "Failed to connect to Twitch servers. Please check your internet " "connection."
+    ),
+    "retry_exhausted": ("Max retry attempts exceeded. Connection to {} failed after {} attempts."),
     "network_diagnostics_failed": "Network diagnostics failed. Unable to reach Twitch servers.",
 }
 
@@ -165,7 +171,11 @@ VALIDATION_ERROR_MESSAGES = {
     "window_width_invalid": "Window width must be between {} and {} pixels",
     "window_height_invalid": "Window height must be between {} and {} pixels",
     "window_maximized_invalid": "Window maximized setting must be a boolean",
-    "favorites_auto_refresh_invalid": "Favorites auto-refresh setting must be a boolean",
-    "favorites_refresh_interval_invalid": "Favorites refresh interval must be between {} and {} seconds",
-    "favorites_check_timeout_invalid": "Favorites check timeout must be between {} and {} seconds",
+    "favorites_auto_refresh_invalid": ("Favorites auto-refresh setting must be a boolean"),
+    "favorites_refresh_interval_invalid": (
+        "Favorites refresh interval must be between {} and {} seconds"
+    ),
+    "favorites_check_timeout_invalid": (
+        "Favorites check timeout must be between {} and {} seconds"
+    ),
 }
