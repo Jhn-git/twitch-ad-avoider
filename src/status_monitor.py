@@ -1,365 +1,170 @@
 """
-Background status monitoring system for favorite channels
-Uses streamlink to check stream status periodically
+Lightweight status monitoring for favorite Twitch channels.
+
+This module provides efficient, non-blocking status checks for favorite channels
+using streamlink with strict performance constraints.
+
+The StatusMonitor class:
+    - Uses streamlink --stream-url for quick checks (no download)
+    - Runs concurrent checks with limited workers (max 3)
+    - Enforces per-channel timeouts (default 5s)
+    - Handles errors gracefully without crashing
+    - Returns results as dict: {channel: is_live}
+
+Performance guarantees:
+    - Non-blocking: Runs in background thread pool
+    - Timeout enforcement: Each channel check limited to configurable timeout
+    - Limited concurrency: Max 3 workers to avoid system overload
+    - Graceful degradation: Failed checks return False, don't crash
 """
 
-import time
-import threading
-from typing import Dict, List, Callable, Optional
-from datetime import datetime, timezone
-
-from .streamlink_status import StreamlinkStatusChecker
-from .exceptions import StreamlinkError
-from .logging_config import get_logger
+import subprocess
+import concurrent.futures
+from typing import Dict, List
+from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
 class StatusMonitor:
-    """Background monitor for checking stream status of favorite channels"""
+    """
+    Lightweight monitor for checking Twitch channel live status.
 
-    def __init__(
-        self,
-        status_checker: StreamlinkStatusChecker,
-        favorites_manager,
-        config_manager,
-        status_callback: Optional[Callable] = None,
-    ):
+    Uses streamlink to quickly test if channels are live without downloading
+    stream data. Designed for minimal system impact with strict timeouts and
+    limited concurrency.
+    """
+
+    def __init__(self, check_timeout: int = 5, max_workers: int = 3):
         """
-        Initialize status monitor
+        Initialize the status monitor.
 
         Args:
-            status_checker: StreamlinkStatusChecker instance
-            favorites_manager: FavoritesManager instance
-            config_manager: ConfigManager instance
-            status_callback: Optional callback function called when status updates
+            check_timeout: Timeout in seconds for each channel check (default: 5)
+            max_workers: Maximum concurrent workers (default: 3)
         """
-        self.status_checker = status_checker
-        self.favorites_manager = favorites_manager
-        self.config = config_manager
-        self.status_callback = status_callback
-
-        self._monitor_thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
-        self._cancel_event = threading.Event()
-        self._last_check_time: Optional[datetime] = None
-        self._is_running = False
-        self._current_operation_cancellable = False
-
-        # Status cache to avoid unnecessary updates
-        self._status_cache: Dict[str, bool] = {}
-        self._cache_timestamp: Optional[datetime] = None
-
-    def start_monitoring(self, delayed_start: bool = True) -> None:
-        """
-        Start the background monitoring thread
-        
-        Args:
-            delayed_start: Whether to apply startup delay before initial checks
-        """
-        if self._is_running:
-            logger.warning("Status monitoring is already running")
-            return
-
-        if not self.config.get("enable_status_monitoring", True):
-            logger.info("Status monitoring is disabled in configuration")
-            return
-
-        if not self.status_checker.is_available():
-            logger.warning("Streamlink is not available, status monitoring disabled")
-            return
-
-        startup_delay = self.config.get("startup_status_check_delay", 2) if delayed_start else 0
-        
-        if startup_delay > 0:
-            logger.info(f"Starting stream status monitoring with {startup_delay}s startup delay")
-        else:
-            logger.info("Starting stream status monitoring")
-            
-        self._stop_event.clear()
-        self._is_running = True
-
-        self._monitor_thread = threading.Thread(
-            target=self._monitor_loop, name="StatusMonitor", daemon=True, args=(startup_delay,)
+        self.check_timeout = check_timeout
+        self.max_workers = max_workers
+        logger.debug(
+            f"StatusMonitor initialized (timeout={check_timeout}s, workers={max_workers})"
         )
-        self._monitor_thread.start()
 
-    def stop_monitoring(self) -> None:
-        """Stop the background monitoring thread"""
-        if not self._is_running:
-            return
-
-        logger.info("Stopping stream status monitoring")
-        self._stop_event.set()
-        self._is_running = False
-
-        if self._monitor_thread and self._monitor_thread.is_alive():
-            self._monitor_thread.join(timeout=5)
-
-    def force_refresh(self) -> None:
-        """Force an immediate status refresh"""
-        if not self.status_checker.is_available():
-            logger.warning("Streamlink not available, cannot refresh status")
-            return
-
-        logger.info("Forcing immediate status refresh")
-        self._current_operation_cancellable = True
-        self._cancel_event.clear()
-        
-        try:
-            self._check_all_favorites()
-        except Exception as e:
-            logger.error(f"Error during forced refresh: {e}")
-        finally:
-            self._current_operation_cancellable = False
-            
-    def cancel_current_operation(self) -> bool:
+    def check_channels(self, channels: List[str]) -> Dict[str, bool]:
         """
-        Cancel the current network operation if possible
-        
-        Returns:
-            True if cancellation was requested, False if no operation is cancellable
-        """
-        if self._current_operation_cancellable:
-            logger.info("Cancelling current status check operation")
-            self._cancel_event.set()
-            return True
-        else:
-            logger.debug("No cancellable operation in progress")
-            return False
-            
-    def is_operation_cancellable(self) -> bool:
-        """Check if the current operation can be cancelled"""
-        return self._current_operation_cancellable
+        Check live status for multiple channels concurrently.
 
-    def _monitor_loop(self, startup_delay: int = 0) -> None:
-        """
-        Main monitoring loop running in background thread
-        
+        This method runs streamlink checks in parallel with controlled
+        concurrency to avoid overwhelming the system or network.
+
         Args:
-            startup_delay: Initial delay in seconds before starting status checks
+            channels: List of channel names to check
+
+        Returns:
+            Dictionary mapping channel names to live status (True/False)
         """
-        logger.info("Status monitoring loop started")
-        
-        # Apply startup delay if configured
-        if startup_delay > 0:
-            logger.debug(f"Applying startup delay of {startup_delay} seconds")
-            if self._stop_event.wait(timeout=startup_delay):
-                # Monitoring was stopped during delay
-                logger.info("Status monitoring stopped during startup delay")
-                return
+        if not channels:
+            logger.debug("No channels to check")
+            return {}
 
-        while not self._stop_event.is_set():
-            try:
-                # Calculate dynamic interval based on channel status
-                interval = self._calculate_next_check_interval()
+        logger.info(f"Checking status for {len(channels)} channels")
+        results = {}
 
-                if (
-                    self._last_check_time is None
-                    or (datetime.now(timezone.utc) - self._last_check_time).total_seconds()
-                    >= interval
-                ):
+        # Use ThreadPoolExecutor for concurrent checks
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            # Submit all checks
+            future_to_channel = {
+                executor.submit(self._check_single_channel, channel): channel
+                for channel in channels
+            }
 
-                    self._check_all_favorites()
-                    self._last_check_time = datetime.now(timezone.utc)
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_channel):
+                channel = future_to_channel[future]
+                try:
+                    is_live = future.result()
+                    results[channel] = is_live
+                    logger.debug(f"Status check complete: {channel} -> {is_live}")
+                except Exception as e:
+                    # Failed check defaults to offline
+                    logger.warning(f"Failed to check {channel}: {e}")
+                    results[channel] = False
 
-                # Sleep for a short interval to avoid busy waiting
-                # Check every 30 seconds if it's time for an update
-                self._stop_event.wait(timeout=30)
+        logger.info(f"Status check complete: {sum(results.values())}/{len(results)} live")
+        return results
 
-            except Exception as e:
-                logger.error(f"Error in status monitoring loop: {e}")
-                # Sleep a bit longer on error to avoid spam
-                self._stop_event.wait(timeout=60)
+    def _check_single_channel(self, channel: str) -> bool:
+        """
+        Check if a single channel is live using streamlink.
 
-        logger.info("Status monitoring loop stopped")
+        Uses `streamlink --stream-url` to quickly test if a stream is available
+        without downloading any data. Enforces timeout to prevent hanging.
 
-    def _calculate_next_check_interval(self) -> int:
-        """Calculate the next check interval based on channel status mix"""
-        if not self.config.get("enable_smart_polling", True):
-            return self.config.get("status_check_interval", 300)
-        
-        favorites = self.favorites_manager.get_favorites_with_status()
-        if not favorites:
-            return self.config.get("status_check_interval", 300)
-        
-        live_count = sum(1 for fav in favorites if fav.is_live)
-        total_count = len(favorites)
-        offline_count = total_count - live_count
-        
-        # Get intervals from config
-        live_interval = self.config.get("status_check_interval_live", 150)      # 2.5 min
-        offline_interval = self.config.get("status_check_interval_offline", 600)  # 10 min
-        fallback_interval = self.config.get("status_check_interval", 300)       # 5 min
-        
-        if total_count == 0:
-            return fallback_interval
-        elif live_count == total_count:
-            # All channels are live - use short interval
-            logger.debug(f"All {total_count} channels live, using {live_interval}s interval")
-            return live_interval
-        elif offline_count == total_count:
-            # All channels are offline - use long interval
-            logger.debug(f"All {total_count} channels offline, using {offline_interval}s interval")
-            return offline_interval
-        else:
-            # Mixed status - weighted average favoring live channels
-            live_weight = 0.7  # Bias toward checking live channels more frequently
-            offline_weight = 0.3
-            
-            live_ratio = live_count / total_count
-            offline_ratio = offline_count / total_count
-            
-            weighted_interval = (
-                live_ratio * live_weight * live_interval +
-                offline_ratio * offline_weight * offline_interval +
-                (1 - live_weight - offline_weight) * fallback_interval
-            )
-            
-            interval = int(weighted_interval)
-            logger.debug(f"Mixed status ({live_count} live, {offline_count} offline), using {interval}s interval")
-            return interval
+        Args:
+            channel: Channel name to check
 
-    def _check_all_favorites(self) -> None:
-        """Check status for all favorite channels"""
-        favorites = self.favorites_manager.get_favorites()
-        if not favorites:
-            logger.debug("No favorite channels to check")
-            return
-
-        logger.debug(f"Checking status for {len(favorites)} favorite channels")
-
+        Returns:
+            True if channel is live, False otherwise
+        """
         try:
-            # Check for cancellation before starting
-            if self._cancel_event.is_set():
-                logger.info("Status check cancelled before starting")
-                return
-                
-            # Get status for all channels using streamlink (concurrent or sequential)
-            use_concurrent = self.config.get("enable_concurrent_status_checks", True) if self.config else True
-            
-            if use_concurrent and len(favorites) > 1:
-                max_workers = self.config.get("concurrent_max_workers", 3) if self.config else 3
-                status_results = self.status_checker.check_multiple_streams_concurrent(
-                    favorites, self._cancel_event, max_workers
-                )
+            # Build streamlink command for quick URL test
+            # --stream-url returns stream URL without downloading
+            # This is much faster than actually opening the stream
+            url = f"https://twitch.tv/{channel}"
+            command = [
+                "streamlink",
+                "--stream-url",
+                url,
+                "best",
+            ]
+
+            logger.debug(f"Running streamlink check for {channel}")
+
+            # Run with timeout
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=self.check_timeout,
+                check=False,  # Don't raise on non-zero exit
+            )
+
+            # streamlink returns exit code 0 and outputs URL if stream is available
+            # Returns non-zero exit code if stream is offline or unavailable
+            if result.returncode == 0 and result.stdout.strip():
+                logger.debug(f"Channel {channel} is LIVE")
+                return True
             else:
-                # Use sequential method for single channels or when concurrent is disabled
-                status_results = self.status_checker.check_multiple_streams_cancellable(
-                    favorites, self._cancel_event
-                )
+                logger.debug(f"Channel {channel} is OFFLINE")
+                return False
 
-            # Update status for each channel
-            updated_channels = []
-            for channel_name, is_live in status_results.items():
-                # Check if status actually changed before updating
-                cached_status = self._status_cache.get(channel_name.lower())
-
-                if cached_status is None or cached_status != is_live:
-                    # Update favorites manager with new status (simplified)
-                    self.favorites_manager.update_channel_status(
-                        channel_name=channel_name, is_live=is_live
-                    )
-
-                    # Update cache
-                    self._status_cache[channel_name.lower()] = is_live
-                    updated_channels.append(channel_name)
-
-                    logger.debug(
-                        f"Status updated for {channel_name}: " f"{'LIVE' if is_live else 'OFFLINE'}"
-                    )
-
-            # Update cache timestamp
-            self._cache_timestamp = datetime.now(timezone.utc)
-
-            # Notify callback if any channels were updated
-            if updated_channels and self.status_callback:
-                try:
-                    self.status_callback(updated_channels)
-                except Exception as e:
-                    logger.error(f"Error in status callback: {e}")
-
-            logger.debug(f"Status check completed, {len(updated_channels)} channels updated")
-
-        except StreamlinkError as e:
-            logger.error(f"Streamlink error during status check: {e}")
-            # Run network diagnostics if enabled and multiple failures occur
-            if self.config.get("enable_network_diagnostics", True):
-                logger.info("Running network diagnostics due to status check failures...")
-                try:
-                    diagnostics = self.status_checker.run_network_diagnostics()
-                    failed_endpoints = [
-                        url for url, (success, _) in diagnostics.items() if not success
-                    ]
-                    if failed_endpoints:
-                        logger.warning(
-                            f"Network issues detected with endpoints: {failed_endpoints}"
-                        )
-                except Exception as diag_e:
-                    logger.error(f"Failed to run network diagnostics: {diag_e}")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Timeout checking {channel} (>{self.check_timeout}s)")
+            return False
+        except FileNotFoundError:
+            logger.error("streamlink not found in PATH")
+            return False
         except Exception as e:
-            logger.error(f"Unexpected error during status check: {e}")
+            logger.warning(f"Error checking {channel}: {e}")
+            return False
 
-    def get_cached_status(self, channel_name: str) -> Optional[bool]:
-        """Get cached status for a channel"""
-        cached_status = self._status_cache.get(channel_name.lower())
+    def update_timeout(self, timeout: int) -> None:
+        """
+        Update the per-channel check timeout.
 
-        # Check if cache is still valid
-        cache_duration = self.config.get("status_cache_duration", 60)  # 1 minute default
+        Args:
+            timeout: New timeout in seconds
+        """
+        self.check_timeout = timeout
+        logger.debug(f"Updated check timeout to {timeout}s")
 
-        if (
-            cached_status is not None
-            and self._cache_timestamp
-            and (datetime.now(timezone.utc) - self._cache_timestamp).total_seconds()
-            < cache_duration
-        ):
-            return cached_status
+    def update_max_workers(self, workers: int) -> None:
+        """
+        Update the maximum number of concurrent workers.
 
-        return None
-
-    def is_monitoring(self) -> bool:
-        """Check if monitoring is currently active"""
-        return self._is_running
-
-    def get_last_check_time(self) -> Optional[datetime]:
-        """Get timestamp of last status check"""
-        return self._last_check_time
-
-    def add_channel_to_monitoring(self, channel_name: str) -> None:
-        """Add a new channel to monitoring (when added to favorites)"""
-        if not self._is_running:
-            return
-
-        logger.debug(f"Adding channel to monitoring: {channel_name}")
-
-        # Get immediate status for the new channel
-        try:
-            is_live = self.status_checker.check_stream_status(channel_name)
-
-            # Update favorites manager (simplified)
-            self.favorites_manager.update_channel_status(channel_name=channel_name, is_live=is_live)
-
-            # Update cache
-            self._status_cache[channel_name.lower()] = is_live
-
-            # Notify callback
-            if self.status_callback:
-                try:
-                    self.status_callback([channel_name])
-                except Exception as e:
-                    logger.error(f"Error in status callback: {e}")
-
-            logger.debug(
-                f"Status fetched for new channel {channel_name}: "
-                f"{'LIVE' if is_live else 'OFFLINE'}"
-            )
-
-        except StreamlinkError as e:
-            logger.error(f"Failed to get status for new channel {channel_name}: {e}")
-
-    def remove_channel_from_monitoring(self, channel_name: str) -> None:
-        """Remove a channel from monitoring (when removed from favorites)"""
-        channel_lower = channel_name.lower()
-        if channel_lower in self._status_cache:
-            del self._status_cache[channel_lower]
-            logger.debug(f"Removed channel from monitoring: {channel_name}")
+        Args:
+            workers: New maximum number of workers
+        """
+        self.max_workers = workers
+        logger.debug(f"Updated max workers to {workers}")

@@ -11,9 +11,9 @@ The API is organized into two main categories:
     input validation, and security features. They form the foundation of the application
     and can be used independently of the GUI.
 
-**GUI Modules** (:mod:`gui`)  
-    These modules provide the graphical user interface built with tkinter, including
-    the main window, favorites management, theme support, and status monitoring.
+**Qt GUI Modules** (:mod:`gui_qt`)
+    These modules provide the modern graphical user interface built with PySide6 Qt, including
+    the main window, tabbed panels, chat integration, theme support, and status monitoring.
 
 Core Modules
 ------------
@@ -31,18 +31,20 @@ Key integration points:
     - :mod:`src.validators`: Security validation functions
     - :mod:`src.exceptions`: Custom exception hierarchy
 
-GUI Modules  
------------
+Qt GUI Modules
+--------------
 
-The GUI modules provide a user-friendly interface with advanced features:
+The Qt GUI modules provide a modern, professional interface with advanced features:
 
 .. toctree::
    :maxdepth: 4
 
-   gui
+   gui_qt
 
-Key GUI components:
-    - :class:`~gui.stream_gui.StreamGUI`: Main application window
-    - :class:`~gui.favorites_manager.FavoritesManager`: Channel favorites handling
-    - :class:`~gui.status_manager.StatusManager`: Status display and management
-    - :mod:`gui.themes`: Theme and styling support
+Key Qt GUI components:
+    - :class:`~gui_qt.stream_gui.StreamGUI`: Main Qt application window
+    - :class:`~gui_qt.main_window.MainWindow`: Tabbed interface container
+    - :class:`~gui_qt.components.favorites_panel.FavoritesPanel`: Channel favorites with status monitoring
+    - :class:`~gui_qt.components.chat_panel.ChatPanel`: Real-time Twitch IRC chat
+    - :class:`~gui_qt.controllers.stream_controller.StreamController`: Stream management controller
+    - :mod:`gui_qt.styles`: QSS theme stylesheets (light and dark)
