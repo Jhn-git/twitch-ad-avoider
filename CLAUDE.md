@@ -78,31 +78,42 @@ TwitchAdAvoider is a **security-focused Python application** for watching Twitch
 
 ## Development Commands
 
-### Running
+**Recommended: Use the Makefile for convenient workflows**
+
+```bash
+make help          # Show all available commands
+make run           # Run the application
+make test          # Run all tests
+make check         # Format, lint, and type check
+make all           # Run checks + tests (before committing)
+make clean         # Remove build artifacts
+make build         # Full build workflow (clean, check, test, build)
+```
+
+### Direct Commands (Alternative)
+
+**Running**:
 ```bash
 python main.py                              # GUI mode
 python main.py --channel ninja --quality 720p  # CLI mode
 python main.py --debug                      # Debug mode
 ```
 
-### Testing
+**Testing**:
 ```bash
 python -m pytest tests/                     # All tests
 python -m pytest tests/test_validators.py   # Specific file
 python -m coverage run -m pytest tests/ && python -m coverage report  # Coverage
 ```
 
-### Code Quality
+**Code Quality**:
 ```bash
 black .                   # Format
 flake8 .                  # Lint
 python -m mypy src/       # Type check
-
-# Before committing:
-black . && flake8 . && mypy src/ && pytest tests/
 ```
 
-### Building
+**Building**:
 ```bash
 python build_executable.py  # Windows executable
 ```
