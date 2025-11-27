@@ -16,7 +16,6 @@ Key Features:
 """
 
 from PySide6.QtCore import QObject, Signal
-from typing import Optional
 
 from src.validators import validate_channel_name
 from src.logging_config import get_logger
