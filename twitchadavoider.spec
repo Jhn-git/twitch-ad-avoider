@@ -23,6 +23,8 @@ streamlink_hiddenimports = [
 minimal_datas = [
     ('config/settings.json', 'config'),
     ('config/favorites.json', 'config'),
+    ('gui_qt/styles/dark.qss', 'gui_qt/styles'),
+    ('gui_qt/styles/light.qss', 'gui_qt/styles'),
 ]
 
 # Check for pre-generated pycparser tables to fix cryptography/cffi runtime issues
@@ -55,31 +57,29 @@ a = Analysis(
         'src.auth_manager',
         'src.constants',
         
-        # GUI imports - all components needed
-        'gui.stream_gui',
-        'gui.status_manager',
-        'gui.favorites_manager',
-        'gui.themes',
-        'gui.components.main_window',
-        'gui.components.favorites_panel',
-        'gui.components.stream_control_panel',
-        'gui.components.chat_panel',
-        'gui.controllers.stream_controller',
-        'gui.controllers.config_controller',
-        'gui.controllers.validation_controller',
-        'gui.controllers.theme_controller',
-        'gui.controllers.chat_controller',
-        'gui.utils.datetime_utility',
-        'gui.utils.spinner_manager',
+        # Qt GUI imports - all components needed
+        'gui_qt.stream_gui',
+        'gui_qt.main_window',
+        'gui_qt.components.chat_panel',
+        'gui_qt.components.favorites_panel',
+        'gui_qt.components.settings_panel',
+        'gui_qt.components.status_display',
+        'gui_qt.components.stream_control_panel',
+        'gui_qt.controllers.chat_controller',
+        'gui_qt.controllers.stream_controller',
+        'gui_qt.controllers.validation_controller',
+        'gui_qt.styles',
+
+        # PySide6 Qt imports
+        'PySide6',
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWidgets',
         
         # Streamlink essentials
         *streamlink_hiddenimports,
         
         # Standard library essentials
-        'tkinter',
-        'tkinter.ttk',
-        'tkinter.messagebox',
-        'tkinter.filedialog',
         'json',
         'subprocess',
         'pathlib',
@@ -88,6 +88,18 @@ a = Analysis(
         'logging.handlers',
         'uuid',
         'shutil',
+        
+        # URL and network modules (fix for ipaddress issue)
+        'ipaddress',
+        'urllib',
+        'urllib.parse',
+        'urllib.request',
+        'urllib.error',
+        
+        # Import system modules
+        'importlib',
+        'importlib.util',
+        'importlib.machinery',
         
         # External dependencies
         'requests',
@@ -115,13 +127,12 @@ a = Analysis(
         'streamlink.plugins.kick', 'streamlink.plugins.bilibili',
         
         # Exclude GUI frameworks we don't use
-        'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'wxPython',
+        'PyQt5', 'PyQt6', 'PySide2', 'wxPython', 'tkinter',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,
     noarchive=False,
-    optimize=0,
 )
 
 # Create Python archive
@@ -135,13 +146,13 @@ exe = EXE(
     a.datas,
     [],
     name=APP_NAME,
-    debug=False,
+    debug=True,
     bootloader_ignore_signals=False,
     strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,

@@ -35,6 +35,7 @@ from gui_qt.controllers.chat_controller import ChatController
 
 from src.favorites_manager import FavoritesManager
 from src.config_manager import ConfigManager
+from src.status_monitor import StatusMonitor
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -77,6 +78,13 @@ class StreamGUI:
 
         # Load initial data
         self._load_initial_data()
+
+        # Initialize status monitor for favorites
+        timeout = self.config.get("favorites_check_timeout", 5)
+        self.status_monitor = StatusMonitor(check_timeout=timeout, max_workers=3)
+
+        # Setup auto-refresh timer
+        self._setup_refresh_timer()
 
         # Register cleanup callback
         self.window.register_on_closing_callback(self._cleanup)
@@ -216,6 +224,49 @@ class StreamGUI:
 
         # Set focus to channel input
         self.stream_panel.focus_channel_input()
+
+    def _setup_refresh_timer(self) -> None:
+        """Setup the auto-refresh timer for favorites status checking."""
+        logger.debug("Setting up favorites auto-refresh timer")
+
+        # Create QTimer
+        self.refresh_timer = QTimer()
+        self.refresh_timer.setSingleShot(False)  # Repeat automatically
+
+        # Connect timeout to refresh handler
+        self.refresh_timer.timeout.connect(self._on_refresh_favorites)
+
+        # Configure from settings
+        self._update_refresh_timer_settings()
+
+        # Perform immediate first refresh if auto-refresh is enabled
+        if self.config.get("favorites_auto_refresh", True):
+            logger.info("Performing initial favorites status check")
+            # Use single-shot timer for immediate refresh (avoids blocking initialization)
+            QTimer.singleShot(0, self._on_refresh_favorites)
+
+    def _update_refresh_timer_settings(self) -> None:
+        """Update refresh timer settings from configuration."""
+        auto_refresh = self.config.get("favorites_auto_refresh", True)
+        interval_seconds = self.config.get("favorites_refresh_interval", 300)
+        check_timeout = self.config.get("favorites_check_timeout", 5)
+
+        # Update status monitor timeout
+        self.status_monitor.update_timeout(check_timeout)
+
+        # Update timer interval (convert seconds to milliseconds)
+        interval_ms = interval_seconds * 1000
+        self.refresh_timer.setInterval(interval_ms)
+
+        # Start or stop timer based on auto-refresh setting
+        if auto_refresh:
+            if not self.refresh_timer.isActive():
+                self.refresh_timer.start()
+                logger.info(f"Auto-refresh enabled (interval: {interval_seconds}s)")
+        else:
+            if self.refresh_timer.isActive():
+                self.refresh_timer.stop()
+                logger.info("Auto-refresh disabled")
 
     def _load_favorites(self) -> None:
         """Load favorites from file."""
@@ -380,10 +431,43 @@ class StreamGUI:
         logger.info(f"Removed favorite: {channel}")
 
     def _on_refresh_favorites(self) -> None:
-        """Handle refresh favorites status."""
-        # TODO: Implement async status checking
-        self.status_display.add_info("Refresh favorites feature coming soon", "FAVORITES")
-        logger.info("Refresh favorites requested")
+        """
+        Handle refresh favorites status.
+
+        Performs lightweight status checks for all favorite channels
+        using streamlink with timeout enforcement.
+        """
+        # Get list of favorite channels
+        favorites = self.favorites_panel.get_favorites()
+
+        if not favorites:
+            logger.debug("No favorites to check")
+            return
+
+        logger.info(f"Refreshing status for {len(favorites)} favorite channels")
+
+        try:
+            # Perform status checks using StatusMonitor
+            # This runs in background threads with timeout enforcement
+            status_results = self.status_monitor.check_channels(favorites)
+
+            # Update favorites panel with new status
+            for channel, is_live in status_results.items():
+                self.favorites_panel.update_favorite_status(channel, is_live)
+
+                # Also update favorites manager
+                self.favorites_manager.update_channel_status(channel, is_live)
+
+            # Save updated favorites with new status
+            self._save_favorites()
+
+            # Log summary
+            live_count = sum(status_results.values())
+            logger.info(f"Status refresh complete: {live_count}/{len(favorites)} channels live")
+
+        except Exception as e:
+            logger.error(f"Error during favorites refresh: {e}")
+            self.status_display.add_error(f"Failed to refresh favorites: {e}", "FAVORITES")
 
     # Chat Handlers
 
@@ -486,6 +570,9 @@ class StreamGUI:
 
     def _on_settings_changed(self) -> None:
         """Handle settings changed event from settings tab."""
+        # Update refresh timer settings if favorites settings changed
+        self._update_refresh_timer_settings()
+
         self.status_display.add_info("Settings saved successfully", "SETTINGS")
         logger.info("Settings updated from settings tab")
 
@@ -522,6 +609,11 @@ class StreamGUI:
     def _cleanup(self) -> None:
         """Cleanup resources before shutdown."""
         logger.info("Performing application cleanup")
+
+        # Stop refresh timer
+        if hasattr(self, 'refresh_timer') and self.refresh_timer.isActive():
+            self.refresh_timer.stop()
+            logger.debug("Stopped favorites refresh timer")
 
         # Stop stream
         if self.stream_controller.is_streaming():

@@ -13,7 +13,7 @@ coordinating between configuration management, input validation, and external pr
 See Also:
     :mod:`src.config_manager`: Configuration and settings management
     :mod:`src.validators`: Input validation and security functions
-    :mod:`gui.stream_gui`: Graphical user interface integration
+    :mod:`gui_qt.stream_gui`: Qt graphical user interface integration
 """
 
 import json
@@ -72,7 +72,7 @@ class TwitchViewer:
     See Also:
         :class:`~src.config_manager.ConfigManager`: Configuration management
         :func:`~src.validators.validate_channel_name`: Channel name validation
-        :class:`~gui.stream_gui.StreamGUI`: GUI integration
+        :class:`~gui_qt.stream_gui.StreamGUI`: Qt GUI integration
     """
 
     def __init__(self, config_manager: Optional[ConfigManager] = None):

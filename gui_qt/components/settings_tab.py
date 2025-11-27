@@ -97,6 +97,10 @@ class SettingsTab(QWidget):
         chat_group = self._create_chat_settings()
         scroll_layout.addWidget(chat_group)
 
+        # === Favorites Settings ===
+        favorites_group = self._create_favorites_settings()
+        scroll_layout.addWidget(favorites_group)
+
         # === Appearance Settings ===
         appearance_group = self._create_appearance_settings()
         scroll_layout.addWidget(appearance_group)
@@ -223,6 +227,42 @@ class SettingsTab(QWidget):
         group.setLayout(layout)
         return group
 
+    def _create_favorites_settings(self) -> QGroupBox:
+        """Create favorites settings group."""
+        group = QGroupBox("Favorites Settings")
+        layout = QFormLayout()
+        layout.setSpacing(10)
+
+        # Auto-refresh checkbox
+        self.favorites_auto_refresh_check = QCheckBox("Automatically refresh favorite channels status")
+        layout.addRow(self.favorites_auto_refresh_check)
+
+        # Refresh interval
+        self.favorites_refresh_interval_spin = QSpinBox()
+        self.favorites_refresh_interval_spin.setRange(30, 3600)
+        self.favorites_refresh_interval_spin.setSuffix(" seconds")
+
+        # Create a horizontal layout for the spinbox and minute display
+        interval_layout = QHBoxLayout()
+        interval_layout.addWidget(self.favorites_refresh_interval_spin)
+        self.favorites_interval_label = QLabel()
+        interval_layout.addWidget(self.favorites_interval_label)
+        interval_layout.addStretch()
+
+        # Connect signal to update minute display
+        self.favorites_refresh_interval_spin.valueChanged.connect(self._update_interval_label)
+
+        layout.addRow("Refresh Interval:", interval_layout)
+
+        # Check timeout
+        self.favorites_check_timeout_spin = QSpinBox()
+        self.favorites_check_timeout_spin.setRange(3, 10)
+        self.favorites_check_timeout_spin.setSuffix(" seconds")
+        layout.addRow("Status Check Timeout:", self.favorites_check_timeout_spin)
+
+        group.setLayout(layout)
+        return group
+
     def _create_appearance_settings(self) -> QGroupBox:
         """Create appearance settings group."""
         group = QGroupBox("Appearance")
@@ -289,6 +329,13 @@ class SettingsTab(QWidget):
         self.chat_max_messages_spin.setValue(self.config.get("chat_max_messages", 500))
         self.chat_timestamps_check.setChecked(self.config.get("chat_show_timestamps", True))
 
+        # Favorites settings
+        self.favorites_auto_refresh_check.setChecked(self.config.get("favorites_auto_refresh", True))
+        interval_value = self.config.get("favorites_refresh_interval", 300)
+        self.favorites_refresh_interval_spin.setValue(interval_value)
+        self._update_interval_label(interval_value)  # Update the minute display
+        self.favorites_check_timeout_spin.setValue(self.config.get("favorites_check_timeout", 5))
+
         # Appearance
         dark_mode = self.config.get("dark_mode", False)
         self.dark_mode_check.setChecked(dark_mode)
@@ -316,6 +363,21 @@ class SettingsTab(QWidget):
         if file_path:
             self.player_path_edit.setText(file_path)
             logger.info(f"Player path selected: {file_path}")
+
+    def _update_interval_label(self, value: int) -> None:
+        """
+        Update the minute display label for refresh interval.
+
+        Args:
+            value: Refresh interval in seconds
+        """
+        minutes = value / 60
+        if value % 60 == 0:
+            # Exact minutes
+            self.favorites_interval_label.setText(f"({int(minutes)} min)")
+        else:
+            # Minutes with decimal
+            self.favorites_interval_label.setText(f"({minutes:.1f} min)")
 
     def _on_dark_mode_changed(self, state: int) -> None:
         """
@@ -352,6 +414,11 @@ class SettingsTab(QWidget):
             self.config.set("chat_auto_connect", self.chat_auto_connect_check.isChecked())
             self.config.set("chat_max_messages", self.chat_max_messages_spin.value())
             self.config.set("chat_show_timestamps", self.chat_timestamps_check.isChecked())
+
+            # Favorites settings
+            self.config.set("favorites_auto_refresh", self.favorites_auto_refresh_check.isChecked())
+            self.config.set("favorites_refresh_interval", self.favorites_refresh_interval_spin.value())
+            self.config.set("favorites_check_timeout", self.favorites_check_timeout_spin.value())
 
             # Appearance
             self.config.set("dark_mode", self.dark_mode_check.isChecked())

@@ -36,6 +36,10 @@ DEFAULT_SETTINGS = {
     "chat_auto_connect": True,  # Automatically connect to chat when starting a stream
     "chat_max_messages": 500,  # Maximum number of chat messages to keep in memory
     "chat_show_timestamps": True,  # Show timestamps in chat messages
+    # Favorites settings
+    "favorites_auto_refresh": True,  # Automatically refresh favorite channels status
+    "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
+    "favorites_check_timeout": 5,  # Timeout per channel check in seconds
 }
 
 # Stream quality options
@@ -115,6 +119,12 @@ MAX_WINDOW_WIDTH = 1920
 MIN_WINDOW_HEIGHT = 200
 MAX_WINDOW_HEIGHT = 1080
 
+# Favorites refresh validation constants
+MIN_REFRESH_INTERVAL = 30  # Minimum 30 seconds
+MAX_REFRESH_INTERVAL = 3600  # Maximum 1 hour
+MIN_CHECK_TIMEOUT = 3  # Minimum 3 seconds per channel
+MAX_CHECK_TIMEOUT = 10  # Maximum 10 seconds per channel
+
 # Error messages
 ERROR_MESSAGES = {
     "empty_channel": "Channel name cannot be empty",
@@ -155,4 +165,7 @@ VALIDATION_ERROR_MESSAGES = {
     "window_width_invalid": "Window width must be between {} and {} pixels",
     "window_height_invalid": "Window height must be between {} and {} pixels",
     "window_maximized_invalid": "Window maximized setting must be a boolean",
+    "favorites_auto_refresh_invalid": "Favorites auto-refresh setting must be a boolean",
+    "favorites_refresh_interval_invalid": "Favorites refresh interval must be between {} and {} seconds",
+    "favorites_check_timeout_invalid": "Favorites check timeout must be between {} and {} seconds",
 }
