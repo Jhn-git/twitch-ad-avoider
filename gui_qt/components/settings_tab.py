@@ -18,17 +18,24 @@ Key Features:
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QComboBox, QCheckBox, QSpinBox,
-    QLineEdit, QPushButton, QScrollArea, QGroupBox,
-    QFileDialog
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QComboBox,
+    QCheckBox,
+    QSpinBox,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QGroupBox,
+    QFileDialog,
 )
 from PySide6.QtCore import Signal, Qt
-from typing import Optional
-from pathlib import Path
 
 from src.config_manager import ConfigManager
-from src.constants import QUALITY_OPTIONS, SUPPORTED_PLAYERS
+from src.constants import QUALITY_OPTIONS
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -212,7 +219,9 @@ class SettingsTab(QWidget):
         layout.setSpacing(10)
 
         # Auto-connect to chat
-        self.chat_auto_connect_check = QCheckBox("Automatically connect to chat when watching stream")
+        self.chat_auto_connect_check = QCheckBox(
+            "Automatically connect to chat when watching stream"
+        )
         layout.addRow(self.chat_auto_connect_check)
 
         # Max messages
@@ -234,7 +243,9 @@ class SettingsTab(QWidget):
         layout.setSpacing(10)
 
         # Auto-refresh checkbox
-        self.favorites_auto_refresh_check = QCheckBox("Automatically refresh favorite channels status")
+        self.favorites_auto_refresh_check = QCheckBox(
+            "Automatically refresh favorite channels status"
+        )
         layout.addRow(self.favorites_auto_refresh_check)
 
         # Refresh interval
@@ -330,7 +341,9 @@ class SettingsTab(QWidget):
         self.chat_timestamps_check.setChecked(self.config.get("chat_show_timestamps", True))
 
         # Favorites settings
-        self.favorites_auto_refresh_check.setChecked(self.config.get("favorites_auto_refresh", True))
+        self.favorites_auto_refresh_check.setChecked(
+            self.config.get("favorites_auto_refresh", True)
+        )
         interval_value = self.config.get("favorites_refresh_interval", 300)
         self.favorites_refresh_interval_spin.setValue(interval_value)
         self._update_interval_label(interval_value)  # Update the minute display
@@ -354,10 +367,7 @@ class SettingsTab(QWidget):
     def _on_browse_player_path(self) -> None:
         """Handle player path browse button click."""
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Video Player Executable",
-            "",
-            "Executables (*.exe);;All Files (*.*)"
+            self, "Select Video Player Executable", "", "Executables (*.exe);;All Files (*.*)"
         )
 
         if file_path:
@@ -417,7 +427,9 @@ class SettingsTab(QWidget):
 
             # Favorites settings
             self.config.set("favorites_auto_refresh", self.favorites_auto_refresh_check.isChecked())
-            self.config.set("favorites_refresh_interval", self.favorites_refresh_interval_spin.value())
+            self.config.set(
+                "favorites_refresh_interval", self.favorites_refresh_interval_spin.value()
+            )
             self.config.set("favorites_check_timeout", self.favorites_check_timeout_spin.value())
 
             # Appearance
@@ -466,7 +478,7 @@ class SettingsTab(QWidget):
             "Reset Settings",
             "Are you sure you want to reset all settings to their default values?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
 
         return reply == QMessageBox.StandardButton.Yes
