@@ -107,9 +107,10 @@ dist/
    - Consider using directory distribution instead of single file
 
 4. **GUI Not Working**
-   - Ensure Tkinter is properly installed
-   - Check that `--noconsole` flag is used for GUI builds
-   - Verify all GUI components are in hidden imports
+   - Ensure PySide6 is properly installed and included
+   - Check that Qt platform plugins are bundled
+   - Verify all Qt GUI components are in hidden imports
+   - Ensure QSS stylesheet files are included in datas
 
 ### Windows-Specific Issues
 

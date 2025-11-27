@@ -91,7 +91,8 @@ def build_executable(spec_file, build_type):
         print(f"[ERROR] Spec file not found: {spec_file}")
         return False
     
-    cmd = f"pyinstaller {spec_file}"
+    # Use the same Python executable to ensure version consistency
+    cmd = f'"{sys.executable}" -m PyInstaller {spec_file}'
     return run_command(cmd, f"Building {build_type} executable")
 
 def get_file_size(filepath):
