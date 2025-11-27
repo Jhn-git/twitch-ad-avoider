@@ -42,11 +42,7 @@ dev = [
     "black>=22.0.0",
     "flake8>=4.0.0",
     "mypy>=1.0.0",
-    "coverage>=6.0.0",
-    "pre-commit>=2.15.0",
-    "sphinx>=7.0.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "sphinx-autodoc-typehints>=1.24.0"
+    "coverage>=6.0.0"
 ]
 
 [project.urls]
