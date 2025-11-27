@@ -63,3 +63,6 @@ $RECYCLE.BIN/
 .anthropic/
 .cursor/
 .copilot/
+
+# Encrypted Auth Token
+config/auth_token.enc
