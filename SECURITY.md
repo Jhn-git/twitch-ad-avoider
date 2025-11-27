@@ -1,3 +1,5 @@
+<!-- Last Updated: 2025-11-27 | Target Audience: Users, Security Researchers, Contributors -->
+
 # Security Policy
 
 TwitchAdAvoider prioritizes security and implements comprehensive validation to protect users from potential threats. This document outlines our security features, best practices, and policies.
@@ -329,4 +331,16 @@ Security testing should include:
 
 ---
 
+## See Also
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Security guidelines for contributors
+- **[CLAUDE.md](CLAUDE.md#security-architecture)** - Security architecture details
+- **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)** - Secure configuration options
+- **[README.md](README.md#security)** - Security features overview
+- **[DOCS-MAP.md](DOCS-MAP.md)** - Complete documentation navigation
+
+---
+
 **Remember**: Security is everyone's responsibility. Report issues promptly, follow best practices, and keep your installation updated.
+
+**Last Updated**: 2025-11-27
