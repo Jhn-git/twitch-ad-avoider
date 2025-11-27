@@ -8,10 +8,11 @@ Critical tests for:
 - PING/PONG handling
 - USERSTATE confirmation
 """
+
 import unittest
 import socket
 import time
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, MagicMock, patch
 
 from src.twitch_chat_client import TwitchChatClient, ChatMessage
 
@@ -30,7 +31,10 @@ class TestChatMessage(unittest.TestCase):
 
     def test_parse_privmsg_with_tags(self):
         """Test parsing PRIVMSG with IRC tags"""
-        raw = "@badge-info=;badges=;color=#FF0000;display-name=TestUser;id=abc-123 :testuser!testuser@testuser.tmi.twitch.tv PRIVMSG #testchannel :Test message"
+        raw = (
+            "@badge-info=;badges=;color=#FF0000;display-name=TestUser;id=abc-123 "
+            ":testuser!testuser@testuser.tmi.twitch.tv PRIVMSG #testchannel :Test message"
+        )
         msg = ChatMessage(raw)
 
         self.assertEqual(msg.username, "testuser")
@@ -41,7 +45,10 @@ class TestChatMessage(unittest.TestCase):
 
     def test_parse_privmsg_underscores_numbers(self):
         """Test parsing usernames and channels with underscores/numbers"""
-        raw = ":test_user_123!test_user_123@test_user_123.tmi.twitch.tv PRIVMSG #channel_name_456 :Hello"
+        raw = (
+            ":test_user_123!test_user_123@test_user_123.tmi.twitch.tv "
+            "PRIVMSG #channel_name_456 :Hello"
+        )
         msg = ChatMessage(raw)
 
         self.assertEqual(msg.username, "test_user_123")
@@ -108,7 +115,7 @@ class TestTwitchChatClient(unittest.TestCase):
         self.client.connected = True
         self.assertTrue(self.client.can_send_messages())
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_connect_anonymous(self, mock_socket_class):
         """Test anonymous connection to IRC"""
         mock_socket = MagicMock()
@@ -129,18 +136,18 @@ class TestTwitchChatClient(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 3)
 
         # Check for anonymous PASS
-        pass_call = calls[0][0][0].decode('utf-8')
+        pass_call = calls[0][0][0].decode("utf-8")
         self.assertIn("PASS SCHMOOPIIE", pass_call)
 
         # Check for NICK
-        nick_call = calls[1][0][0].decode('utf-8')
+        nick_call = calls[1][0][0].decode("utf-8")
         self.assertIn("NICK", nick_call)
 
         # Check for JOIN
         join_found = False
         for call_args in calls:
-            decoded = call_args[0][0].decode('utf-8')
-            if 'JOIN #testchannel' in decoded:
+            decoded = call_args[0][0].decode("utf-8")
+            if "JOIN #testchannel" in decoded:
                 join_found = True
                 break
         self.assertTrue(join_found)
@@ -148,7 +155,7 @@ class TestTwitchChatClient(unittest.TestCase):
         # Verify callback was called
         on_connect.assert_called_once()
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_connect_authenticated(self, mock_socket_class):
         """Test authenticated connection to IRC"""
         mock_socket = MagicMock()
@@ -164,10 +171,10 @@ class TestTwitchChatClient(unittest.TestCase):
 
         # Verify OAuth PASS was sent
         calls = mock_socket.send.call_args_list
-        pass_call = calls[0][0][0].decode('utf-8')
+        pass_call = calls[0][0][0].decode("utf-8")
         self.assertIn("PASS oauth:oauth_token_123", pass_call)
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_connect_with_hash_prefix(self, mock_socket_class):
         """Test connecting with # prefix on channel name"""
         mock_socket = MagicMock()
@@ -178,7 +185,7 @@ class TestTwitchChatClient(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.client.current_channel, "#testchannel")
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_connect_failure(self, mock_socket_class):
         """Test connection failure handling"""
         mock_socket = MagicMock()
@@ -238,7 +245,7 @@ class TestTwitchChatClient(unittest.TestCase):
 
         # Verify PONG was sent
         mock_socket.send.assert_called_once()
-        pong_msg = mock_socket.send.call_args[0][0].decode('utf-8')
+        pong_msg = mock_socket.send.call_args[0][0].decode("utf-8")
         self.assertIn("PONG :tmi.twitch.tv", pong_msg)
 
     def test_handle_privmsg(self):
@@ -274,11 +281,9 @@ class TestTwitchChatClient(unittest.TestCase):
     def test_handle_userstate_confirmation(self):
         """Test USERSTATE message confirmation"""
         self.client.set_authentication("test_user", "oauth_token")
-        self.client.pending_messages.append({
-            'message': 'Test message',
-            'timestamp': time.time(),
-            'confirmed': False
-        })
+        self.client.pending_messages.append(
+            {"message": "Test message", "timestamp": time.time(), "confirmed": False}
+        )
 
         on_send_success = Mock()
         self.client.on_send_success = on_send_success
@@ -288,8 +293,8 @@ class TestTwitchChatClient(unittest.TestCase):
         self.client._handle_message(userstate_msg)
 
         # Verify message was confirmed
-        self.assertTrue(self.client.pending_messages[0]['confirmed'])
-        on_send_success.assert_called_once_with('Test message')
+        self.assertTrue(self.client.pending_messages[0]["confirmed"])
+        on_send_success.assert_called_once_with("Test message")
 
     def test_send_message_not_authenticated(self):
         """Test send_message fails when not authenticated"""
@@ -363,13 +368,13 @@ class TestTwitchChatClient(unittest.TestCase):
 
         # Verify PRIVMSG was sent
         mock_socket.send.assert_called_once()
-        privmsg = mock_socket.send.call_args[0][0].decode('utf-8')
+        privmsg = mock_socket.send.call_args[0][0].decode("utf-8")
         self.assertIn("PRIVMSG #testchannel :Hello World", privmsg)
 
         # Verify message added to pending list
         self.assertEqual(len(self.client.pending_messages), 1)
-        self.assertEqual(self.client.pending_messages[0]['message'], "Hello World")
-        self.assertFalse(self.client.pending_messages[0]['confirmed'])
+        self.assertEqual(self.client.pending_messages[0]["message"], "Hello World")
+        self.assertFalse(self.client.pending_messages[0]["confirmed"])
 
     def test_send_message_pending_list_limit(self):
         """Test pending messages list is limited to 10"""
@@ -385,18 +390,18 @@ class TestTwitchChatClient(unittest.TestCase):
 
         # Should only keep last 10
         self.assertEqual(len(self.client.pending_messages), 10)
-        self.assertEqual(self.client.pending_messages[0]['message'], "Message 5")
-        self.assertEqual(self.client.pending_messages[-1]['message'], "Message 14")
+        self.assertEqual(self.client.pending_messages[0]["message"], "Message 5")
+        self.assertEqual(self.client.pending_messages[-1]["message"], "Message 14")
 
     def test_get_authentication_status(self):
         """Test get_authentication_status method"""
         status = self.client.get_authentication_status()
 
-        self.assertFalse(status['authenticated'])
-        self.assertIsNone(status['username'])
-        self.assertFalse(status['can_send_messages'])
-        self.assertFalse(status['connected'])
-        self.assertIsNone(status['current_channel'])
+        self.assertFalse(status["authenticated"])
+        self.assertIsNone(status["username"])
+        self.assertFalse(status["can_send_messages"])
+        self.assertFalse(status["connected"])
+        self.assertIsNone(status["current_channel"])
 
         # Set authenticated and connected
         self.client.set_authentication("test_user", "oauth_token")
@@ -405,11 +410,11 @@ class TestTwitchChatClient(unittest.TestCase):
 
         status = self.client.get_authentication_status()
 
-        self.assertTrue(status['authenticated'])
-        self.assertEqual(status['username'], "test_user")
-        self.assertTrue(status['can_send_messages'])
-        self.assertTrue(status['connected'])
-        self.assertEqual(status['current_channel'], "#testchannel")
+        self.assertTrue(status["authenticated"])
+        self.assertEqual(status["username"], "test_user")
+        self.assertTrue(status["can_send_messages"])
+        self.assertTrue(status["connected"])
+        self.assertEqual(status["current_channel"], "#testchannel")
 
     def test_raw_message_callback(self):
         """Test raw message callback is called"""
@@ -422,5 +427,5 @@ class TestTwitchChatClient(unittest.TestCase):
         on_raw_message.assert_called_once_with(raw_msg)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

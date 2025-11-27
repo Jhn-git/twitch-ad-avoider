@@ -8,12 +8,13 @@ Critical tests for:
 - Status tracking and datetime handling
 - Data integrity
 """
+
 import unittest
 import json
 import tempfile
 import os
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from src.favorites_manager import FavoritesManager, FavoriteChannelInfo
 
@@ -224,17 +225,17 @@ class TestFavoritesManager(unittest.TestCase):
         self.manager.update_channel_status("ninja", is_live=True)
 
         # Read raw JSON
-        with open(self.favorites_file, 'r') as f:
+        with open(self.favorites_file, "r") as f:
             data = json.load(f)
 
         # Check that datetimes are strings in JSON
-        ninja_data = data['channels']['ninja']
-        self.assertIsInstance(ninja_data['last_checked'], str)
-        self.assertIsInstance(ninja_data['last_seen_live'], str)
+        ninja_data = data["channels"]["ninja"]
+        self.assertIsInstance(ninja_data["last_checked"], str)
+        self.assertIsInstance(ninja_data["last_seen_live"], str)
 
         # Verify ISO format
-        datetime.fromisoformat(ninja_data['last_checked'])
-        datetime.fromisoformat(ninja_data['last_seen_live'])
+        datetime.fromisoformat(ninja_data["last_checked"])
+        datetime.fromisoformat(ninja_data["last_seen_live"])
 
     def test_datetime_deserialization(self):
         """Test datetime strings are properly loaded as datetime objects"""
@@ -251,10 +252,8 @@ class TestFavoritesManager(unittest.TestCase):
     def test_backward_compatibility_old_format(self):
         """Test loading old format (list of strings) migrates to new format"""
         # Create old format favorites file
-        old_format = {
-            "favorites": ["ninja", "shroud", "pokimane"]
-        }
-        with open(self.favorites_file, 'w') as f:
+        old_format = {"favorites": ["ninja", "shroud", "pokimane"]}
+        with open(self.favorites_file, "w") as f:
             json.dump(old_format, f)
 
         # Load with FavoritesManager
@@ -274,7 +273,7 @@ class TestFavoritesManager(unittest.TestCase):
     def test_backward_compatibility_corrupted_file(self):
         """Test handling of corrupted favorites file"""
         # Write corrupted JSON
-        with open(self.favorites_file, 'w') as f:
+        with open(self.favorites_file, "w") as f:
             f.write("{corrupted json content")
 
         # Should handle gracefully and start empty
@@ -285,34 +284,31 @@ class TestFavoritesManager(unittest.TestCase):
         """Test that version is saved in JSON file"""
         self.manager.add_favorite("ninja")
 
-        with open(self.favorites_file, 'r') as f:
+        with open(self.favorites_file, "r") as f:
             data = json.load(f)
 
-        self.assertIn('version', data)
-        self.assertEqual(data['version'], '2.0')
+        self.assertIn("version", data)
+        self.assertEqual(data["version"], "2.0")
 
     def test_new_format_structure(self):
         """Test that new format has correct structure"""
         self.manager.add_favorite("ninja")
 
-        with open(self.favorites_file, 'r') as f:
+        with open(self.favorites_file, "r") as f:
             data = json.load(f)
 
-        self.assertIn('channels', data)
-        self.assertIn('ninja', data['channels'])
-        self.assertIn('channel_name', data['channels']['ninja'])
-        self.assertIn('is_live', data['channels']['ninja'])
-        self.assertIn('last_checked', data['channels']['ninja'])
-        self.assertIn('last_seen_live', data['channels']['ninja'])
+        self.assertIn("channels", data)
+        self.assertIn("ninja", data["channels"])
+        self.assertIn("channel_name", data["channels"]["ninja"])
+        self.assertIn("is_live", data["channels"]["ninja"])
+        self.assertIn("last_checked", data["channels"]["ninja"])
+        self.assertIn("last_seen_live", data["channels"]["ninja"])
 
     def test_favorite_channel_info_namedtuple(self):
         """Test FavoriteChannelInfo namedtuple properties"""
         now = datetime.now(timezone.utc)
         info = FavoriteChannelInfo(
-            channel_name="ninja",
-            is_live=True,
-            last_checked=now,
-            last_seen_live=now
+            channel_name="ninja", is_live=True, last_checked=now, last_seen_live=now
         )
 
         self.assertEqual(info.channel_name, "ninja")
@@ -341,17 +337,17 @@ class TestFavoritesManager(unittest.TestCase):
         """Test handling of invalid datetime strings in file"""
         # Create file with invalid datetime
         data = {
-            'channels': {
-                'ninja': {
-                    'channel_name': 'ninja',
-                    'is_live': False,
-                    'last_checked': 'invalid-datetime',
-                    'last_seen_live': 'also-invalid'
+            "channels": {
+                "ninja": {
+                    "channel_name": "ninja",
+                    "is_live": False,
+                    "last_checked": "invalid-datetime",
+                    "last_seen_live": "also-invalid",
                 }
             },
-            'version': '2.0'
+            "version": "2.0",
         }
-        with open(self.favorites_file, 'w') as f:
+        with open(self.favorites_file, "w") as f:
             json.dump(data, f)
 
         manager = FavoritesManager(self.favorites_file)
@@ -362,5 +358,5 @@ class TestFavoritesManager(unittest.TestCase):
         self.assertIsNone(info.last_seen_live)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
