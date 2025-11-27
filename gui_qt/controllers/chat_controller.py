@@ -19,7 +19,6 @@ Key Features:
 
 from PySide6.QtCore import QObject, Signal
 from typing import Optional
-from datetime import datetime
 
 from src.twitch_chat_client import TwitchChatClient, ChatMessage
 from src.config_manager import ConfigManager
@@ -117,8 +116,7 @@ class ChatController(QObject):
         """Setup callbacks for the authentication manager."""
         if self.auth_manager:
             self.auth_manager.set_callbacks(
-                on_success=self._on_auth_success,
-                on_failure=self._on_auth_failure
+                on_success=self._on_auth_success, on_failure=self._on_auth_failure
             )
 
     def _on_chat_connected(self) -> None:
@@ -142,11 +140,7 @@ class ChatController(QObject):
             message: Chat message object
         """
         logger.debug(f"Received chat message from {message.username}")
-        self.message_received.emit(
-            message.username,
-            message.message,
-            message.timestamp
-        )
+        self.message_received.emit(message.username, message.message, message.timestamp)
 
     def _on_message_sent(self, message: str) -> None:
         """

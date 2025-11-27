@@ -17,9 +17,8 @@ Key Features:
     - Theme management
 """
 
-from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt, QTimer
-from typing import Optional
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTimer
 import sys
 
 from gui_qt.main_window import MainWindow
@@ -134,23 +133,19 @@ class StreamGUI:
         # Row 2: Status display (span both columns)
 
         self.window.add_component_to_layout(
-            self.stream_panel,
-            row=0, column=0, row_span=1, column_span=2
+            self.stream_panel, row=0, column=0, row_span=1, column_span=2
         )
 
         self.window.add_component_to_layout(
-            self.favorites_panel,
-            row=1, column=0, row_span=1, column_span=1
+            self.favorites_panel, row=1, column=0, row_span=1, column_span=1
         )
 
         self.window.add_component_to_layout(
-            self.chat_panel,
-            row=1, column=1, row_span=1, column_span=1
+            self.chat_panel, row=1, column=1, row_span=1, column_span=1
         )
 
         self.window.add_component_to_layout(
-            self.status_display,
-            row=2, column=0, row_span=1, column_span=2
+            self.status_display, row=2, column=0, row_span=1, column_span=2
         )
 
         # Add settings as a separate tab
@@ -283,15 +278,6 @@ class StreamGUI:
             logger.error(f"Error loading favorites: {e}")
             self.status_display.add_error(f"Failed to load favorites: {e}")
 
-    def _save_favorites(self) -> None:
-        """Update favorites status (FavoritesManager auto-saves)."""
-        try:
-            # FavoritesManager auto-saves when add_favorite() or remove_favorite() is called
-            # This method is kept for compatibility but doesn't need to manually save
-            logger.debug("Favorites auto-saved by manager")
-        except Exception as e:
-            logger.error(f"Error updating favorites: {e}")
-
     # Channel Validation Handlers
 
     def _on_channel_changed(self, channel: str) -> None:
@@ -391,7 +377,7 @@ class StreamGUI:
         channel = self.stream_panel.get_channel()
         if channel and self.validation_controller.get_is_valid():
             self.favorites_panel.add_favorite(channel, False)
-            self._save_favorites()
+            self.favorites_manager.add_favorite(channel)
             self.status_display.add_info(f"Added to favorites: {channel}", "FAVORITES")
             logger.info(f"Added favorite: {channel}")
         else:
@@ -401,18 +387,15 @@ class StreamGUI:
         """Handle add new favorite (with dialog)."""
         from PySide6.QtWidgets import QInputDialog
 
-        channel, ok = QInputDialog.getText(
-            self.window,
-            "Add Favorite",
-            "Enter channel name:"
-        )
+        channel, ok = QInputDialog.getText(self.window, "Add Favorite", "Enter channel name:")
 
         if ok and channel.strip():
             try:
                 from src.validators import validate_channel_name
+
                 validate_channel_name(channel.strip())
                 self.favorites_panel.add_favorite(channel.strip(), False)
-                self._save_favorites()
+                self.favorites_manager.add_favorite(channel.strip())
                 self.status_display.add_info(f"Added to favorites: {channel}", "FAVORITES")
                 logger.info(f"Added favorite: {channel}")
             except ValueError as e:
@@ -426,7 +409,7 @@ class StreamGUI:
             channel: Channel to remove
         """
         self.favorites_panel.remove_favorite(channel)
-        self._save_favorites()
+        self.favorites_manager.remove_favorite(channel)
         self.status_display.add_info(f"Removed from favorites: {channel}", "FAVORITES")
         logger.info(f"Removed favorite: {channel}")
 
@@ -455,11 +438,8 @@ class StreamGUI:
             for channel, is_live in status_results.items():
                 self.favorites_panel.update_favorite_status(channel, is_live)
 
-                # Also update favorites manager
+                # Also update favorites manager (auto-saves)
                 self.favorites_manager.update_channel_status(channel, is_live)
-
-            # Save updated favorites with new status
-            self._save_favorites()
 
             # Log summary
             live_count = sum(status_results.values())
@@ -481,7 +461,7 @@ class StreamGUI:
         if self.chat_controller.connect_to_channel(channel):
             self.status_display.add_info(f"Connecting to chat: #{channel}", "CHAT")
         else:
-            self.status_display.add_error(f"Failed to connect to chat", "CHAT")
+            self.status_display.add_error("Failed to connect to chat", "CHAT")
 
     def _on_chat_login(self) -> None:
         """Handle chat login request."""
@@ -587,7 +567,6 @@ class StreamGUI:
             enabled: Whether dark mode is enabled
         """
         self._apply_theme(enabled)
-        theme_name = "dark" if enabled else "light"
         logger.info(f"Dark mode preview: {enabled}")
 
     def _apply_theme(self, dark_mode: bool) -> None:
@@ -611,7 +590,7 @@ class StreamGUI:
         logger.info("Performing application cleanup")
 
         # Stop refresh timer
-        if hasattr(self, 'refresh_timer') and self.refresh_timer.isActive():
+        if hasattr(self, "refresh_timer") and self.refresh_timer.isActive():
             self.refresh_timer.stop()
             logger.debug("Stopped favorites refresh timer")
 
@@ -622,9 +601,6 @@ class StreamGUI:
         # Disconnect chat
         if self.chat_controller.is_connected():
             self.chat_controller.disconnect()
-
-        # Save favorites
-        self._save_favorites()
 
         logger.info("Cleanup complete")
 

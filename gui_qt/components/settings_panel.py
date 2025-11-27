@@ -15,10 +15,7 @@ Key Features:
     - Modern Qt styling
 """
 
-from PySide6.QtWidgets import (
-    QGroupBox, QLabel, QComboBox, QCheckBox,
-    QHBoxLayout
-)
+from PySide6.QtWidgets import QGroupBox, QLabel, QComboBox, QCheckBox, QHBoxLayout
 from PySide6.QtCore import Signal
 from typing import List
 
@@ -116,6 +113,7 @@ class SettingsPanel(QGroupBox):
             state: Checkbox state (Qt.Checked or Qt.Unchecked)
         """
         from PySide6.QtCore import Qt
+
         is_checked = state == Qt.CheckState.Checked
         logger.info(f"Dark mode changed to: {is_checked}")
         self.dark_mode_changed.emit(is_checked)
@@ -150,6 +148,7 @@ class SettingsPanel(QGroupBox):
             True if dark mode is enabled, False otherwise
         """
         from PySide6.QtCore import Qt
+
         return self.dark_mode_checkbox.checkState() == Qt.CheckState.Checked
 
     def set_dark_mode(self, enabled: bool) -> None:
@@ -160,6 +159,7 @@ class SettingsPanel(QGroupBox):
             enabled: True to enable dark mode, False to disable
         """
         from PySide6.QtCore import Qt
+
         self.dark_mode_checkbox.setCheckState(
             Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
         )

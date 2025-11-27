@@ -19,10 +19,15 @@ Key Features:
 """
 
 from PySide6.QtWidgets import (
-    QGroupBox, QTextEdit, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QLabel
+    QGroupBox,
+    QTextEdit,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
 )
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QTextCursor, QFont
 from datetime import datetime
 from typing import Optional
@@ -205,10 +210,7 @@ class ChatPanel(QGroupBox):
             self.connection_status_label.setText("Chat disconnected")
 
     def add_message(
-        self,
-        username: str,
-        message: str,
-        timestamp: Optional[datetime] = None
+        self, username: str, message: str, timestamp: Optional[datetime] = None
     ) -> None:
         """
         Add a chat message to the display.
@@ -232,7 +234,7 @@ class ChatPanel(QGroupBox):
         html_message = (
             f'<span style="color: gray;">[{time_str}]</span> '
             f'<span style="color: #9147FF; font-weight: bold;">{username}</span>: '
-            f'<span>{message}</span>'
+            f"<span>{message}</span>"
         )
 
         # Append message
