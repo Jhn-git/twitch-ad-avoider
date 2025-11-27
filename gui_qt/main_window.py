@@ -21,7 +21,7 @@ Key Features:
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QVBoxLayout,
-    QHBoxLayout, QApplication
+    QHBoxLayout, QApplication, QTabWidget
 )
 from PySide6.QtCore import Qt, QSettings, QSize
 from PySide6.QtGui import QCloseEvent
@@ -104,49 +104,65 @@ class MainWindow(QMainWindow):
 
     def _create_main_layout(self) -> None:
         """
-        Create the main layout structure with improved spacing and organization.
+        Create the main layout structure with tabbed interface.
 
         Layout structure:
         +--------------------------------------------------+
-        |  Stream Control Panel (top)                     |
-        +----------------------+---------------------------+
-        |                      |                           |
-        |  Favorites Panel     |   Chat Panel              |
-        |  (left)              |   (right)                 |
-        |                      |                           |
-        +----------------------+---------------------------+
-        |  Settings Panel (bottom-left)                    |
-        +--------------------------------------------------+
-        |  Status Display (bottom)                         |
+        | Tab 1: Stream                                    |
+        |   +----------------------------------------------+|
+        |   |  Stream Control Panel (top)                 ||
+        |   +--------------------+-------------------------+|
+        |   |                    |                         ||
+        |   |  Favorites Panel   |   Chat Panel            ||
+        |   |  (left)            |   (right)               ||
+        |   |                    |                         ||
+        |   +--------------------+-------------------------+|
+        |   |  Status Display (bottom)                     ||
+        |   +----------------------------------------------+|
+        |                                                  |
+        | Tab 2: Settings                                  |
+        |   (Settings tab content)                         |
         +--------------------------------------------------+
         """
         # Create central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Create main grid layout with proper spacing
-        self.main_layout = QGridLayout(central_widget)
-        self.main_layout.setSpacing(12)  # Space between components
-        self.main_layout.setContentsMargins(15, 15, 15, 15)  # Window margins
+        # Create main layout
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Grid layout weights for responsive resizing:
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+
+        # Create stream tab (will hold the main stream interface)
+        self.stream_tab = QWidget()
+        self.stream_tab_layout = QGridLayout(self.stream_tab)
+        self.stream_tab_layout.setSpacing(12)
+        self.stream_tab_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Grid layout weights for stream tab:
         # Row 0: Stream controls (fixed height)
         # Row 1: Favorites + Chat (expandable)
-        # Row 2: Settings (fixed height)
-        # Row 3: Status (fixed height)
+        # Row 2: Status (fixed height)
 
-        self.main_layout.setRowStretch(0, 0)  # Stream controls - no stretch
-        self.main_layout.setRowStretch(1, 1)  # Favorites/Chat - expand
-        self.main_layout.setRowStretch(2, 0)  # Settings - no stretch
-        self.main_layout.setRowStretch(3, 0)  # Status - no stretch
+        self.stream_tab_layout.setRowStretch(0, 0)  # Stream controls - no stretch
+        self.stream_tab_layout.setRowStretch(1, 1)  # Favorites/Chat - expand
+        self.stream_tab_layout.setRowStretch(2, 0)  # Status - no stretch
 
         # Column 0: Favorites (40% width)
         # Column 1: Chat (60% width)
-        self.main_layout.setColumnStretch(0, 2)
-        self.main_layout.setColumnStretch(1, 3)
+        self.stream_tab_layout.setColumnStretch(0, 2)
+        self.stream_tab_layout.setColumnStretch(1, 3)
 
-        # Store layout reference for component placement
+        # Add stream tab to tab widget
+        self.tab_widget.addTab(self.stream_tab, "Stream")
+
+        # Store references
         self.central_widget = central_widget
+        self.main_layout = self.stream_tab_layout  # For backward compatibility
 
     def add_component_to_layout(
         self,
@@ -157,7 +173,7 @@ class MainWindow(QMainWindow):
         column_span: int = 1
     ) -> None:
         """
-        Add a component to the main grid layout.
+        Add a component to the stream tab grid layout.
 
         Args:
             component: Widget to add
@@ -168,6 +184,17 @@ class MainWindow(QMainWindow):
         """
         self.main_layout.addWidget(component, row, column, row_span, column_span)
         self.components.append(component)
+
+    def add_settings_tab(self, settings_widget: QWidget) -> None:
+        """
+        Add the settings tab to the tab widget.
+
+        Args:
+            settings_widget: Settings widget to add as a tab
+        """
+        self.tab_widget.addTab(settings_widget, "Settings")
+        self.components.append(settings_widget)
+        logger.debug("Settings tab added to tab widget")
 
     def _apply_theme(self) -> None:
         """Load and apply the current theme stylesheet."""
@@ -253,7 +280,7 @@ class MainWindow(QMainWindow):
 
         # Save configuration
         try:
-            self.config.save()
+            self.config.save_settings()
             logger.info("Configuration saved successfully")
         except Exception as e:
             logger.error(f"Failed to save configuration: {e}")
