@@ -10,13 +10,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.config_manager import ConfigManager
-from src.exceptions import ValidationError
 
 # Check for streamlink availability
 try:
-    import streamlink
     from src.streamlink_status import StreamlinkStatusChecker
     from src.twitch_viewer import TwitchViewer
+
     HAS_STREAMLINK = True
 except ImportError:
     HAS_STREAMLINK = False
@@ -141,8 +140,9 @@ class TestNetworkConfiguration(unittest.TestCase):
         self.assertEqual(self.config.get("connection_retry_attempts"), 5)  # Should still be 5
 
 
-@unittest.skipIf(not HAS_STREAMLINK, 
-    "streamlink required - install with 'pip install streamlink>=5.0.0'")
+@unittest.skipIf(
+    not HAS_STREAMLINK, "streamlink required - install with 'pip install streamlink>=5.0.0'"
+)
 class TestStreamlinkStatusChecker(unittest.TestCase):
     """Test StreamlinkStatusChecker with network configuration"""
 
@@ -165,7 +165,7 @@ class TestStreamlinkStatusChecker(unittest.TestCase):
         mock_streamlink.return_value = mock_session
 
         # Create new checker to test initialization
-        checker = StreamlinkStatusChecker(self.config)
+        StreamlinkStatusChecker(self.config)
 
         # Verify session timeout was set
         mock_session.set_option.assert_called_with("http-timeout", 30)
@@ -199,8 +199,9 @@ class TestStreamlinkStatusChecker(unittest.TestCase):
         self.assertEqual(results, {})
 
 
-@unittest.skipIf(not HAS_STREAMLINK, 
-    "streamlink required - install with 'pip install streamlink>=5.0.0'")
+@unittest.skipIf(
+    not HAS_STREAMLINK, "streamlink required - install with 'pip install streamlink>=5.0.0'"
+)
 class TestTwitchViewerNetworkConfig(unittest.TestCase):
     """Test TwitchViewer with network configuration"""
 
@@ -221,7 +222,7 @@ class TestTwitchViewerNetworkConfig(unittest.TestCase):
         mock_streamlink.return_value = mock_session
 
         # Create viewer
-        viewer = TwitchViewer(self.config)
+        TwitchViewer(self.config)
 
         # Verify session timeout was set
         mock_session.set_option.assert_called_with("http-timeout", 45)
