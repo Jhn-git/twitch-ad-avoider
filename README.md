@@ -6,7 +6,7 @@
 [![Documentation Status](https://img.shields.io/badge/docs-sphinx-brightgreen.svg)](docs/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#testing)
 
-A Python implementation for watching Twitch streams while avoiding ads, featuring both GUI and command-line interfaces with comprehensive security validation.
+A Python implementation for watching Twitch streams while avoiding ads, featuring a modern Qt GUI and command-line interface with comprehensive security validation.
 
 ## Table of Contents
 
@@ -26,12 +26,15 @@ A Python implementation for watching Twitch streams while avoiding ads, featurin
 
 - **Stream Viewing**: Watch Twitch streams through external players (VLC, MPV, MPC-HC)
 - **Ad Avoidance**: Utilizes streamlink to bypass advertisements
-- **Dual Interface**: Both graphical and command-line interfaces available
+- **Modern Qt GUI**: Professional PySide6-based interface with tabbed panels
+- **Command-Line Interface**: Full CLI support for headless operation
 - **Player Auto-Detection**: Automatically detects installed video players
-- **Favorites Management**: Save and manage your favorite channels
+- **Favorites Management**: Save and manage favorite channels with live status monitoring
+- **Twitch Chat Integration**: Real-time IRC chat with OAuth authentication
 - **Quality Selection**: Choose stream quality (best, worst, 720p, 480p, 360p, 160p)
 - **Security Validation**: Comprehensive input validation and sanitization
 - **Real-time Validation**: GUI provides immediate feedback on input validity
+- **Theming Support**: Light and dark themes with custom QSS stylesheets
 - **Flexible Configuration**: JSON-based configuration with validation
 
 ## Prerequisites
@@ -97,11 +100,17 @@ Launch the graphical interface for easy stream management:
 python main.py
 ```
 
-**GUI Features**:
+**Qt GUI Features**:
+- Modern tabbed interface with two main tabs:
+  - **Stream Tab**: Channel controls, favorites panel, chat integration, and status display
+  - **Settings Tab**: Comprehensive configuration for all application settings
 - Real-time channel name validation with visual feedback
-- Dropdown quality selection
-- Favorites management with add/remove functionality
-- Player detection status display
+- Dropdown quality selection with preferred quality configuration
+- Favorites management with live status monitoring
+- Integrated Twitch chat with OAuth authentication and real-time messaging
+- Complete settings management (player, network, chat, appearance, advanced)
+- Player detection and custom player configuration
+- Light and dark theme support with immediate preview
 - One-click stream launching
 
 ### Command Line Mode
@@ -284,11 +293,12 @@ TwitchAdAvoider follows a modular architecture with clear separation of concerns
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   GUI Layer     │    │   CLI Interface  │    │  Configuration  │
+│ Qt GUI Layer    │    │   CLI Interface  │    │  Configuration  │
 │                 │    │                  │    │                 │
 │ • StreamGUI     │    │ • main.py        │    │ • ConfigManager │
-│ • Favorites     │    │ • Argument       │    │ • Validation    │
-│   Manager       │    │   Parsing        │    │ • Persistence   │
+│ • MainWindow    │    │ • Argument       │    │ • Validation    │
+│ • Components    │    │   Parsing        │    │ • Persistence   │
+│ • Controllers   │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
@@ -300,6 +310,8 @@ TwitchAdAvoider follows a modular architecture with clear separation of concerns
                     │ • Player Detection      │
                     │ • Stream Management     │
                     │ • Process Control       │
+                    │ • OAuth Auth Manager    │
+                    │ • Twitch Chat Client    │
                     └─────────────────────────┘
                                  │
                ┌─────────────────┼─────────────────┐
@@ -308,8 +320,9 @@ TwitchAdAvoider follows a modular architecture with clear separation of concerns
     │   Security Layer    │ │ Logging │ │  External APIs    │
     │                     │ │         │ │                   │
     │ • Input Validation  │ │ • Multi │ │ • Streamlink      │
-    │ • Sanitization      │ │   Level │ │ • Twitch Status   │
-    │ • Attack Prevention │ │ • File  │ │ • Player Process  │
+    │ • Sanitization      │ │   Level │ │ • Twitch OAuth    │
+    │ • Attack Prevention │ │ • File  │ │ • Twitch IRC      │
+    │                     │ │         │ │ • Player Process  │
     └─────────────────────┘ └─────────┘ └───────────────────┘
 ```
 
@@ -346,8 +359,9 @@ TwitchAdAvoider follows a modular architecture with clear separation of concerns
 | **TwitchViewer** | Core stream management, player detection | Input validation coordination |
 | **ConfigManager** | Settings persistence and validation | Configuration security enforcement |
 | **Validators** | Input sanitization and security checks | Primary security enforcement |
-| **StreamGUI** | User interface and real-time feedback | User input validation and feedback |
-| **StatusMonitor** | Channel status tracking and caching | API rate limiting and error handling |
+| **StreamGUI** | Qt-based user interface and real-time feedback | User input validation and feedback |
+| **AuthManager** | OAuth authentication and token management | Secure credential encryption and storage |
+| **TwitchChatClient** | IRC chat integration | Authenticated messaging with USERSTATE confirmation |
 
 ## Contributing
 
