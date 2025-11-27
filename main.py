@@ -11,28 +11,22 @@ from pathlib import Path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
-from src.logging_config import setup_logging, get_logger, configure_logging_from_config
-from src.config_manager import ConfigManager
+from src.logging_config import (  # noqa: E402
+    setup_logging,
+    get_logger,
+    configure_logging_from_config,
+)
+from src.config_manager import ConfigManager  # noqa: E402
+
 
 def main():
     """Main application entry point"""
     parser = argparse.ArgumentParser(
-        description='TwitchAdAvoider - Watch Twitch streams while avoiding ads'
+        description="TwitchAdAvoider - Watch Twitch streams while avoiding ads"
     )
-    parser.add_argument(
-        '--channel', '-c',
-        help='Channel to watch (launches directly to stream)'
-    )
-    parser.add_argument(
-        '--quality', '-q',
-        default='best',
-        help='Stream quality (default: best)'
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode'
-    )
+    parser.add_argument("--channel", "-c", help="Channel to watch (launches directly to stream)")
+    parser.add_argument("--quality", "-q", default="best", help="Stream quality (default: best)")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()
 
@@ -42,13 +36,13 @@ def main():
 
         # Setup logging
         if args.debug:
-            config.set('debug', True)
+            config.set("debug", True)
             log_level = "DEBUG"
         else:
-            log_level = config.get('log_level', 'INFO')
+            log_level = config.get("log_level", "INFO")
 
         # Configure logging
-        if config.get('log_to_file'):
+        if config.get("log_to_file"):
             configure_logging_from_config(config)
         else:
             setup_logging(level=log_level)
@@ -59,8 +53,9 @@ def main():
         # If channel provided, start stream directly (CLI mode)
         if args.channel:
             from src.twitch_viewer import TwitchViewer
+
             viewer = TwitchViewer(config)
-            config.set('preferred_quality', args.quality)
+            config.set("preferred_quality", args.quality)
             viewer.watch_stream(args.channel)
             return 0
 
@@ -99,8 +94,10 @@ def main():
     except Exception as e:
         print(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
