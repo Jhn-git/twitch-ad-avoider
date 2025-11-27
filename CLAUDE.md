@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 🎯 Project Context
+
+**This is a PERSONAL PROJECT for solo use** - not intended for distribution or collaboration.
+
+**Development Approach**:
+- ✅ Focus on **practical value** (catching bugs, preventing regressions)
+- ✅ Test **critical components only** (auth, chat, streaming, data persistence)
+- ❌ Skip enterprise bloat (CI/CD, pre-commit hooks, contribution guidelines)
+- ❌ Skip GUI tests (manual testing is sufficient for personal use)
+- ❌ No strict coverage targets (40-50% on critical paths is fine)
+
+**When suggesting improvements**:
+- Prioritize features/fixes the user will actually use
+- Avoid over-engineering for hypothetical future needs
+- Skip collaboration tooling (issue templates, PR workflows, etc.)
+- Keep testing practical, not comprehensive
+
+---
+
 ## Project Overview
 
 TwitchAdAvoider is a **security-focused Python application** for watching Twitch streams while avoiding ads. Features GUI (PySide6 Qt) and CLI interfaces with comprehensive input validation.
@@ -150,11 +169,28 @@ pip install -e .[dev]   # Development (includes pytest, black, flake8, mypy)
 
 ## Testing Strategy
 
-**Test Coverage** (`tests/`):
-- Unit tests (validation, config, player detection)
-- **Security tests** (malicious inputs, path traversal, command injection)
-- Integration tests (component interaction)
-- GUI tests (UI functionality)
+**Philosophy**: Focus on tests that **prevent regressions** when making changes. Skip enterprise testing practices.
+
+**Test Coverage** (`tests/`) - **Target: 40-50% on critical paths**:
+- ✅ Unit tests for **critical components** (auth, chat, streaming, data persistence)
+- ✅ **Security tests** (malicious inputs, path traversal, command injection)
+- ❌ GUI tests (manual testing is sufficient for personal use)
+- ❌ Integration/E2E tests (overkill for solo project)
+- ❌ CI/CD, pre-commit hooks, coverage enforcement
+
+**What to Test**:
+- **AuthManager** - OAuth flow, token encryption, secure storage
+- **TwitchChatClient** - IRC connection, message handling, authentication
+- **FavoritesManager** - Save/load operations, data integrity
+- **TwitchViewer** - Stream opening, player detection
+- **Validators** - Security validation (already well-tested)
+- **ConfigManager** - Settings validation (already tested)
+
+**What to Skip**:
+- GUI components (you'll catch issues by using the app)
+- Error recovery edge cases
+- Performance/concurrency tests
+- Utilities with minimal risk
 
 **Security Testing Pattern**:
 ```python
@@ -168,7 +204,7 @@ def test_security_validation(self):
 **Security tests are REQUIRED** when adding:
 - New validation functions
 - Input handling code
-- Configuration options
+- Authentication/authorization code
 - File operations
 
 ---
@@ -194,7 +230,7 @@ def test_security_validation(self):
 2. Use Qt signals for communication
 3. Validate inputs in real-time
 4. Update main window
-5. Test UI functionality
+5. Test manually (no automated GUI tests for personal project)
 
 ---
 
