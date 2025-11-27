@@ -1,7 +1,7 @@
 """
 Configuration management for TwitchAdAvoider.
 
-This module handles loading, saving, and validation of application settings using a 
+This module handles loading, saving, and validation of application settings using a
 JSON-based configuration system with comprehensive validation and secure defaults.
 
 The :class:`ConfigManager` provides:
@@ -11,7 +11,7 @@ The :class:`ConfigManager` provides:
     - UTF-8 encoding support for international users
     - Integration with the validation system
 
-Configuration files are stored in JSON format and validated against predefined 
+Configuration files are stored in JSON format and validated against predefined
 schemas to ensure security and data integrity.
 
 See Also:
@@ -23,21 +23,18 @@ See Also:
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 from .constants import (
     DEFAULT_SETTINGS,
     CONFIG_FILE,
-    QUALITY_OPTIONS,
-    SUPPORTED_PLAYERS,
     MIN_NETWORK_TIMEOUT,
     MAX_NETWORK_TIMEOUT,
     MIN_RETRY_ATTEMPTS,
     MAX_RETRY_ATTEMPTS,
     MIN_RETRY_DELAY,
     MAX_RETRY_DELAY,
-    MIN_STARTUP_DELAY,
-    MAX_STARTUP_DELAY,
     MIN_WINDOW_WIDTH,
     MAX_WINDOW_WIDTH,
     MIN_WINDOW_HEIGHT,
@@ -46,7 +43,6 @@ from .constants import (
     MAX_REFRESH_INTERVAL,
     MIN_CHECK_TIMEOUT,
     MAX_CHECK_TIMEOUT,
-    VALIDATION_ERROR_MESSAGES,
 )
 from .logging_config import get_logger
 from .validators import (
@@ -58,10 +54,9 @@ from .validators import (
     validate_numeric_range,
     sanitize_string_input,
 )
+from .exceptions import ValidationError
 
 # Import theme validation from gui module (avoid circular import)
-import sys
-import os
 
 gui_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gui")
 if gui_path not in sys.path:
@@ -73,8 +68,6 @@ except ImportError:
     def is_valid_theme(theme: str) -> bool:
         return theme in ["light", "dark"]
 
-
-from .exceptions import ValidationError
 
 logger = get_logger(__name__)
 
@@ -90,7 +83,7 @@ class ConfigManager:
             config_path: Path to the configuration file
         """
         self.config_path = config_path or CONFIG_FILE
-        self._settings = {}
+        self._settings: Dict[str, Any] = {}
         self.load_settings()
 
     def load_settings(self) -> Dict[str, Any]:
@@ -144,7 +137,7 @@ class ConfigManager:
             logger.info(f"Settings saved to {self.config_path}")
             return True
 
-        except (OSError, json.JSONEncodeError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.error(f"Failed to save settings to {self.config_path}: {e}")
             return False
 
@@ -204,7 +197,7 @@ class ConfigManager:
             logger.debug(f"Settings updated: {settings}")
             return True
         else:
-            logger.warning(f"Failed to update settings due to validation errors")
+            logger.warning("Failed to update settings due to validation errors")
             return False
 
     def reset_to_defaults(self) -> None:
@@ -264,7 +257,6 @@ class ConfigManager:
                 validate_numeric_range(value, min_val=0, max_val=3600, data_type=int)
                 return True
 
-
             elif key == "debug":
                 if not isinstance(value, bool):
                     raise ValidationError("Debug setting must be a boolean")
@@ -274,7 +266,6 @@ class ConfigManager:
                 if not isinstance(value, bool):
                     raise ValidationError("Log to file setting must be a boolean")
                 return True
-
 
             elif key == "log_level":
                 validate_log_level(value)
@@ -328,7 +319,9 @@ class ConfigManager:
                     raise ValidationError("Twitch client ID must be a string")
                 # Allow empty string for initial setup
                 if value and (len(value) < 10 or len(value) > 50):
-                    raise ValidationError("Twitch client ID must be between 10-50 characters when provided")
+                    raise ValidationError(
+                        "Twitch client ID must be between 10-50 characters when provided"
+                    )
                 return True
 
             # Chat settings validation
@@ -410,26 +403,26 @@ class ConfigManager:
     def _sync_debug_and_log_level(self) -> None:
         """
         Synchronize debug flag and log_level setting for consistency.
-        
+
         This ensures the JSON configuration accurately reflects the expected behavior:
-        - If debug=true but log_level != "DEBUG", update log_level to "DEBUG"  
+        - If debug=true but log_level != "DEBUG", update log_level to "DEBUG"
         - If debug=false but log_level == "DEBUG", update log_level to "INFO"
         """
         debug_enabled = self._settings.get("debug", False)
         current_log_level = self._settings.get("log_level", "INFO")
-        
+
         needs_save = False
-        
+
         if debug_enabled and current_log_level != "DEBUG":
             self._settings["log_level"] = "DEBUG"
             logger.debug("Auto-synced log_level to DEBUG (debug mode is enabled)")
             needs_save = True
-            
+
         elif not debug_enabled and current_log_level == "DEBUG":
             self._settings["log_level"] = "INFO"
             logger.debug("Auto-synced log_level to INFO (debug mode is disabled)")
             needs_save = True
-        
+
         # Save the synchronized settings back to file if changes were made
         if needs_save:
             self.save_settings()
