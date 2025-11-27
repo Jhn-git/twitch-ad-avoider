@@ -7,15 +7,13 @@ Critical security tests for:
 - Secure token storage
 - Authentication state management
 """
+
 import unittest
-import json
-import secrets
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch, mock_open
+from unittest.mock import Mock, patch
 
-from src.auth_manager import AuthManager, TOKEN_FILE
-from src.exceptions import ValidationError
+from src.auth_manager import AuthManager
 
 
 class TestAuthManager(unittest.TestCase):
@@ -28,11 +26,11 @@ class TestAuthManager(unittest.TestCase):
 
         # Patch TOKEN_FILE to use temp location
         self.temp_token_file = Path("test_auth_token.enc")
-        self.token_file_patcher = patch('src.auth_manager.TOKEN_FILE', self.temp_token_file)
+        self.token_file_patcher = patch("src.auth_manager.TOKEN_FILE", self.temp_token_file)
         self.token_file_patcher.start()
 
         # Create auth manager
-        with patch.object(AuthManager, 'load_token', return_value=False):
+        with patch.object(AuthManager, "load_token", return_value=False):
             self.auth = AuthManager(self.client_id, self.client_secret)
 
     def tearDown(self):
@@ -90,8 +88,9 @@ class TestAuthManager(unittest.TestCase):
 
     def test_oauth_state_generation(self):
         """Test OAuth state is generated securely (security-critical)"""
-        with patch('webbrowser.open'), \
-             patch.object(AuthManager, '_start_callback_server', return_value=True):
+        with patch("webbrowser.open"), patch.object(
+            AuthManager, "_start_callback_server", return_value=True
+        ):
 
             # Generate state multiple times
             states = []
@@ -160,7 +159,7 @@ class TestAuthManager(unittest.TestCase):
         result = self.auth.load_token()
         self.assertFalse(result)
 
-    @patch('src.auth_manager.AuthManager.validate_token')
+    @patch("src.auth_manager.AuthManager.validate_token")
     def test_load_token_success(self, mock_validate):
         """Test load_token loads and decrypts token"""
         mock_validate.return_value = True
@@ -173,7 +172,7 @@ class TestAuthManager(unittest.TestCase):
         self.auth.save_token()
 
         # Create new auth manager and load
-        with patch.object(AuthManager, 'load_token', return_value=True):
+        with patch.object(AuthManager, "load_token", return_value=True):
             auth2 = AuthManager(self.client_id, self.client_secret)
 
         # Now manually load
@@ -185,7 +184,7 @@ class TestAuthManager(unittest.TestCase):
         self.assertEqual(auth2.username, "test_user")
         self.assertIsNotNone(auth2.token_expires)
 
-    @patch('src.auth_manager.AuthManager.validate_token')
+    @patch("src.auth_manager.AuthManager.validate_token")
     def test_load_token_invalid_token(self, mock_validate):
         """Test load_token clears invalid token"""
         mock_validate.return_value = False
@@ -198,7 +197,7 @@ class TestAuthManager(unittest.TestCase):
         self.auth.save_token()
 
         # Load with validation failing
-        with patch.object(AuthManager, 'logout') as mock_logout:
+        with patch.object(AuthManager, "logout") as mock_logout:
             result = self.auth.load_token()
             self.assertFalse(result)
             mock_logout.assert_called_once()
@@ -240,15 +239,12 @@ class TestAuthManager(unittest.TestCase):
         success_callback = Mock()
         failure_callback = Mock()
 
-        self.auth.set_callbacks(
-            on_success=success_callback,
-            on_failure=failure_callback
-        )
+        self.auth.set_callbacks(on_success=success_callback, on_failure=failure_callback)
 
         self.assertEqual(self.auth.on_auth_success, success_callback)
         self.assertEqual(self.auth.on_auth_failure, failure_callback)
 
-    @patch('src.auth_manager.requests')
+    @patch("src.auth_manager.requests")
     def test_validate_token_success(self, mock_requests):
         """Test validate_token with valid token"""
         # Setup
@@ -256,11 +252,11 @@ class TestAuthManager(unittest.TestCase):
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            'client_id': self.client_id,
-            'login': 'test_user',
-            'scopes': ['chat:read', 'chat:edit'],
-            'user_id': '12345',
-            'expires_in': 3600
+            "client_id": self.client_id,
+            "login": "test_user",
+            "scopes": ["chat:read", "chat:edit"],
+            "user_id": "12345",
+            "expires_in": 3600,
         }
         mock_requests.get.return_value = mock_response
 
@@ -271,13 +267,10 @@ class TestAuthManager(unittest.TestCase):
         # Verify API call
         mock_requests.get.assert_called_once()
         call_args = mock_requests.get.call_args
-        self.assertIn('Authorization', call_args[1]['headers'])
-        self.assertEqual(
-            call_args[1]['headers']['Authorization'],
-            'OAuth test_token'
-        )
+        self.assertIn("Authorization", call_args[1]["headers"])
+        self.assertEqual(call_args[1]["headers"]["Authorization"], "OAuth test_token")
 
-    @patch('src.auth_manager.requests')
+    @patch("src.auth_manager.requests")
     def test_validate_token_invalid(self, mock_requests):
         """Test validate_token with invalid token"""
         self.auth.access_token = "invalid_token"
@@ -293,8 +286,8 @@ class TestAuthManager(unittest.TestCase):
         result = self.auth.validate_token()
         self.assertFalse(result)
 
-    @patch('webbrowser.open')
-    @patch('src.auth_manager.AuthManager._start_callback_server')
+    @patch("webbrowser.open")
+    @patch("src.auth_manager.AuthManager._start_callback_server")
     def test_start_oauth_flow_success(self, mock_server, mock_browser):
         """Test OAuth flow starts successfully"""
         mock_server.return_value = True
@@ -310,11 +303,11 @@ class TestAuthManager(unittest.TestCase):
 
         # Verify browser opened with correct URL
         url = mock_browser.call_args[0][0]
-        self.assertIn('client_id=' + self.client_id, url)
-        self.assertIn('state=' + self.auth.oauth_state, url)
-        self.assertIn('scope=chat%3Aread+chat%3Aedit', url)
+        self.assertIn("client_id=" + self.client_id, url)
+        self.assertIn("state=" + self.auth.oauth_state, url)
+        self.assertIn("scope=chat%3Aread+chat%3Aedit", url)
 
-    @patch('src.auth_manager.requests', None)
+    @patch("src.auth_manager.requests", None)
     def test_start_oauth_flow_no_requests_library(self):
         """Test OAuth flow fails gracefully without requests library"""
         result = self.auth.start_oauth_flow()
@@ -325,13 +318,13 @@ class TestAuthManager(unittest.TestCase):
         self.auth.oauth_state = "test_state_12345"
         url = self.auth._build_auth_url()
 
-        self.assertIn('https://id.twitch.tv/oauth2/authorize', url)
-        self.assertIn('client_id=' + self.client_id, url)
-        self.assertIn('state=test_state_12345', url)
-        self.assertIn('response_type=code', url)
-        self.assertIn('redirect_uri=http%3A%2F%2Flocalhost%3A8080', url)
+        self.assertIn("https://id.twitch.tv/oauth2/authorize", url)
+        self.assertIn("client_id=" + self.client_id, url)
+        self.assertIn("state=test_state_12345", url)
+        self.assertIn("response_type=code", url)
+        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%3A8080", url)
 
-    @patch('src.auth_manager.requests')
+    @patch("src.auth_manager.requests")
     def test_exchange_code_for_token_state_mismatch(self, mock_requests):
         """Test code exchange fails with state mismatch (security-critical)"""
         self.auth.oauth_state = "correct_state"
@@ -350,7 +343,7 @@ class TestAuthManager(unittest.TestCase):
         # Should not make API call
         mock_requests.post.assert_not_called()
 
-    @patch('src.auth_manager.requests')
+    @patch("src.auth_manager.requests")
     def test_exchange_code_for_token_success(self, mock_requests):
         """Test successful code exchange"""
         self.auth.oauth_state = "test_state"
@@ -359,11 +352,11 @@ class TestAuthManager(unittest.TestCase):
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            'access_token': 'new_access_token',
-            'refresh_token': 'new_refresh_token',
-            'expires_in': 3600,
-            'scope': ['chat:read', 'chat:edit'],
-            'token_type': 'bearer'
+            "access_token": "new_access_token",
+            "refresh_token": "new_refresh_token",
+            "expires_in": 3600,
+            "scope": ["chat:read", "chat:edit"],
+            "token_type": "bearer",
         }
         mock_requests.post.return_value = mock_response
 
@@ -371,11 +364,11 @@ class TestAuthManager(unittest.TestCase):
         mock_validate_response = Mock()
         mock_validate_response.status_code = 200
         mock_validate_response.json.return_value = {
-            'client_id': self.client_id,
-            'login': 'test_user',
-            'scopes': ['chat:read', 'chat:edit'],
-            'user_id': '12345',
-            'expires_in': 3600
+            "client_id": self.client_id,
+            "login": "test_user",
+            "scopes": ["chat:read", "chat:edit"],
+            "user_id": "12345",
+            "expires_in": 3600,
         }
         mock_requests.get.return_value = mock_validate_response
 
@@ -387,13 +380,13 @@ class TestAuthManager(unittest.TestCase):
         self.auth._exchange_code_for_token("auth_code", "test_state")
 
         # Verify token was set
-        self.assertEqual(self.auth.access_token, 'new_access_token')
-        self.assertEqual(self.auth.refresh_token, 'new_refresh_token')
+        self.assertEqual(self.auth.access_token, "new_access_token")
+        self.assertEqual(self.auth.refresh_token, "new_refresh_token")
         self.assertIsNotNone(self.auth.token_expires)
 
         # Verify success callback was called
-        success_callback.assert_called_once_with('test_user')
+        success_callback.assert_called_once_with("test_user")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
