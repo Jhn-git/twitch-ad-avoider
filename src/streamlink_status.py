@@ -7,8 +7,7 @@ import time
 import uuid
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple, Callable
-from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple, Callable, Any
 
 import streamlink
 
@@ -17,7 +16,6 @@ try:
 except ImportError:
     requests = None
 
-from .exceptions import StreamlinkError
 from .logging_config import get_logger
 from .constants import ERROR_MESSAGES, NETWORK_TEST_ENDPOINTS
 
@@ -27,10 +25,14 @@ logger = get_logger(__name__)
 class StreamlinkStatusChecker:
     """Simple status checker using streamlink for live/offline detection"""
 
-    def __init__(self, config_manager=None, progress_callback: Optional[Callable[[str, int, int], None]] = None):
+    def __init__(
+        self,
+        config_manager: Optional[Any] = None,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    ) -> None:
         """
         Initialize the streamlink status checker
-        
+
         Args:
             config_manager: Configuration manager instance
             progress_callback: Optional callback for progress updates (message, current, total)
@@ -38,7 +40,7 @@ class StreamlinkStatusChecker:
         self.config = config_manager
         self.progress_callback = progress_callback
         self.session = streamlink.Streamlink()
-        
+
         # Configure session timeouts if config is available
         if self.config:
             timeout = self.config.get("network_timeout", 30)
@@ -47,11 +49,11 @@ class StreamlinkStatusChecker:
             logger.debug(f"Streamlink configured with {timeout}s timeout (adaptive)")
 
         logger.info("StreamlinkStatusChecker initialized")
-        
+
     def set_progress_callback(self, callback: Optional[Callable[[str, int, int], None]]) -> None:
         """Set or update the progress callback"""
         self.progress_callback = callback
-        
+
     def get_error_statistics(self) -> Dict:
         """Get current error statistics and network condition"""
         # Simplified - no complex error tracking
@@ -83,13 +85,13 @@ class StreamlinkStatusChecker:
                 is_live = len(streams) > 0
 
                 # Success - no error tracking needed
-                
+
                 logger.debug(f"Stream {channel_name}: {'LIVE' if is_live else 'OFFLINE'}")
                 return is_live
 
             except streamlink.StreamlinkError as e:
                 error_msg = str(e)
-                
+
                 # Simple error logging - no complex recovery tracking
 
                 # Check if this is a timeout/network error that should be retried
@@ -100,7 +102,8 @@ class StreamlinkStatusChecker:
 
                 if is_network_error and attempt < max_attempts - 1:
                     logger.warning(
-                        f"Network error checking {channel_name} (attempt {attempt + 1}/{max_attempts}): {error_msg}"
+                        f"Network error checking {channel_name} "
+                        f"(attempt {attempt + 1}/{max_attempts}): {error_msg}"
                     )
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
@@ -115,16 +118,18 @@ class StreamlinkStatusChecker:
 
             except Exception as e:
                 # Simple error logging - no complex recovery tracking
-                
+
                 if attempt < max_attempts - 1:
                     logger.warning(
-                        f"Unexpected error checking {channel_name} (attempt {attempt + 1}/{max_attempts}): {e}"
+                        f"Unexpected error checking {channel_name} "
+                        f"(attempt {attempt + 1}/{max_attempts}): {e}"
                     )
                     time.sleep(retry_delay)
                     continue
                 else:
                     logger.error(
-                        f"Unexpected error checking {channel_name} after {max_attempts} attempts: {e}"
+                        f"Unexpected error checking {channel_name} "
+                        f"after {max_attempts} attempts: {e}"
                     )
                     return False
 
@@ -151,7 +156,7 @@ class StreamlinkStatusChecker:
             # Send progress update
             if self.progress_callback:
                 self.progress_callback(f"Checking {channel_name}...", index, total_channels)
-                
+
             results[channel_name] = self.check_stream_status(channel_name)
 
             # Small delay between requests to avoid overwhelming Twitch APIs
@@ -159,14 +164,20 @@ class StreamlinkStatusChecker:
 
         live_count = sum(1 for is_live in results.values() if is_live)
         logger.info(f"Status check completed: {live_count}/{total_channels} channels live")
-        
+
         # Send completion update
         if self.progress_callback:
-            self.progress_callback(f"Completed: {live_count}/{total_channels} channels live", total_channels, total_channels)
+            self.progress_callback(
+                f"Completed: {live_count}/{total_channels} channels live",
+                total_channels,
+                total_channels,
+            )
 
         return results
-        
-    def check_multiple_streams_cancellable(self, channel_names: List[str], cancel_event: threading.Event) -> Dict[str, bool]:
+
+    def check_multiple_streams_cancellable(
+        self, channel_names: List[str], cancel_event: threading.Event
+    ) -> Dict[str, bool]:
         """
         Check status for multiple streams with cancellation support
 
@@ -190,11 +201,11 @@ class StreamlinkStatusChecker:
             if cancel_event.is_set():
                 logger.info(f"Status check cancelled after {index-1}/{total_channels} channels")
                 break
-                
+
             # Send progress update
             if self.progress_callback:
                 self.progress_callback(f"Checking {channel_name}...", index, total_channels)
-                
+
             results[channel_name] = self.check_stream_status(channel_name)
 
             # Small delay between requests, but check for cancellation
@@ -204,19 +215,34 @@ class StreamlinkStatusChecker:
 
         live_count = sum(1 for is_live in results.values() if is_live)
         completed_count = len(results)
-        
+
         if cancel_event.is_set():
-            logger.info(f"Status check cancelled: {completed_count}/{total_channels} channels checked")
+            logger.info(
+                f"Status check cancelled: {completed_count}/{total_channels} channels checked"
+            )
             if self.progress_callback:
-                self.progress_callback(f"Cancelled: {completed_count}/{total_channels} channels checked", completed_count, total_channels)
+                self.progress_callback(
+                    f"Cancelled: {completed_count}/{total_channels} channels checked",
+                    completed_count,
+                    total_channels,
+                )
         else:
             logger.info(f"Status check completed: {live_count}/{total_channels} channels live")
             if self.progress_callback:
-                self.progress_callback(f"Completed: {live_count}/{total_channels} channels live", total_channels, total_channels)
+                self.progress_callback(
+                    f"Completed: {live_count}/{total_channels} channels live",
+                    total_channels,
+                    total_channels,
+                )
 
         return results
-        
-    def check_multiple_streams_concurrent(self, channel_names: List[str], cancel_event: Optional[threading.Event] = None, max_workers: int = 3) -> Dict[str, bool]:
+
+    def check_multiple_streams_concurrent(
+        self,
+        channel_names: List[str],
+        cancel_event: Optional[threading.Event] = None,
+        max_workers: int = 3,
+    ) -> Dict[str, bool]:
         """
         Check status for multiple streams concurrently with cancellation support
 
@@ -233,7 +259,10 @@ class StreamlinkStatusChecker:
             return {}
 
         total_channels = len(channel_names)
-        logger.debug(f"Checking status for {total_channels} channels concurrently (max_workers={max_workers})")
+        logger.debug(
+            f"Checking status for {total_channels} channels concurrently "
+            f"(max_workers={max_workers})"
+        )
         results = {}
         completed_count = 0
 
@@ -248,7 +277,10 @@ class StreamlinkStatusChecker:
                 for future in as_completed(future_to_channel):
                     # Check for cancellation
                     if cancel_event and cancel_event.is_set():
-                        logger.info(f"Concurrent status check cancelled after {completed_count}/{total_channels} channels")
+                        logger.info(
+                            f"Concurrent status check cancelled after "
+                            f"{completed_count}/{total_channels} channels"
+                        )
                         # Cancel remaining futures
                         for remaining_future in future_to_channel:
                             if not remaining_future.done():
@@ -257,15 +289,17 @@ class StreamlinkStatusChecker:
 
                     channel = future_to_channel[future]
                     completed_count += 1
-                    
+
                     try:
                         is_live = future.result()
                         results[channel] = is_live
-                        
+
                         # Send progress update
                         if self.progress_callback:
-                            self.progress_callback(f"Checked {channel}", completed_count, total_channels)
-                            
+                            self.progress_callback(
+                                f"Checked {channel}", completed_count, total_channels
+                            )
+
                     except Exception as e:
                         logger.error(f"Error checking {channel}: {e}")
                         results[channel] = False
@@ -275,15 +309,29 @@ class StreamlinkStatusChecker:
 
         live_count = sum(1 for is_live in results.values() if is_live)
         completed_count = len(results)
-        
+
         if cancel_event and cancel_event.is_set():
-            logger.info(f"Concurrent status check cancelled: {completed_count}/{total_channels} channels checked")
+            logger.info(
+                f"Concurrent status check cancelled: "
+                f"{completed_count}/{total_channels} channels checked"
+            )
             if self.progress_callback:
-                self.progress_callback(f"Cancelled: {completed_count}/{total_channels} channels checked", completed_count, total_channels)
+                self.progress_callback(
+                    f"Cancelled: {completed_count}/{total_channels} channels checked",
+                    completed_count,
+                    total_channels,
+                )
         else:
-            logger.info(f"Concurrent status check completed: {live_count}/{total_channels} channels live")
+            logger.info(
+                f"Concurrent status check completed: "
+                f"{live_count}/{total_channels} channels live"
+            )
             if self.progress_callback:
-                self.progress_callback(f"Completed: {live_count}/{total_channels} channels live", total_channels, total_channels)
+                self.progress_callback(
+                    f"Completed: {live_count}/{total_channels} channels live",
+                    total_channels,
+                    total_channels,
+                )
 
         return results
 
@@ -297,7 +345,7 @@ class StreamlinkStatusChecker:
         try:
             # Try to create a session and check a non-existent stream
             test_channel = f"twitch.tv/test_{uuid.uuid4().hex[:12]}"
-            test_streams = self.session.streams(test_channel)
+            self.session.streams(test_channel)
             # If we get here without exception, streamlink is working
             logger.debug("Streamlink availability check passed")
             return True
