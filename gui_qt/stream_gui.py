@@ -26,15 +26,14 @@ from gui_qt.main_window import MainWindow
 from gui_qt.components.stream_control_panel import StreamControlPanel
 from gui_qt.components.favorites_panel import FavoritesPanel
 from gui_qt.components.chat_panel import ChatPanel
-from gui_qt.components.settings_panel import SettingsPanel
+from gui_qt.components.settings_tab import SettingsTab
 from gui_qt.components.status_display import StatusDisplay
 
 from gui_qt.controllers.validation_controller import ValidationController
 from gui_qt.controllers.stream_controller import StreamController
 from gui_qt.controllers.chat_controller import ChatController
 
-from gui.favorites_manager import FavoritesManager
-
+from src.favorites_manager import FavoritesManager
 from src.config_manager import ConfigManager
 from src.logging_config import get_logger
 
@@ -97,8 +96,8 @@ class StreamGUI:
         # Chat panel (right)
         self.chat_panel = ChatPanel()
 
-        # Settings panel (bottom-left)
-        self.settings_panel = SettingsPanel()
+        # Settings tab (separate tab)
+        self.settings_tab = SettingsTab(self.config)
 
         # Status display (bottom)
         self.status_display = StatusDisplay()
@@ -120,12 +119,11 @@ class StreamGUI:
         """Setup component layout in main window."""
         logger.debug("Setting up component layout")
 
-        # Grid layout:
+        # Stream tab grid layout:
         # Row 0: Stream controls (span both columns)
         # Row 1, Col 0: Favorites panel
         # Row 1, Col 1: Chat panel
-        # Row 2, Col 0: Settings panel (span both columns)
-        # Row 3: Status display (span both columns)
+        # Row 2: Status display (span both columns)
 
         self.window.add_component_to_layout(
             self.stream_panel,
@@ -143,14 +141,12 @@ class StreamGUI:
         )
 
         self.window.add_component_to_layout(
-            self.settings_panel,
+            self.status_display,
             row=2, column=0, row_span=1, column_span=2
         )
 
-        self.window.add_component_to_layout(
-            self.status_display,
-            row=3, column=0, row_span=1, column_span=2
-        )
+        # Add settings as a separate tab
+        self.window.add_settings_tab(self.settings_tab)
 
     def _connect_signals(self) -> None:
         """Connect all component and controller signals."""
@@ -191,26 +187,23 @@ class StreamGUI:
         self.chat_controller.auth_success.connect(self._on_auth_success)
         self.chat_controller.auth_failure.connect(self._on_auth_failure)
 
-        # Settings Panel
-        self.settings_panel.player_changed.connect(self._on_player_changed)
-        self.settings_panel.dark_mode_changed.connect(self._on_dark_mode_changed)
+        # Settings Tab
+        self.settings_tab.settings_changed.connect(self._on_settings_changed)
+        self.settings_tab.dark_mode_changed.connect(self._on_dark_mode_changed)
 
     def _load_initial_data(self) -> None:
         """Load initial configuration and data."""
         logger.debug("Loading initial data")
 
-        # Load player setting
-        player = self.config.get("player", "vlc")
-        self.settings_panel.set_player(player)
-
         # Load quality setting
         quality = self.config.get("quality", "best")
         self.stream_panel.set_quality(quality)
 
-        # Load dark mode setting
+        # Load dark mode setting and apply theme
         dark_mode = self.config.get("dark_mode", False)
-        self.settings_panel.set_dark_mode(dark_mode)
         self._apply_theme(dark_mode)
+
+        # Settings tab loads its own settings from config in its __init__
 
         # Load favorites
         self._load_favorites()
@@ -491,29 +484,24 @@ class StreamGUI:
 
     # Settings Handlers
 
-    def _on_player_changed(self, player: str) -> None:
-        """
-        Handle player selection change.
-
-        Args:
-            player: Selected player
-        """
-        self.config.set("player", player)
-        self.status_display.add_info(f"Player changed to: {player}", "SETTINGS")
-        logger.info(f"Player changed to: {player}")
+    def _on_settings_changed(self) -> None:
+        """Handle settings changed event from settings tab."""
+        self.status_display.add_info("Settings saved successfully", "SETTINGS")
+        logger.info("Settings updated from settings tab")
 
     def _on_dark_mode_changed(self, enabled: bool) -> None:
         """
-        Handle dark mode toggle.
+        Handle dark mode toggle (from settings tab).
+
+        Note: This provides immediate visual feedback without saving.
+        Settings are saved when user clicks "Apply Settings" button.
 
         Args:
             enabled: Whether dark mode is enabled
         """
         self._apply_theme(enabled)
-        self.config.set("dark_mode", enabled)
         theme_name = "dark" if enabled else "light"
-        self.status_display.add_info(f"Theme changed to {theme_name} mode", "SETTINGS")
-        logger.info(f"Dark mode changed to: {enabled}")
+        logger.info(f"Dark mode preview: {enabled}")
 
     def _apply_theme(self, dark_mode: bool) -> None:
         """

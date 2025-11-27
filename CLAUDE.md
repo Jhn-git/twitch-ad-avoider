@@ -14,9 +14,11 @@ TwitchAdAvoider is a security-focused Python application for watching Twitch str
 - **`src/validators.py`**: Security-focused input validation (channel names, file paths, player args)
 - **`src/auth_manager.py`**: OAuth authentication manager for Twitch API integration
 - **`src/twitch_chat_client.py`**: Twitch IRC chat client with USERSTATE message confirmation
-- **`gui/stream_gui.py`**: Tkinter GUI with real-time validation
-- **`gui/controllers/chat_controller.py`**: Chat management and lifecycle controller
-- **`gui/favorites_manager.py`**: Channel favorites persistence and management
+- **`gui_qt/stream_gui.py`**: PySide6 Qt GUI orchestrator with component coordination
+- **`gui_qt/main_window.py`**: Main Qt window with tabbed interface (Stream + Settings tabs)
+- **`gui_qt/components/settings_tab.py`**: Comprehensive settings interface with all configuration options
+- **`gui_qt/controllers/chat_controller.py`**: Chat management and lifecycle controller
+- **`gui_qt/components/favorites_panel.py`**: Channel favorites panel with status monitoring
 
 ### Security Architecture
 The application implements defense-in-depth security:
@@ -153,11 +155,31 @@ Custom exception hierarchy in `src/exceptions.py`:
 - `StreamlinkError`: Streamlink integration errors
 
 ### GUI Architecture
-The Tkinter GUI implements:
+The PySide6 Qt GUI implements a modern tabbed interface with two main tabs:
+
+**Stream Tab** (Main Interface):
+- Stream control panel with channel input and quality selection
+- Favorites panel (left) with live status monitoring
+- Chat panel (right) with OAuth authentication and real-time messaging
+- Status display showing application logs and events
+
+**Settings Tab** (Comprehensive Configuration):
+- **Stream Settings**: Player selection, quality preferences, cache duration, custom player path/args
+- **Network Settings**: Timeout, retry attempts, retry delay
+- **Chat Settings**: Auto-connect, message limits, timestamps
+- **Appearance**: Dark mode toggle with immediate preview
+- **Advanced**: Debug mode, logging configuration, Twitch client ID
+- Apply and Reset to Defaults buttons for settings management
+
+**Key Features**:
+- Modern signal-based architecture for responsive UI
 - Real-time input validation with visual feedback
 - Asynchronous status monitoring for favorite channels
 - Thread-safe operations for non-blocking UI
-- Cross-platform file dialogs and system integration
+- All 16+ configuration options exposed in Settings tab
+- Custom QSS stylesheets for light and dark themes
+- Cross-platform Qt widgets with consistent appearance
+- Settings persistence via ConfigManager with validation
 
 ## Security Considerations
 

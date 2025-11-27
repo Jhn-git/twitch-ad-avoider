@@ -29,30 +29,25 @@ Enable debug output::
 
     python main.py --channel pokimane --debug
 
-GUI Interface
--------------
+Qt GUI Interface
+----------------
 
-The GUI provides an easy-to-use interface with the following sections:
+The modern Qt GUI provides a tabbed interface with two main tabs:
 
-**Stream Input**
-    * Enter channel name
-    * Select video quality
-    * Real-time input validation
+**Stream Tab** (Main Interface)
+    * **Stream Control Panel**: Enter channel name with real-time validation, select quality, watch button
+    * **Favorites Panel** (left): Save frequently watched channels, live status monitoring, quick-watch by double-clicking
+    * **Chat Panel** (right): Real-time Twitch IRC chat, OAuth authentication, send messages, message history
+    * **Status Display** (bottom): Application logs and event messages
 
-**Favorites**
-    * Save frequently watched channels
-    * Live status indicators
-    * Quick access to favorite streams
-
-**Settings**
-    * Player selection (VLC, MPV, MPC-HC, Auto)
-    * Debug mode toggle
-    * Dark/Light theme toggle
-
-**Status Bar**
-    * Real-time status updates
-    * Error messages and debugging info
-    * Message history
+**Settings Tab** (Comprehensive Configuration)
+    * **Stream Settings**: Player selection (VLC, MPV, MPC-HC, Auto), preferred quality, cache duration, custom player path/arguments
+    * **Network Settings**: Timeout configuration, retry attempts, retry delay
+    * **Chat Settings**: Auto-connect toggle, maximum messages, timestamp display
+    * **Appearance**: Light/Dark theme toggle with immediate preview
+    * **Advanced**: Debug mode, log to file, log level, Twitch client ID
+    * **Apply Settings** button to save changes
+    * **Reset to Defaults** button to restore original settings
 
 Configuration
 -------------
