@@ -1,15 +1,10 @@
-"""
-Shared pytest fixtures and test configuration.
-
-This module provides reusable fixtures for testing TwitchAdAvoider components,
-reducing boilerplate and ensuring consistent test setup across the test suite.
-"""
+"""Shared pytest fixtures and test configuration."""
 
 import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 
 # Mock streamlink globally for all tests
@@ -18,18 +13,9 @@ sys.modules["streamlink"] = MagicMock()
 
 @pytest.fixture
 def temp_dir():
-    """
-    Create a temporary directory for test files.
-
-    Yields:
-        Path: Path to temporary directory
-
-    Cleanup:
-        Removes directory and all contents after test
-    """
+    """Create a temporary directory for test files."""
     tmp = tempfile.mkdtemp()
     yield Path(tmp)
-    # Cleanup
     import shutil
 
     if os.path.exists(tmp):
@@ -38,84 +24,16 @@ def temp_dir():
 
 @pytest.fixture
 def temp_config_path(temp_dir):
-    """
-    Create a temporary config file path.
-
-    Args:
-        temp_dir: Temporary directory fixture
-
-    Returns:
-        Path: Path to temporary config file
-    """
+    """Create a temporary config file path."""
     return temp_dir / "test_settings.json"
 
 
 @pytest.fixture
-def temp_token_path(temp_dir):
-    """
-    Create a temporary token file path for auth tests.
-
-    Args:
-        temp_dir: Temporary directory fixture
-
-    Returns:
-        Path: Path to temporary token file
-    """
-    return temp_dir / "test_auth_token.enc"
-
-
-@pytest.fixture
 def mock_config_manager(temp_config_path):
-    """
-    Create a ConfigManager instance with temporary storage.
-
-    Args:
-        temp_config_path: Temporary config file path
-
-    Returns:
-        ConfigManager: Configured instance for testing
-    """
+    """Create a ConfigManager instance with temporary storage."""
     from src.config_manager import ConfigManager
 
     return ConfigManager(temp_config_path)
-
-
-@pytest.fixture
-def mock_requests():
-    """
-    Mock the requests library for HTTP testing.
-
-    Returns:
-        MagicMock: Mocked requests module
-    """
-    with patch("requests.post") as mock_post, patch("requests.get") as mock_get:
-        yield {"post": mock_post, "get": mock_get}
-
-
-@pytest.fixture
-def mock_webbrowser():
-    """
-    Mock webbrowser.open for auth flow testing.
-
-    Returns:
-        MagicMock: Mocked webbrowser.open function
-    """
-    with patch("webbrowser.open") as mock_open:
-        yield mock_open
-
-
-@pytest.fixture
-def mock_http_server():
-    """
-    Mock HTTPServer for OAuth callback testing.
-
-    Returns:
-        MagicMock: Mocked HTTPServer
-    """
-    with patch("http.server.HTTPServer") as mock_server:
-        mock_instance = MagicMock()
-        mock_server.return_value = mock_instance
-        yield mock_instance
 
 
 # Test data fixtures
@@ -123,23 +41,13 @@ def mock_http_server():
 
 @pytest.fixture
 def valid_channels():
-    """
-    List of valid Twitch channel names for testing.
-
-    Returns:
-        list: Valid channel names
-    """
+    """List of valid Twitch channel names for testing."""
     return ["ninja", "shroud", "test_channel", "test123", "valid_user"]
 
 
 @pytest.fixture
 def invalid_channels():
-    """
-    List of invalid channel names for security testing.
-
-    Returns:
-        list: Invalid/malicious channel names
-    """
+    """List of invalid channel names for security testing."""
     return [
         "",  # Empty
         "ab",  # Too short
@@ -158,45 +66,25 @@ def invalid_channels():
 
 @pytest.fixture
 def valid_qualities():
-    """
-    List of valid stream quality options.
-
-    Returns:
-        list: Valid quality strings
-    """
+    """List of valid stream quality options."""
     return ["best", "worst", "720p", "480p", "360p", "160p"]
 
 
 @pytest.fixture
 def invalid_qualities():
-    """
-    List of invalid quality options for validation testing.
-
-    Returns:
-        list: Invalid quality strings
-    """
+    """List of invalid quality options for validation testing."""
     return ["1080p", "4k", "ultra", "", None, "../../etc", "test;whoami"]
 
 
 @pytest.fixture
 def valid_players():
-    """
-    List of valid player choices.
-
-    Returns:
-        list: Valid player names
-    """
+    """List of valid player choices."""
     return ["vlc", "mpv", "mpc-hc", "auto"]
 
 
 @pytest.fixture
 def malicious_paths():
-    """
-    List of malicious file paths for security testing.
-
-    Returns:
-        list: Path traversal and command injection attempts
-    """
+    """List of malicious file paths for security testing."""
     return [
         "../../../etc/passwd",  # Unix path traversal
         "..\\..\\..\\windows\\system32\\config\\sam",  # Windows path traversal
@@ -212,12 +100,7 @@ def malicious_paths():
 
 @pytest.fixture
 def malicious_args():
-    """
-    List of malicious command-line arguments for security testing.
-
-    Returns:
-        list: Command injection attempts
-    """
+    """List of malicious command-line arguments for security testing."""
     return [
         "; whoami",  # Command separator
         "| cat /etc/passwd",  # Pipe
@@ -230,57 +113,11 @@ def malicious_args():
     ]
 
 
-@pytest.fixture
-def sample_oauth_token():
-    """
-    Sample OAuth token data for auth testing.
-
-    Returns:
-        dict: OAuth token response structure
-    """
-    return {
-        "access_token": "test_access_token_1234567890",
-        "refresh_token": "test_refresh_token_0987654321",
-        "expires_in": 3600,
-        "scope": ["chat:read", "chat:edit"],
-        "token_type": "bearer",
-    }
-
-
-@pytest.fixture
-def sample_chat_messages():
-    """
-    Sample IRC chat messages for parsing tests.
-
-    Returns:
-        list: Raw IRC message strings
-    """
-    return [
-        (
-            "@badge-info=;badges=;color=#FF0000;display-name=TestUser;emotes=;id=abc-123;"
-            "mod=0;room-id=12345;subscriber=0;tmi-sent-ts=1234567890;turbo=0;user-id=67890;"
-            "user-type= :testuser!testuser@testuser.tmi.twitch.tv "
-            "PRIVMSG #testchannel :Hello, World!"
-        ),
-        ":tmi.twitch.tv 001 testuser :Welcome to the IRC network",
-        ":tmi.twitch.tv 002 testuser :Your host is tmi.twitch.tv",
-        ":tmi.twitch.tv 376 testuser :End of /MOTD command",
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/tags twitch.tv/commands",
-        "PING :tmi.twitch.tv",
-    ]
-
-
 # Utility functions for tests
 
 
 def create_mock_favorites_file(path: Path, favorites: list = None):
-    """
-    Create a mock favorites.json file for testing.
-
-    Args:
-        path: Path to create the file at
-        favorites: List of favorite channel dicts (optional)
-    """
+    """Create a mock favorites.json file for testing."""
     import json
     from datetime import datetime
 
@@ -305,13 +142,7 @@ def create_mock_favorites_file(path: Path, favorites: list = None):
 
 
 def create_mock_config_file(path: Path, config: dict = None):
-    """
-    Create a mock settings.json file for testing.
-
-    Args:
-        path: Path to create the file at
-        config: Config dict (optional, uses defaults if not provided)
-    """
+    """Create a mock settings.json file for testing."""
     import json
 
     if config is None:
@@ -328,29 +159,3 @@ def create_mock_config_file(path: Path, config: dict = None):
 
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
-
-
-# Pytest hooks for custom markers
-
-
-# Export utility functions for use in tests
-__all__ = [
-    "temp_dir",
-    "temp_config_path",
-    "temp_token_path",
-    "mock_config_manager",
-    "mock_requests",
-    "mock_webbrowser",
-    "mock_http_server",
-    "valid_channels",
-    "invalid_channels",
-    "valid_qualities",
-    "invalid_qualities",
-    "valid_players",
-    "malicious_paths",
-    "malicious_args",
-    "sample_oauth_token",
-    "sample_chat_messages",
-    "create_mock_favorites_file",
-    "create_mock_config_file",
-]

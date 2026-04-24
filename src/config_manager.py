@@ -337,34 +337,6 @@ class ConfigManager:
                 )
                 return True
 
-            # Authentication settings validation
-            elif key == "twitch_client_id":
-                if not isinstance(value, str):
-                    raise ValidationError("Twitch client ID must be a string")
-                # Allow empty string for initial setup
-                if value and (len(value) < 10 or len(value) > 50):
-                    raise ValidationError(
-                        "Twitch client ID must be between 10-50 characters when provided"
-                    )
-                return True
-
-            # Chat settings validation
-            elif key == "chat_auto_connect":
-                if not isinstance(value, bool):
-                    raise ValidationError("Chat auto-connect setting must be a boolean")
-                return True
-
-            elif key == "chat_max_messages":
-                if not isinstance(value, int):
-                    raise ValidationError("Chat max messages must be an integer")
-                validate_numeric_range(value, min_val=100, max_val=2000, data_type=int)
-                return True
-
-            elif key == "chat_show_timestamps":
-                if not isinstance(value, bool):
-                    raise ValidationError("Chat show timestamps setting must be a boolean")
-                return True
-
             # Favorites settings validation
             elif key == "favorites_auto_refresh":
                 if not isinstance(value, bool):
