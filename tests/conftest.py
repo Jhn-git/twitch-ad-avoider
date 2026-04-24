@@ -5,9 +5,9 @@ This module provides reusable fixtures for testing TwitchAdAvoider components,
 reducing boilerplate and ensuring consistent test setup across the test suite.
 """
 
-import tempfile
 import os
 import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
@@ -328,6 +328,9 @@ def create_mock_config_file(path: Path, config: dict = None):
 
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
+
+
+# Pytest hooks for custom markers
 
 
 # Export utility functions for use in tests
