@@ -186,13 +186,11 @@ class FavoritesPanel(QGroupBox):
         self.list_widget.setSpacing(2)
 
         # Indent text to make room for status circle
-        self.list_widget.setStyleSheet(
-            """
+        self.list_widget.setStyleSheet("""
             QListWidget::item {
                 padding-left: 25px;
             }
-        """
-        )
+        """)
 
         layout.addWidget(self.list_widget)
 
@@ -382,4 +380,5 @@ class FavoritesPanel(QGroupBox):
             enabled: True for dark mode, False for light mode
         """
         self.delegate.set_dark_mode(enabled)
-        self.list_widget.update()
+        # Trigger repaint of list widget to apply new colors
+        self.list_widget.viewport().update()
