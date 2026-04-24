@@ -283,6 +283,24 @@ class ConfigManager:
                 validate_file_path(value, must_exist=False)
                 return True
 
+            elif key == "clip_enabled":
+                if not isinstance(value, bool):
+                    raise ValidationError("Clip enabled setting must be a boolean")
+                return True
+
+            elif key == "clip_directory":
+                if not isinstance(value, str):
+                    raise ValidationError("Clip directory must be a string")
+                validate_file_path(value, must_exist=False)
+                return True
+
+            elif key == "ffmpeg_path":
+                if not isinstance(value, str):
+                    raise ValidationError("FFmpeg path must be a string")
+                if value:
+                    validate_file_path(value, must_exist=False)
+                return True
+
             elif key == "player_args":
                 sanitize_player_args(value)
                 return True

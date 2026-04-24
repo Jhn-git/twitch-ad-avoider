@@ -15,10 +15,14 @@ DEFAULT_SETTINGS = {
     "player": "vlc",
     "cache_duration": 30,
     "debug": False,
-    "log_to_file": False,
-    "log_level": "INFO",
+    "log_to_file": True,
+    "log_level": "DEBUG",
     "player_path": None,
     "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
+    # Clip settings
+    "clip_enabled": True,  # Record stream for clipping (near-zero CPU/network overhead)
+    "clip_directory": "clips",  # Where to save clips
+    "ffmpeg_path": "",  # FFmpeg executable path (empty = auto-detect from PATH)
     # GUI theme settings
     "dark_mode": False,  # Enable dark theme
     # Window settings
@@ -76,6 +80,8 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 FAVORITES_FILE = CONFIG_DIR / "favorites.json"
 LOG_DIR = Path("logs")
 LOG_FILE = LOG_DIR / "twitch_ad_avoider.log"
+CLIPS_DIR = Path("clips")
+TEMP_DIR = Path("temp")
 
 # GUI settings
 GUI_TITLE = f"{APP_NAME} - Stream Manager"
