@@ -14,7 +14,7 @@ import platform
 
 def run_command(cmd, description):
     """Run a command and handle errors."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {description}")
     print(f"Command: {cmd}")
     print("=" * 60)

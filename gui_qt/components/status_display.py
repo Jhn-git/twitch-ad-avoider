@@ -18,12 +18,15 @@ Key Features:
     - Message trimming to prevent memory bloat
 """
 
-from PySide6.QtWidgets import QGroupBox, QTextEdit, QVBoxLayout
-from PySide6.QtGui import QTextCursor, QFont
+from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QPushButton, QTextEdit, QVBoxLayout
+from PySide6.QtCore import Signal, QUrl
+from PySide6.QtGui import QTextCursor, QFont, QDesktopServices
 from datetime import datetime
 from typing import Optional
 from enum import Enum
+from pathlib import Path
 
+from src.constants import CLIPS_DIR
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -46,6 +49,8 @@ class StatusDisplay(QGroupBox):
     This component provides a read-only display for system messages
     with automatic scrolling and message history management.
     """
+
+    clip_requested = Signal()
 
     # Color mapping for message levels (light theme colors)
     LEVEL_COLORS = {
@@ -90,6 +95,24 @@ class StatusDisplay(QGroupBox):
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 15, 10, 10)
 
+        # Clip button row
+        button_layout = QHBoxLayout()
+        self.clip_button = QPushButton("Clip (30s)")
+        self.clip_button.setToolTip("Save the last 30 seconds to a local file (requires FFmpeg)")
+        self.clip_button.setEnabled(False)
+        self.clip_button.setMaximumWidth(120)
+        self.clip_button.clicked.connect(self.clip_requested)
+        button_layout.addWidget(self.clip_button)
+
+        self.open_clips_button = QPushButton("Open Clips Folder")
+        self.open_clips_button.setToolTip(f"Open the clips folder ({CLIPS_DIR})")
+        self.open_clips_button.setMaximumWidth(140)
+        self.open_clips_button.clicked.connect(self._open_clips_folder)
+        button_layout.addWidget(self.open_clips_button)
+
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
         # Text display (read-only)
         self.text_display = QTextEdit()
         self.text_display.setObjectName("statusDisplay")
@@ -109,6 +132,12 @@ class StatusDisplay(QGroupBox):
         layout.addWidget(self.text_display)
         self.setLayout(layout)
 
+    def _open_clips_folder(self) -> None:
+        """Open the clips folder in the system file explorer."""
+        clips_path = Path(CLIPS_DIR).resolve()
+        clips_path.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(clips_path)))
+
     def add_message(
         self, message: str, level: MessageLevel = MessageLevel.INFO, category: Optional[str] = None
     ) -> None:
@@ -120,6 +149,19 @@ class StatusDisplay(QGroupBox):
             level: Message severity level
             category: Optional message category (e.g., "STREAM", "FAVORITES")
         """
+        # Send to file logger FIRST (before GUI formatting)
+        # This ensures all GUI status messages are written to the log file
+        log_message = f"[{category}] {message}" if category else message
+
+        if level == MessageLevel.ERROR:
+            logger.error(log_message)
+        elif level == MessageLevel.WARNING:
+            logger.warning(log_message)
+        elif level == MessageLevel.SYSTEM:
+            logger.info(log_message)  # SYSTEM → INFO
+        else:  # INFO, STATUS, or unknown
+            logger.info(log_message)
+
         # Get current timestamp
         timestamp = datetime.now().strftime("%H:%M:%S")
 
@@ -180,6 +222,10 @@ class StatusDisplay(QGroupBox):
         self.text_display.clear()
         self.message_count = 0
         logger.debug("Status display cleared")
+
+    def set_streaming(self, active: bool) -> None:
+        """Enable or disable the Clip button based on stream state."""
+        self.clip_button.setEnabled(active)
 
     def set_dark_mode(self, enabled: bool) -> None:
         """

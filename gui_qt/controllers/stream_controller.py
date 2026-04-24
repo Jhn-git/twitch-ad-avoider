@@ -27,6 +27,24 @@ from src.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+class ClipWorker(QObject):
+    """Runs create_clip() in a background thread."""
+
+    finished = Signal(str)   # output path
+    failed = Signal(str)     # error message
+
+    def __init__(self, twitch_viewer: "TwitchViewer"):
+        super().__init__()
+        self.twitch_viewer = twitch_viewer
+
+    def run(self) -> None:
+        result = self.twitch_viewer.create_clip()
+        if result:
+            self.finished.emit(result)
+        else:
+            self.failed.emit("Failed to create clip — check FFmpeg is installed and stream is active")
+
+
 class StreamWorker(QObject):
     """
     Worker object for running stream processes in background thread.
@@ -61,18 +79,23 @@ class StreamWorker(QObject):
 
     def run(self) -> None:
         """Run the stream process (executed in background thread)."""
+        logger.info("[DEBUG] StreamWorker.run() ENTERED")
         try:
             logger.info(f"Starting stream: {self.channel} @ {self.quality}")
+            logger.info(f"[DEBUG] About to call watch_stream for {self.channel}")
 
             # Launch stream (quality is set in config before this call)
             self.process = self.twitch_viewer.watch_stream(self.channel)
+            logger.info(f"[DEBUG] watch_stream returned: {self.process}")
 
             if self.process:
+                logger.info("[DEBUG] Process created successfully, about to emit started signal")
                 self.started.emit()
                 logger.info(f"Stream process started: PID {self.process.pid}")
 
                 # Wait for process to finish
                 return_code = self.process.wait()
+                logger.info(f"[DEBUG] Process finished with return code: {return_code}")
 
                 if not self.should_stop:
                     if return_code == 0:
@@ -85,10 +108,12 @@ class StreamWorker(QObject):
             else:
                 error_msg = "Failed to start stream process"
                 logger.error(error_msg)
+                logger.error("[DEBUG] watch_stream returned None - stream failed to start")
                 self.error.emit(error_msg)
 
         except Exception as e:
             error_msg = f"Stream error: {str(e)}"
+            logger.error(f"[DEBUG] Exception in StreamWorker.run(): {type(e).__name__}: {str(e)}")
             logger.error(error_msg, exc_info=True)
             self.error.emit(error_msg)
 
@@ -124,9 +149,11 @@ class StreamController(QObject):
     """
 
     # Signals
-    stream_started = Signal(str)  # channel
+    stream_started = Signal(str)   # channel
     stream_finished = Signal(str)  # channel
     stream_error = Signal(str, str)  # channel, error_message
+    clip_created = Signal(str)     # output file path
+    clip_failed = Signal(str)      # error message
 
     def __init__(self, config: ConfigManager):
         """
@@ -144,6 +171,9 @@ class StreamController(QObject):
         self.current_worker: Optional[StreamWorker] = None
         self.current_channel: Optional[str] = None
         self.current_process: Optional[subprocess.Popen] = None
+        self.current_quality: Optional[str] = None
+        self._clip_thread: Optional[QThread] = None
+        self._clip_worker: Optional[ClipWorker] = None
 
     def start_stream(self, channel: str, quality: str) -> None:
         """
@@ -153,6 +183,8 @@ class StreamController(QObject):
             channel: Channel name to watch
             quality: Quality to request
         """
+        logger.info(f"[DEBUG] start_stream called: channel={channel}, quality={quality}")
+
         # Stop any existing stream first
         if self.is_streaming():
             logger.warning("Stream already running, stopping it first")
@@ -160,20 +192,25 @@ class StreamController(QObject):
 
         # Update config with current quality
         self.config.set("quality", quality)
+        logger.info(f"[DEBUG] Config updated with quality: {quality}")
 
         # Create worker and thread
         self.current_worker = StreamWorker(self.twitch_viewer, channel, quality)
         self.current_thread = QThread()
         self.current_channel = channel
+        self.current_quality = quality
+        logger.info("[DEBUG] Created worker and thread")
 
         # Move worker to thread
         self.current_worker.moveToThread(self.current_thread)
+        logger.info("[DEBUG] Worker moved to thread")
 
         # Connect signals
         self.current_thread.started.connect(self.current_worker.run)
         self.current_worker.started.connect(self._on_stream_started)
         self.current_worker.finished.connect(self._on_stream_finished)
         self.current_worker.error.connect(self._on_stream_error)
+        logger.info("[DEBUG] Signals connected")
 
         # Cleanup when finished
         self.current_worker.finished.connect(self.current_thread.quit)
@@ -181,7 +218,9 @@ class StreamController(QObject):
         self.current_thread.finished.connect(self._cleanup_thread)
 
         # Start the thread
+        logger.info(f"[DEBUG] Starting thread for channel: {channel}")
         self.current_thread.start()
+        logger.info("[DEBUG] Thread started successfully")
 
         logger.info(f"Stream thread started for channel: {channel}")
 
@@ -210,6 +249,34 @@ class StreamController(QObject):
             True if stream is running, False otherwise
         """
         return self.current_thread is not None and self.current_thread.isRunning()
+
+    def create_clip(self) -> None:
+        """Save the last 30 seconds of the current stream as a local clip."""
+        if not self.is_streaming():
+            self.clip_failed.emit("No active stream to clip")
+            return
+
+        self._clip_worker = ClipWorker(self.twitch_viewer)
+        self._clip_thread = QThread()
+        self._clip_worker.moveToThread(self._clip_thread)
+
+        self._clip_thread.started.connect(self._clip_worker.run)
+        self._clip_worker.finished.connect(self.clip_created)
+        self._clip_worker.failed.connect(self.clip_failed)
+        self._clip_worker.finished.connect(self._clip_thread.quit)
+        self._clip_worker.failed.connect(self._clip_thread.quit)
+        self._clip_thread.finished.connect(self._on_clip_thread_finished)
+
+        self._clip_thread.start()
+
+    def _on_clip_thread_finished(self) -> None:
+        """Clean up clip thread and worker after completion."""
+        if self._clip_thread:
+            self._clip_thread.deleteLater()
+            self._clip_thread = None
+        if self._clip_worker:
+            self._clip_worker.deleteLater()
+            self._clip_worker = None
 
     def get_current_channel(self) -> Optional[str]:
         """
@@ -257,6 +324,7 @@ class StreamController(QObject):
 
         self.current_channel = None
         self.current_process = None
+        self.current_quality = None
 
         logger.debug("Stream thread cleaned up")
 
