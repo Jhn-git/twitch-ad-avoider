@@ -46,6 +46,7 @@ ENV/
 # Project specific
 config/settings.json
 config/favorites.json
+temp/*
 
 # Logs
 *.log
@@ -66,3 +67,4 @@ $RECYCLE.BIN/
 
 # Encrypted Auth Token
 config/auth_token.enc
+
