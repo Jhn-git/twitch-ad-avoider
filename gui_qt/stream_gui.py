@@ -550,6 +550,11 @@ class StreamGUI:
 
     def _on_settings_changed(self) -> None:
         """Handle settings changed event from settings tab."""
+        # Reconfigure logging if log settings changed
+        from src.logging_config import reconfigure_logging_from_config
+
+        reconfigure_logging_from_config(self.config)
+
         # Update refresh timer settings if favorites settings changed
         self._update_refresh_timer_settings()
 
@@ -603,6 +608,14 @@ class StreamGUI:
             self.chat_controller.disconnect()
 
         logger.info("Cleanup complete")
+
+        # Flush and close all logging handlers
+        import logging
+
+        log = logging.getLogger("twitch_ad_avoider")
+        for handler in log.handlers:
+            handler.flush()
+            handler.close()
 
     def show(self) -> None:
         """Show the main window."""
