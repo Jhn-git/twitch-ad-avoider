@@ -3,6 +3,7 @@
 TwitchAdAvoider - Main Application Entry Point
 A Python implementation for watching Twitch streams while avoiding ads.
 """
+
 import sys
 import argparse
 from pathlib import Path
@@ -60,10 +61,30 @@ def main():
             return 0
 
         # Otherwise launch Qt GUI
+        import os
         from PySide6.QtWidgets import QApplication
         from gui_qt.stream_gui import StreamGUI
 
         logger.info("Starting TwitchAdAvoider Qt GUI")
+
+        # Fix for WSL2 Wayland issues - force XCB (X11) platform
+        # Qt auto-detects Wayland on WSL2 but Wayland support is broken
+        if "QT_QPA_PLATFORM" not in os.environ:
+            # Check for WSL2 via environment variable
+            if "WSL_DISTRO_NAME" in os.environ:
+                logger.info("WSL2 detected - forcing Qt platform to XCB (X11)")
+                os.environ["QT_QPA_PLATFORM"] = "xcb"
+            # Fallback: check /proc/version for "microsoft"
+            elif os.path.exists("/proc/version"):
+                try:
+                    with open("/proc/version", "r") as f:
+                        if "microsoft" in f.read().lower():
+                            logger.info(
+                                "WSL2 detected via /proc/version - forcing Qt platform to XCB"
+                            )
+                            os.environ["QT_QPA_PLATFORM"] = "xcb"
+                except Exception:
+                    pass  # Ignore errors, continue without forcing platform
 
         # Create Qt application
         app = QApplication(sys.argv)
