@@ -7,8 +7,6 @@
 
 A Python implementation for watching Twitch streams while avoiding ads, featuring a modern Qt GUI and command-line interface with comprehensive security validation.
 
-🔧 **[Installation Guide](INSTALLATION.md)**
-
 ---
 
 ## Features
@@ -31,8 +29,8 @@ A Python implementation for watching Twitch streams while avoiding ads, featurin
 - **Live Status Monitoring**: Track when favorite streamers go live
 
 ### Security & Configuration
-- **Security Validation**: Comprehensive input validation and sanitization ([Details](SECURITY.md))
-- **Flexible Configuration**: JSON-based configuration with 16+ settings ([Reference](CONFIG-REFERENCE.md))
+- **Security Validation**: Comprehensive input validation and sanitization (see CLAUDE.md Security section)
+- **Flexible Configuration**: JSON-based configuration with essential settings
 - **Attack Prevention**: Protection against path traversal, command injection, and other attacks
 
 ---
@@ -49,19 +47,17 @@ git clone <your-repo-url>
 cd twitch-viewer
 
 # Create virtual environment
-python -m venv venv
+python -m venv .venv
 
 # Activate virtual environment
 # Windows:
-venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 # macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 # Install dependencies
 pip install -e .
 ```
-
-**📖 For detailed installation instructions**, see **[INSTALLATION.md](INSTALLATION.md)**.
 
 ### Basic Usage
 
@@ -86,52 +82,71 @@ python main.py --channel pokimane --debug
 
 ## Documentation
 
-### For Users
-
-| Document | Description |
-|----------|-------------|
-| **[INSTALLATION.md](INSTALLATION.md)** | Complete installation guide for all platforms |
-| **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)** | Complete configuration options reference (16+ settings) |
-| **[PLAYER-CONFIG.md](PLAYER-CONFIG.md)** | Player setup and optimization guide |
-| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Solutions for common problems |
-| **[SECURITY.md](SECURITY.md)** | Security features and best practices |
-
-### For Developers
-
-| Document | Description |
-|----------|-------------|
-| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contribution guidelines and development workflow |
-| **[CLAUDE.md](CLAUDE.md)** | Architecture reference and development commands |
-| **[PACKAGING.md](PACKAGING.md)** | Building Windows executables with PyInstaller |
+**README.md** - This file: Features, installation, usage, troubleshooting
+**CLAUDE.md** - Developer guide: Architecture, security, development commands, code style
 
 ---
 
 ## Configuration
 
-TwitchAdAvoider uses `config/settings.json` for configuration. The file is automatically created with defaults on first run.
+TwitchAdAvoider uses `config/settings.json` for configuration. Created automatically with defaults on first run.
 
-**Quick Configuration Examples**:
+### Essential Settings
 
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `preferred_quality` | String | `"best"` | Stream quality (best, 720p, 480p, 360p, 160p) |
+| `player` | String | `"vlc"` | Player choice (vlc, mpv, mpc-hc, auto) |
+| `player_path` | String/null | `null` | Custom player path (absolute path required) |
+| `player_args` | String | `"--network-caching=10000..."` | Player arguments (see note below) |
+| `cache_duration` | Integer | `30` | Stream buffer cache (0-3600 seconds) |
+| `debug` | Boolean | `false` | Enable debug logging |
+| `log_to_file` | Boolean | `false` | Write logs to file |
+| `log_level` | String | `"INFO"` | Log level (DEBUG, INFO, WARNING, ERROR) |
+
+**Note on player_args**: The default buffering arguments (10 second cache) help VLC handle stream discontinuities caused by Twitch ads, preventing visual corruption when ads are inserted.
+
+### Configuration Examples
+
+**Minimal Configuration**:
 ```json
 {
     "preferred_quality": "best",
-    "player": "auto",
-    "cache_duration": 30,
-    "current_theme": "dark",
-    "debug": false
+    "player": "auto"
 }
 ```
 
-**Common Settings**:
-- `preferred_quality` - Default stream quality (`best`, `720p`, `480p`, etc.)
-- `player` - Player choice (`auto`, `vlc`, `mpv`, `mpc-hc`)
-- `player_path` - Custom player path (leave `null` for auto-detection)
-- `current_theme` - UI theme (`light` or `dark`)
-- `debug` - Enable debug logging
+**High-Quality Setup**:
+```json
+{
+    "preferred_quality": "best",
+    "player": "vlc",
+    "player_path": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
+    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000 --fullscreen",
+    "cache_duration": 60
+}
+```
 
-**For all 16+ configuration options**, see **[CONFIG-REFERENCE.md](CONFIG-REFERENCE.md)**.
+**Debug Configuration**:
+```json
+{
+    "preferred_quality": "480p",
+    "debug": true,
+    "log_to_file": true,
+    "log_level": "DEBUG"
+}
+```
 
-**To configure via GUI**: Launch application → Settings tab → Modify → Apply Settings
+### Player Path Security
+
+**✓ Use absolute paths**:
+- Windows: `C:\Program Files\VideoLAN\VLC\vlc.exe`
+- macOS: `/Applications/VLC.app/Contents/MacOS/VLC`
+- Linux: `/usr/bin/vlc`
+
+**✗ Avoid relative paths** (security risk)
+
+**Configuration via GUI**: Launch application → Settings tab → Modify → Apply Settings
 
 ---
 
@@ -198,57 +213,123 @@ TwitchAdAvoider implements defense-in-depth security with comprehensive input va
 - Validated configuration persistence
 - Secure OAuth token encryption
 
-**For complete security documentation**, see **[SECURITY.md](SECURITY.md)**.
+**For complete security documentation**, see **CLAUDE.md Security section**.
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Enable Debug Mode First
 
-**"Video player not found"**
-- Install VLC, MPV, or MPC-HC ([Installation Guide](INSTALLATION.md#installing-a-video-player))
-- Set custom player path in Settings tab or `config/settings.json`
-
-**"streamlink command not found"**
+**Via CLI**:
 ```bash
+python main.py --debug
+```
+
+**Via GUI**: Settings tab → Enable "Debug Mode" + "Log to File" → Apply Settings → Check `logs/twitch_ad_avoider.log`
+
+**Via Config**: Edit `config/settings.json`:
+```json
+{
+    "debug": true,
+    "log_to_file": true,
+    "log_level": "DEBUG"
+}
+```
+
+### Top Issues
+
+**1. "Video player not found"**
+- **Install a player**: Download VLC from https://www.videolan.org/vlc/
+- **Manual config** (GUI): Settings → Custom Player Path → Set to exact path → Apply
+  - Windows: `C:\Program Files\VideoLAN\VLC\vlc.exe`
+  - macOS: `/Applications/VLC.app/Contents/MacOS/VLC`
+  - Linux: `/usr/bin/vlc`
+
+**2. "streamlink command not found"**
+```bash
+# Activate virtual environment first
+source .venv/bin/activate  # macOS/Linux
+.venv\Scripts\Activate.ps1  # Windows
+
+# Reinstall dependencies
 pip install -e .
 ```
 
-**GUI won't launch**
+**3. GUI won't launch**
 ```bash
+# Reinstall PySide6
 pip install --upgrade --force-reinstall PySide6
+
+# Linux: Install Qt dependencies
+sudo apt install libxcb-xinerama0 libxcb-cursor0
 ```
 
-**Stream buffering/lagging**
-- Lower quality: Try `720p`, `480p`, or `360p`
-- Settings tab → Preferred Quality → Apply
+**4. WSL2 Qt/Wayland Error** (`undefined symbol: wl_proxy_marshal_flags`)
+- **Issue**: Qt detects Wayland on WSL2 but Wayland support is incomplete
+- **Quick fix**: Set environment variable before running:
+  ```bash
+  export QT_QPA_PLATFORM=xcb
+  python main.py
+  ```
+- **Permanent fix**: Add to `~/.bashrc` or `~/.zshrc`:
+  ```bash
+  export QT_QPA_PLATFORM=xcb  # Force Qt to use X11 instead of Wayland
+  ```
+- **Alternative**: Use `make run` which sets this automatically
 
-**For detailed troubleshooting**, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** and **[RESOLVED-ISSUES.md](RESOLVED-ISSUES.md)**.
+**5. Stream buffering / constant pausing**
+- **Lower quality**: Try 720p → 480p → 360p
+- **Adjust cache**: Settings → Stream Settings → Cache Duration: 15 → Apply
+- **Check bandwidth**: 3+ Mbps for 480p, 5+ Mbps for 720p, 10+ Mbps for 1080p
+
+**6. Connection timeouts**
+- **Increase timeouts**: Settings → Network Settings → Network Timeout: 60 → Apply
+- **Via config**:
+```json
+{
+    "network_timeout": 60,
+    "retry_attempts": 5,
+    "retry_delay": 10
+}
+```
+
+### Verify Installation
+
+```bash
+# Check Python version (need 3.8+)
+python --version
+
+# Check virtual environment is activated
+which python  # macOS/Linux (should include ".venv")
+where python  # Windows (should include ".venv")
+
+# Check streamlink
+streamlink --version
+
+# Test application
+python main.py --help
+```
 
 ---
 
 ## Contributing
 
-Contributions are welcome! TwitchAdAvoider follows modern Python best practices and comprehensive testing standards.
+This is a personal project for solo use. Development documentation is in **CLAUDE.md**.
 
-**Quick Start for Contributors**:
-1. Fork the repository
-2. Install with dev dependencies: `pip install -e .[dev]`
-3. Run tests: `pytest tests/`
-4. Follow code style: `black . && flake8 . && mypy src/`
-5. Submit PR with tests
+**Quick Development Setup**:
+```bash
+# Install with dev dependencies
+pip install -e .[dev]
 
-**Development Tools**:
-- **pytest** - Testing framework
-- **black** - Code formatter (configured in `pyproject.toml`)
-- **flake8** - Linter
-- **mypy** - Type checker
-- **coverage** - Code coverage analysis
+# Run tests
+make test
 
-**For complete contributing guide**, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+# Code quality checks
+make check
+```
 
-**Security Guidelines**: All user inputs must be validated using `src/validators.py`. See **[SECURITY.md](SECURITY.md)** for security requirements.
+**See CLAUDE.md** for architecture, code style, security guidelines, and development patterns.
 
 ---
 
@@ -285,13 +366,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **[PySide6](https://doc.qt.io/qtforpython/)** - Modern Qt GUI framework
 - **Python Community** - Excellent libraries and tools
 - **Contributors** - Thank you to everyone who has contributed to this project
-
----
-
-## Getting Help
-
-- **📖 Documentation**: See documentation files listed above
-- **🔒 Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
 
 ---
 
