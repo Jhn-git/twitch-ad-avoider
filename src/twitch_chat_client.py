@@ -80,6 +80,7 @@ class TwitchChatClient:
 
     def __init__(self) -> None:
         self.socket = None
+        self._socket_lock = threading.Lock()
         self.connected = False
         self.running = False
         self.current_channel = None
@@ -195,22 +196,28 @@ class TwitchChatClient:
 
     def disconnect(self) -> None:
         """Disconnect from Twitch IRC."""
+        # Prevent double-disconnect
+        if not self.running and not self.connected:
+            logger.debug("Already disconnected, skipping")
+            return
+
         self.running = False
         self.connected = False
 
-        if self.socket:
-            try:
-                # Try to close the socket gracefully
-                self.socket.shutdown(socket.SHUT_RDWR)
-            except Exception as e:
-                logger.debug(f"Error shutting down socket: {e}")
+        with self._socket_lock:
+            if self.socket:
+                try:
+                    # Try to close the socket gracefully
+                    self.socket.shutdown(socket.SHUT_RDWR)
+                except Exception as e:
+                    logger.debug(f"Error shutting down socket: {e}")
 
-            try:
-                self.socket.close()
-            except Exception as e:
-                logger.debug(f"Error closing socket: {e}")
+                try:
+                    self.socket.close()
+                except Exception as e:
+                    logger.debug(f"Error closing socket: {e}")
 
-            self.socket = None
+                self.socket = None
 
         if self.on_disconnect:
             self.on_disconnect()
@@ -223,10 +230,14 @@ class TwitchChatClient:
 
         while self.running and self.connected:
             try:
-                if not self.socket:
-                    break
+                # Copy socket reference while holding lock briefly
+                with self._socket_lock:
+                    sock = self.socket
+                    if not sock:
+                        break
 
-                data = self.socket.recv(4096).decode("utf-8", errors="ignore")
+                # Perform blocking recv() without holding lock
+                data = sock.recv(4096).decode("utf-8", errors="ignore")
                 if not data:
                     logger.debug("Received empty data, connection closed by server")
                     break
@@ -273,7 +284,14 @@ class TwitchChatClient:
         # Handle PING/PONG to stay connected
         if raw_message.startswith("PING"):
             pong_response = raw_message.replace("PING", "PONG")
-            self.socket.send(f"{pong_response}\r\n".encode("utf-8"))
+            with self._socket_lock:
+                sock = self.socket
+
+            if sock:
+                try:
+                    sock.send(f"{pong_response}\r\n".encode("utf-8"))
+                except Exception as e:
+                    logger.debug(f"Error sending PONG: {e}")
             return
 
         # Handle USERSTATE messages (confirm our own messages were sent)
@@ -407,10 +425,21 @@ class TwitchChatClient:
                 self.on_send_error(error_msg)
             return False
 
+        # Copy socket reference with lock
+        with self._socket_lock:
+            sock = self.socket
+
+        if not sock or not self.connected:
+            error_msg = "Cannot send message: not connected"
+            logger.warning(error_msg)
+            if self.on_send_error:
+                self.on_send_error(error_msg)
+            return False
+
         try:
             # Send PRIVMSG command
             privmsg = f"PRIVMSG {self.current_channel} :{message}\r\n"
-            bytes_sent = self.socket.send(privmsg.encode("utf-8"))
+            bytes_sent = sock.send(privmsg.encode("utf-8"))
 
             logger.info(f"Message sent to {self.current_channel}: {message}")
             logger.debug(f"Sent {bytes_sent} bytes to Twitch IRC")
