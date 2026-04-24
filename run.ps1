@@ -10,7 +10,7 @@ Import-Module "$PSScriptRoot\scripts\TwitchUtilities.psm1" -Force
 
 function Initialize-VirtualEnvironment {
     """Setup or use existing virtual environment"""
-    $venvPath = "venv"
+    $venvPath = ".venv"
     
     if (-not (Test-Path $venvPath)) {
         Write-Info "Creating virtual environment..."

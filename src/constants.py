@@ -20,7 +20,7 @@ DEFAULT_SETTINGS = {
     "player_path": None,
     "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
     # GUI theme settings
-    "current_theme": "light",  # light or dark theme
+    "dark_mode": False,  # Enable dark theme
     # Window settings
     "window_width": 640,  # Main window width in pixels
     "window_height": 650,  # Main window height in pixels
