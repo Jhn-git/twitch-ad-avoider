@@ -46,7 +46,7 @@ ENV/
 # Project specific
 config/settings.json
 config/favorites.json
-temp/*
+temp/
 
 # Logs
 *.log
