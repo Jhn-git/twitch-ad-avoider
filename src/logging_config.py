@@ -12,6 +12,21 @@ if TYPE_CHECKING:
     from .config_manager import ConfigManager
 
 
+class UnbufferedFileHandler(logging.FileHandler):
+    """
+    FileHandler that flushes after every log write.
+
+    This ensures logs are written to disk immediately rather than being
+    buffered in memory, which is critical for debugging long-running
+    GUI applications where the handler may never be closed.
+    """
+
+    def emit(self, record):
+        """Emit a record and flush immediately."""
+        super().emit(record)
+        self.flush()
+
+
 def setup_logging(
     level: str = "INFO",
     log_to_file: bool = False,
@@ -41,8 +56,8 @@ def setup_logging(
     # Convert level string to logging constant
     numeric_level = getattr(logging, effective_level.upper(), logging.INFO)
 
-    # Create logger
-    logger = logging.getLogger("twitch_ad_avoider")
+    # Create ROOT logger (ensures all child loggers inherit handlers)
+    logger = logging.getLogger()
     logger.setLevel(numeric_level)
 
     # Clear any existing handlers
@@ -73,7 +88,7 @@ def setup_logging(
         # Create logs directory if it doesn't exist
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file_path)
+        file_handler = UnbufferedFileHandler(log_file_path, encoding="utf-8")
         file_handler.setLevel(numeric_level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
@@ -99,8 +114,8 @@ def reconfigure_logging(
     Returns:
         Reconfigured logger instance
     """
-    # Remove existing handlers and reconfigure
-    logger = logging.getLogger("twitch_ad_avoider")
+    # Remove existing handlers and reconfigure ROOT logger
+    logger = logging.getLogger()
 
     # Clear existing handlers
     for handler in logger.handlers[:]:
