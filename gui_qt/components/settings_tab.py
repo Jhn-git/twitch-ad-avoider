@@ -100,10 +100,6 @@ class SettingsTab(QWidget):
         network_group = self._create_network_settings()
         scroll_layout.addWidget(network_group)
 
-        # === Chat Settings ===
-        chat_group = self._create_chat_settings()
-        scroll_layout.addWidget(chat_group)
-
         # === Favorites Settings ===
         favorites_group = self._create_favorites_settings()
         scroll_layout.addWidget(favorites_group)
@@ -212,30 +208,6 @@ class SettingsTab(QWidget):
         group.setLayout(layout)
         return group
 
-    def _create_chat_settings(self) -> QGroupBox:
-        """Create chat settings group."""
-        group = QGroupBox("Chat Settings")
-        layout = QFormLayout()
-        layout.setSpacing(10)
-
-        # Auto-connect to chat
-        self.chat_auto_connect_check = QCheckBox(
-            "Automatically connect to chat when watching stream"
-        )
-        layout.addRow(self.chat_auto_connect_check)
-
-        # Max messages
-        self.chat_max_messages_spin = QSpinBox()
-        self.chat_max_messages_spin.setRange(100, 2000)
-        layout.addRow("Max Messages in Memory:", self.chat_max_messages_spin)
-
-        # Show timestamps
-        self.chat_timestamps_check = QCheckBox("Show timestamps on chat messages")
-        layout.addRow(self.chat_timestamps_check)
-
-        group.setLayout(layout)
-        return group
-
     def _create_favorites_settings(self) -> QGroupBox:
         """Create favorites settings group."""
         group = QGroupBox("Favorites Settings")
@@ -307,11 +279,6 @@ class SettingsTab(QWidget):
         self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
         layout.addRow("Log Level:", self.log_level_combo)
 
-        # Twitch Client ID
-        self.client_id_edit = QLineEdit()
-        self.client_id_edit.setPlaceholderText("Optional: Twitch application client ID")
-        layout.addRow("Twitch Client ID:", self.client_id_edit)
-
         group.setLayout(layout)
         return group
 
@@ -335,11 +302,6 @@ class SettingsTab(QWidget):
         self.retry_attempts_spin.setValue(self.config.get("connection_retry_attempts", 3))
         self.retry_delay_spin.setValue(self.config.get("retry_delay", 5))
 
-        # Chat settings
-        self.chat_auto_connect_check.setChecked(self.config.get("chat_auto_connect", True))
-        self.chat_max_messages_spin.setValue(self.config.get("chat_max_messages", 500))
-        self.chat_timestamps_check.setChecked(self.config.get("chat_show_timestamps", True))
-
         # Favorites settings
         self.favorites_auto_refresh_check.setChecked(
             self.config.get("favorites_auto_refresh", True)
@@ -357,10 +319,6 @@ class SettingsTab(QWidget):
         self.debug_check.setChecked(self.config.get("debug", False))
         self.log_to_file_check.setChecked(self.config.get("log_to_file", False))
         self.log_level_combo.setCurrentText(self.config.get("log_level", "INFO"))
-
-        client_id = self.config.get("twitch_client_id", "")
-        if client_id:
-            self.client_id_edit.setText(client_id)
 
         logger.debug("Settings loaded into UI")
 
@@ -420,11 +378,6 @@ class SettingsTab(QWidget):
             self.config.set("connection_retry_attempts", self.retry_attempts_spin.value())
             self.config.set("retry_delay", self.retry_delay_spin.value())
 
-            # Chat settings
-            self.config.set("chat_auto_connect", self.chat_auto_connect_check.isChecked())
-            self.config.set("chat_max_messages", self.chat_max_messages_spin.value())
-            self.config.set("chat_show_timestamps", self.chat_timestamps_check.isChecked())
-
             # Favorites settings
             self.config.set("favorites_auto_refresh", self.favorites_auto_refresh_check.isChecked())
             self.config.set(
@@ -439,9 +392,6 @@ class SettingsTab(QWidget):
             self.config.set("debug", self.debug_check.isChecked())
             self.config.set("log_to_file", self.log_to_file_check.isChecked())
             self.config.set("log_level", self.log_level_combo.currentText())
-
-            client_id = self.client_id_edit.text().strip()
-            self.config.set("twitch_client_id", client_id)
 
             # Save to file
             if self.config.save_settings():
