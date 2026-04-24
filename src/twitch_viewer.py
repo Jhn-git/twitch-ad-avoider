@@ -19,6 +19,7 @@ See Also:
 import os
 import subprocess
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, cast
 import streamlink
@@ -33,6 +34,8 @@ from .constants import (
     COMMON_PLAYER_PATHS,
     ENV_PLAYER_PATH,
     ENV_PLAYER_NAME,
+    CLIPS_DIR,
+    TEMP_DIR,
 )
 
 logger = get_logger(__name__)
@@ -86,6 +89,8 @@ class TwitchViewer:
         self.player_path: Optional[str] = None
         self.selected_player: Optional[str] = None
         self.session = streamlink.Streamlink()
+        self._recording_path: Optional[str] = None
+        self._current_channel: Optional[str] = None
 
         # Configure session timeouts
         timeout = self.config.get("network_timeout", 30)
@@ -474,6 +479,18 @@ class TwitchViewer:
             title = f"Twitch - {channel_name}"
             cmd.extend(["--title", title])
 
+            # Add loglevel to get stderr output for monitoring
+            cmd.extend(["--loglevel", "info"])
+
+            # Add recording for clip support (zero extra bandwidth — same download)
+            self._current_channel = channel_name
+            self._recording_path = None
+            if self.config.get("clip_enabled", True):
+                TEMP_DIR.mkdir(parents=True, exist_ok=True)
+                self._recording_path = str(TEMP_DIR / f"recording_{channel_name}.ts")
+                cmd.extend(["--record", self._recording_path])
+                logger.debug(f"Recording to: {self._recording_path}")
+
             logger.info(f"Starting stream for channel: {channel_name}")
             logger.info(f"Quality: {quality}")
             logger.debug(f"Command: {' '.join(cmd)}")
@@ -496,3 +513,70 @@ class TwitchViewer:
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
             raise TwitchStreamError(f"Unexpected error: {str(e)}") from e
+
+    def _get_ffmpeg_executable(self) -> Optional[str]:
+        """Locate FFmpeg, checking configured path then system PATH."""
+        configured = self.config.get("ffmpeg_path", "")
+        if configured and Path(configured).exists():
+            return configured
+        return shutil.which("ffmpeg")
+
+    def create_clip(self, duration_seconds: int = 30) -> Optional[str]:
+        """
+        Save the last N seconds of the current recording as a clip.
+
+        Args:
+            duration_seconds: How many seconds to clip from the end
+
+        Returns:
+            Path to the saved clip file, or None on failure
+        """
+        if not self._recording_path or not Path(self._recording_path).exists():
+            logger.warning("No recording available — start a stream with clip_enabled=True first")
+            return None
+
+        ffmpeg_exe = self._get_ffmpeg_executable()
+        if not ffmpeg_exe:
+            logger.error("FFmpeg not found. Install FFmpeg and ensure it is in PATH.")
+            return None
+
+        clip_dir = Path(self.config.get("clip_directory", str(CLIPS_DIR)))
+        clip_dir.mkdir(parents=True, exist_ok=True)
+
+        channel = self._current_channel or "unknown"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = clip_dir / f"{channel}_{timestamp}.ts"
+
+        cmd = [
+            ffmpeg_exe,
+            "-sseof", f"-{duration_seconds}",
+            "-i", self._recording_path,
+            "-c", "copy",
+            "-y",
+            str(output_path),
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=60)
+            if result.returncode == 0:
+                logger.info(f"Clip saved: {output_path}")
+                return str(output_path)
+            else:
+                logger.error(f"FFmpeg failed: {result.stderr.decode(errors='replace')}")
+                return None
+        except subprocess.TimeoutExpired:
+            logger.error("FFmpeg timed out creating clip")
+            return None
+        except Exception as e:
+            logger.error(f"Error creating clip: {e}")
+            return None
+
+    def cleanup_recording(self) -> None:
+        """Delete the temp recording file from the current session."""
+        if self._recording_path and Path(self._recording_path).exists():
+            try:
+                Path(self._recording_path).unlink()
+                logger.debug(f"Deleted temp recording: {self._recording_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete temp recording: {e}")
+        self._recording_path = None

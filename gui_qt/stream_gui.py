@@ -169,6 +169,11 @@ class StreamGUI:
         self.stream_controller.stream_started.connect(self._on_stream_started)
         self.stream_controller.stream_finished.connect(self._on_stream_finished)
         self.stream_controller.stream_error.connect(self._on_stream_error)
+        self.stream_controller.clip_created.connect(self._on_clip_created)
+        self.stream_controller.clip_failed.connect(self._on_clip_failed)
+
+        # Clip button
+        self.status_display.clip_requested.connect(self.stream_controller.create_clip)
 
         # Favorites Panel
         self.favorites_panel.favorite_double_clicked.connect(self._on_favorite_double_clicked)
@@ -330,6 +335,7 @@ class StreamGUI:
         """
         logger.info(f"Stream started: {channel}")
         self.status_display.add_system(f"Stream started: {channel}", "STREAM")
+        self.status_display.set_streaming(True)
 
         # Update window with stream process reference
         process = self.stream_controller.get_current_process()
@@ -344,6 +350,8 @@ class StreamGUI:
         """
         logger.info(f"Stream finished: {channel}")
         self.status_display.add_info(f"Stream finished: {channel}", "STREAM")
+        self.status_display.set_streaming(False)
+        self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
 
     def _on_stream_error(self, channel: str, error: str) -> None:
@@ -356,7 +364,17 @@ class StreamGUI:
         """
         logger.error(f"Stream error for {channel}: {error}")
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
+        self.status_display.set_streaming(False)
+        self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
+
+    def _on_clip_created(self, path: str) -> None:
+        """Handle successful clip creation."""
+        self.status_display.add_system(f"Clip saved: {path}", "CLIP")
+
+    def _on_clip_failed(self, error: str) -> None:
+        """Handle clip creation failure."""
+        self.status_display.add_error(f"Clip failed: {error}", "CLIP")
 
     # Favorites Handlers
 
@@ -599,9 +617,10 @@ class StreamGUI:
             self.refresh_timer.stop()
             logger.debug("Stopped favorites refresh timer")
 
-        # Stop stream
+        # Stop stream and clean up recording
         if self.stream_controller.is_streaming():
             self.stream_controller.stop_stream()
+        self.stream_controller.twitch_viewer.cleanup_recording()
 
         # Disconnect chat
         if self.chat_controller.is_connected():

@@ -199,7 +199,7 @@ class StreamlinkStatusChecker:
         for index, channel_name in enumerate(channel_names, 1):
             # Check for cancellation before each channel
             if cancel_event.is_set():
-                logger.info(f"Status check cancelled after {index-1}/{total_channels} channels")
+                logger.info(f"Status check cancelled after {index - 1}/{total_channels} channels")
                 break
 
             # Send progress update
