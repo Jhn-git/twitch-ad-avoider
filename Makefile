@@ -1,5 +1,14 @@
 .PHONY: help clean test format lint typecheck check run build install dev-install all
 
+# Detect OS for cross-platform compatibility
+ifeq ($(OS),Windows_NT)
+    PYTHON := python
+    RUN_CMD := $(PYTHON) main.py
+else
+    PYTHON := python3
+    RUN_CMD := QT_QPA_PLATFORM=xcb $(PYTHON) main.py
+endif
+
 # Default target - show available commands
 help:
 	@echo "TwitchAdAvoider - Available Commands"
@@ -25,28 +34,28 @@ help:
 
 # Run the application
 run:
-	python3 main.py
+	$(RUN_CMD)
 
 # Run tests
 test:
-	python3 -m pytest tests/
+	$(PYTHON) -m pytest tests/
 
 # Run tests with coverage
 test-coverage:
-	python3 -m coverage run -m pytest tests/
-	python3 -m coverage report
+	$(PYTHON) -m coverage run -m pytest tests/
+	$(PYTHON) -m coverage report
 
 # Format code with black
 format:
-	python3 -m black .
+	$(PYTHON) -m black .
 
 # Lint with flake8
 lint:
-	python3 -m flake8 .
+	$(PYTHON) -m flake8 .
 
 # Type check with mypy
 typecheck:
-	python3 -m mypy src/
+	$(PYTHON) -m mypy src/
 
 # Run all code quality checks
 check: format lint typecheck
@@ -71,8 +80,14 @@ install:
 dev-install:
 	pip install -e .[dev]
 
-# Build Windows executable (full workflow)
-build: clean check test
+# Build Windows executable (skip tests for faster builds)
+build: clean
 	@echo "Building executable..."
-	python3 build_executable.py
+	$(PYTHON) build_executable.py
+	@echo "✓ Build complete"
+
+# Build with full quality checks and tests
+build-full: clean format lint test
+	@echo "Building executable..."
+	$(PYTHON) build_executable.py
 	@echo "✓ Build complete"

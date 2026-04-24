@@ -107,6 +107,14 @@ class ConfigManager:
                 # Synchronize debug flag and log_level for consistency
                 self._sync_debug_and_log_level()
 
+                # Migrate old "current_theme" to new "dark_mode" setting
+                if "current_theme" in self._settings and "dark_mode" not in self._settings:
+                    old_theme = self._settings.pop("current_theme")
+                    self._settings["dark_mode"] = old_theme == "dark"
+                    logger.info("Migrated 'current_theme' setting to 'dark_mode'")
+                    # Save migrated config
+                    self.save_settings()
+
                 logger.info(f"Settings loaded from {self.config_path}")
 
             except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -279,11 +287,9 @@ class ConfigManager:
                 sanitize_player_args(value)
                 return True
 
-            elif key == "current_theme":
-                if not isinstance(value, str):
-                    raise ValidationError("Theme setting must be a string")
-                if not is_valid_theme(value):
-                    raise ValidationError(f"Invalid theme '{value}'. Available themes: light, dark")
+            elif key == "dark_mode":
+                if not isinstance(value, bool):
+                    raise ValidationError("Dark mode setting must be a boolean")
                 return True
 
             elif key == "network_timeout":
