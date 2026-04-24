@@ -33,12 +33,6 @@ DEFAULT_SETTINGS = {
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
     "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
     "retry_delay": 5,  # Delay between retry attempts in seconds
-    # Authentication settings
-    "twitch_client_id": "",  # Twitch application client ID for OAuth
-    # Chat settings
-    "chat_auto_connect": True,  # Automatically connect to chat when starting a stream
-    "chat_max_messages": 500,  # Maximum number of chat messages to keep in memory
-    "chat_show_timestamps": True,  # Show timestamps in chat messages
     # Favorites settings
     "favorites_auto_refresh": True,  # Automatically refresh favorite channels status
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
