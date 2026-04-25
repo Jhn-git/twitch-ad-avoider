@@ -488,6 +488,13 @@ class TwitchViewer:
             if self.config.get("clip_enabled", True):
                 TEMP_DIR.mkdir(parents=True, exist_ok=True)
                 self._recording_path = str(TEMP_DIR / f"recording_{channel_name}.ts")
+                stale = Path(self._recording_path)
+                if stale.exists():
+                    try:
+                        stale.unlink()
+                        logger.debug(f"Removed stale recording: {self._recording_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove stale recording: {e}")
                 cmd.extend(["--record", self._recording_path])
                 logger.debug(f"Recording to: {self._recording_path}")
 
@@ -521,6 +528,61 @@ class TwitchViewer:
             return configured
         return shutil.which("ffmpeg")
 
+    def _probe_clip_start(self, ffmpeg_exe: str, duration_seconds: int) -> Optional[float]:
+        """Return start offset (seconds) for a clip of duration_seconds from end of recording."""
+        # Try to find ffprobe next to ffmpeg, then in PATH
+        ffprobe_exe = str(Path(ffmpeg_exe).with_name("ffprobe.exe"))
+        logger.debug(f"[PROBE] Trying ffprobe at: {ffprobe_exe}")
+        if not Path(ffprobe_exe).exists():
+            ffprobe_exe = str(Path(ffmpeg_exe).with_name("ffprobe"))
+            logger.debug(f"[PROBE] .exe not found, trying: {ffprobe_exe}")
+        if not Path(ffprobe_exe).exists():
+            ffprobe_exe = shutil.which("ffprobe") or ""
+            logger.debug(f"[PROBE] Local not found, searching PATH: {ffprobe_exe}")
+        if not ffprobe_exe:
+            logger.warning("[PROBE] ffprobe not found in PATH or FFmpeg directory")
+            return None
+        
+        logger.debug(f"[PROBE] Using ffprobe: {ffprobe_exe}")
+        logger.debug(f"[PROBE] Recording file: {self._recording_path}")
+        try:
+            # Get both duration and start_time to handle HLS-reconstructed files with offset PTS
+            cmd = [ffprobe_exe, "-v", "error", "-show_entries", 
+                   "format=duration,start_time",
+                   "-of", "default=noprint_wrappers=1:nokey=1", self._recording_path]
+            logger.debug(f"[PROBE] Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            logger.debug(f"[PROBE] Return code: {result.returncode}")
+            logger.debug(f"[PROBE] Stdout: {repr(result.stdout)}")
+            if result.stderr:
+                logger.debug(f"[PROBE] Stderr: {result.stderr}")
+            
+            if result.returncode != 0:
+                logger.warning(f"[PROBE] ffprobe failed with code {result.returncode}")
+                return None
+            
+            # Parse duration and start_time (handles HLS files with PTS offsets)
+            lines = result.stdout.strip().split('\n')
+            duration = float(lines[0]) if lines else 0.0
+            start_time = float(lines[1]) if len(lines) > 1 else 0.0
+            
+            # Actual content duration = end - start (accounts for HLS offset PTS)
+            actual_duration = duration - start_time
+            start_offset = max(0.0, actual_duration - duration_seconds)
+            
+            logger.info(f"[PROBE] Container duration: {duration}s, start_time: {start_time}s, "
+                       f"actual content: {actual_duration}s, clip start offset: {start_offset}s (last {duration_seconds}s)")
+            return start_offset
+        except ValueError as e:
+            logger.error(f"[PROBE] Could not parse duration from ffprobe: {e}")
+            return None
+        except subprocess.TimeoutExpired:
+            logger.error("[PROBE] ffprobe timed out after 10 seconds")
+            return None
+        except Exception as e:
+            logger.error(f"[PROBE] Unexpected error: {e}")
+            return None
+
     def create_clip(self, duration_seconds: int = 30) -> Optional[str]:
         """
         Save the last N seconds of the current recording as a clip.
@@ -547,28 +609,50 @@ class TwitchViewer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = clip_dir / f"{channel}_{timestamp}.ts"
 
+        # Probe the recording duration so we can seek accurately.
+        # -sseof is unreliable for live-written fMP4 files (FFmpeg can't find
+        # the true EOF), so we calculate the start offset explicitly.
+        logger.debug(f"[CLIP] Recording file size: {Path(self._recording_path).stat().st_size} bytes")
+        start_time = self._probe_clip_start(ffmpeg_exe, duration_seconds)
+
+        if start_time is not None:
+            seek_args = ["-ss", str(start_time), "-i", self._recording_path, "-t", str(duration_seconds)]
+            logger.info(f"[CLIP] Using ffprobe-based seek: -ss {start_time} -i <file> -t {duration_seconds}")
+        else:
+            seek_args = ["-sseof", f"-{duration_seconds}", "-i", self._recording_path]
+            logger.warning(f"[CLIP] ffprobe unavailable, falling back to: -sseof -{duration_seconds} -i <file>")
+
         cmd = [
             ffmpeg_exe,
-            "-sseof", f"-{duration_seconds}",
-            "-i", self._recording_path,
+            *seek_args,
             "-c", "copy",
+            "-bsf:v", "h264_mp4toannexb",
+            "-avoid_negative_ts", "make_zero",
             "-y",
             str(output_path),
         ]
+        
+        logger.debug(f"[CLIP] Full FFmpeg command: {' '.join(cmd)}")
 
         try:
             result = subprocess.run(cmd, capture_output=True, timeout=60)
+            stderr_text = result.stderr.decode(errors='replace') if result.stderr else ""
+            logger.debug(f"[CLIP] FFmpeg return code: {result.returncode}")
+            if stderr_text:
+                logger.debug(f"[CLIP] FFmpeg stderr: {stderr_text[:500]}...")  # First 500 chars
+            
             if result.returncode == 0:
-                logger.info(f"Clip saved: {output_path}")
+                output_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+                logger.info(f"[CLIP] Clip saved: {output_path} ({output_size} bytes)")
                 return str(output_path)
             else:
-                logger.error(f"FFmpeg failed: {result.stderr.decode(errors='replace')}")
+                logger.error(f"[CLIP] FFmpeg failed (code {result.returncode}): {stderr_text}")
                 return None
         except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out creating clip")
+            logger.error("[CLIP] FFmpeg timed out creating clip after 60 seconds")
             return None
         except Exception as e:
-            logger.error(f"Error creating clip: {e}")
+            logger.error(f"[CLIP] Unexpected error creating clip: {e}")
             return None
 
     def cleanup_recording(self) -> None:

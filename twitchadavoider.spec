@@ -53,8 +53,6 @@ a = Analysis(
         'src.status_monitor',
         'src.error_recovery',
         'src.streamlink_status',
-        'src.twitch_chat_client',
-        'src.auth_manager',
         'src.constants',
         
         # Qt GUI imports - all components needed

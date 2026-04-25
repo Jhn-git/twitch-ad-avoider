@@ -381,6 +381,33 @@ class ConfigManager:
                     raise ValidationError("Window maximized setting must be a boolean")
                 return True
 
+            elif key == "enable_network_diagnostics":
+                if not isinstance(value, bool):
+                    raise ValidationError("Enable network diagnostics must be a boolean")
+                return True
+
+            elif key == "enable_status_monitoring":
+                if not isinstance(value, bool):
+                    raise ValidationError("Enable status monitoring must be a boolean")
+                return True
+
+            elif key == "status_check_interval":
+                if not isinstance(value, int):
+                    raise ValidationError("Status check interval must be an integer")
+                validate_numeric_range(value, min_val=10, max_val=86400, data_type=int)
+                return True
+
+            elif key == "status_cache_duration":
+                if not isinstance(value, int):
+                    raise ValidationError("Status cache duration must be an integer")
+                validate_numeric_range(value, min_val=1, max_val=3600, data_type=int)
+                return True
+
+            elif key == "current_theme":
+                if not isinstance(value, str) or value not in ("light", "dark"):
+                    raise ValidationError("Theme must be 'light' or 'dark'")
+                return True
+
             else:
                 # Unknown setting keys are allowed but logged
                 logger.debug(f"Unknown setting key: {key}")
