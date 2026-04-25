@@ -45,11 +45,10 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/twitch-viewer"
-"Bug Reports" = "https://github.com/yourusername/twitch-viewer/issues"
-"Source" = "https://github.com/yourusername/twitch-viewer"
-"Documentation" = "https://yourusername.github.io/twitch-viewer/"
-"Changelog" = "https://github.com/yourusername/twitch-viewer/releases"
+"Homepage" = "https://github.com/Jhn-git/TwitchAdAvoider-lite"
+"Bug Reports" = "https://github.com/Jhn-git/TwitchAdAvoider-lite/issues"
+"Source" = "https://github.com/Jhn-git/TwitchAdAvoider-lite"
+"Changelog" = "https://github.com/Jhn-git/TwitchAdAvoider-lite/releases"
 
 [project.scripts]
 twitchadavoider = "main:main"

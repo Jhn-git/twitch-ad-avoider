@@ -94,14 +94,14 @@ class TestTwitchViewer(unittest.TestCase):
         result = self.viewer._check_manual_player()
         self.assertIsNone(result)
 
-    @patch("shutil.which")
+    @patch("src.twitch_viewer.shutil.which")
     def test_check_player_in_path_found(self, mock_which):
         mock_which.return_value = "/usr/bin/vlc"
         result = self.viewer._check_player_in_path("vlc", ["vlc", "vlc.exe"])
         self.assertEqual(result, "vlc")
         self.assertEqual(self.viewer.player_path, "/usr/bin/vlc")
 
-    @patch("shutil.which")
+    @patch("src.twitch_viewer.shutil.which")
     def test_check_player_in_path_not_found(self, mock_which):
         mock_which.return_value = None
         result = self.viewer._check_player_in_path("vlc", ["vlc", "vlc.exe"])
