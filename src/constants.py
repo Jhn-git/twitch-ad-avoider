@@ -33,6 +33,7 @@ DEFAULT_SETTINGS = {
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
     "connection_retry_attempts": 3,  # Number of retry attempts for failed connections
     "retry_delay": 5,  # Delay between retry attempts in seconds
+    "enable_network_diagnostics": True,  # Enable network diagnostics on connection failure
     # Favorites settings
     "favorites_auto_refresh": True,  # Automatically refresh favorite channels status
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
