@@ -188,8 +188,6 @@ TwitchAdAvoider follows a modular architecture with clear separation between GUI
 | **StreamGUI** | Qt interface orchestration | `gui_qt/stream_gui.py` |
 | **ConfigManager** | Settings validation & persistence | `src/config_manager.py` |
 | **Validators** | Security input validation | `src/validators.py` |
-| **AuthManager** | OAuth authentication | `src/auth_manager.py` |
-| **TwitchChatClient** | IRC chat integration | `src/twitch_chat_client.py` |
 
 **For detailed architecture**, see **[CLAUDE.md](CLAUDE.md)**.
 
