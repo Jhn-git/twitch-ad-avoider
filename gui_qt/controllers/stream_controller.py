@@ -106,6 +106,11 @@ class StreamWorker(QObject):
                     else:
                         error_msg = f"Stream exited with code {return_code}"
                         logger.warning(error_msg)
+                        # Log streamlink's own output so the cause is visible in the log
+                        if self.process.stderr:
+                            stderr_text = self.process.stderr.read().decode(errors="replace").strip()
+                            if stderr_text:
+                                logger.warning(f"Streamlink output:\n{stderr_text}")
                         self.error.emit(error_msg)
             else:
                 error_msg = "Failed to start stream process"
