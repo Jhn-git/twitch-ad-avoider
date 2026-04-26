@@ -215,7 +215,7 @@ def main():
         clean_build()
 
     # Build executable
-    success = build_executable("twitchadavoider.spec", "Windows")
+    success = build_executable("scripts/twitchadavoider.spec", "Windows")
 
     if success:
         create_launcher_script()

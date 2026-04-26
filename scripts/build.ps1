@@ -30,10 +30,10 @@ if ($SkipDeps) {
     $pythonArgs += "--skip-deps"  
 }
 
-Write-Host "Executing: python build_executable.py $($pythonArgs -join ' ')" -ForegroundColor Yellow
+Write-Host "Executing: python scripts/build_executable.py $($pythonArgs -join ' ')" -ForegroundColor Yellow
 
 try {
-    python build_executable.py @pythonArgs
+    python scripts/build_executable.py @pythonArgs
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "`n[OK] Build completed successfully!" -ForegroundColor Green
