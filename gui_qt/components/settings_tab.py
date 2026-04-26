@@ -354,7 +354,7 @@ class SettingsTab(QWidget):
         Args:
             state: Checkbox state
         """
-        is_checked = state == Qt.CheckState.Checked
+        is_checked = bool(state)
         logger.info(f"Dark mode changed to: {is_checked}")
         # Don't save yet, just emit signal for immediate UI update
         self.dark_mode_changed.emit(is_checked)

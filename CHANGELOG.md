@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.1 — 2026-04-26
+
+### Fixed
+- **Dark mode not activating** — PySide6 6.4+ changed Qt enums to strict Python enums (no longer IntEnum-comparable). The checkbox `stateChanged` comparison `state == Qt.CheckState.Checked` always returned `False`, so toggling dark mode had no effect. Fixed with `bool(state)`.
+- **Validation label ignores dark mode** — Channel name validation feedback (valid/invalid) used hardcoded inline `setStyleSheet` colors that bypassed QSS theming. The valid-channel green is now `#3CB371` on dark backgrounds and `#006400` on light.
+- **`StreamControlPanel` not receiving theme updates** — `_apply_theme` in `stream_gui.py` now propagates `set_dark_mode` to `stream_panel` alongside other components.
+
+---
+
 ## v2.0.0 — Initial Release
 
 ### Features
