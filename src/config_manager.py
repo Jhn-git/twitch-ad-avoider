@@ -22,8 +22,6 @@ See Also:
 """
 
 import json
-import os
-import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 from .constants import (
@@ -55,19 +53,6 @@ from .validators import (
     sanitize_string_input,
 )
 from .exceptions import ValidationError
-
-# Import theme validation from gui module (avoid circular import)
-
-gui_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gui")
-if gui_path not in sys.path:
-    sys.path.insert(0, gui_path)
-try:
-    from themes import is_valid_theme
-except ImportError:
-    # Fallback if GUI module not available
-    def is_valid_theme(theme: str) -> bool:
-        return theme in ["light", "dark"]
-
 
 logger = get_logger(__name__)
 
