@@ -162,6 +162,12 @@ except ValidationError as e:
 
 ---
 
+## Git Guidelines
+
+- **Commit Messages**: DO NOT include "Co-authored-by" trailers. Commits should only represent the user.
+
+---
+
 ## Installation
 
 ```bash
