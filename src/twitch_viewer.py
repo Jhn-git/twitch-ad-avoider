@@ -594,7 +594,7 @@ class TwitchViewer:
         output_path = clip_dir / f"{channel}_{timestamp}.ts"
 
         # Probe the recording duration so we can seek accurately.
-        # -sseof is unreliable for live-written fMP4 files (FFmpeg can't find
+        # -sseof is unreliable for live-written TS files (FFmpeg can't find
         # the true EOF), so we calculate the start offset explicitly.
         logger.debug(
             f"[CLIP] Recording file size: {Path(self._recording_path).stat().st_size} bytes"
@@ -611,23 +611,27 @@ class TwitchViewer:
                 str(duration_seconds),
             ]
             logger.info(
-                f"[CLIP] Using ffprobe-based seek: -ss {start_time} -i <file> -t {duration_seconds}"
+                f"[CLIP] Using seek: -ss {start_time} -i <file> -t {duration_seconds}"
             )
         else:
             seek_args = ["-sseof", f"-{duration_seconds}", "-i", self._recording_path]
             logger.warning(
-                f"[CLIP] ffprobe unavailable, falling back to: -sseof -{duration_seconds} -i <file>"
+                f"[CLIP] No start time, falling back to: -sseof -{duration_seconds} -i <file>"
             )
 
         cmd = [
             ffmpeg_exe,
+            # Tolerate partial/corrupt packets at the tail of a live recording.
+            # The tee thread is still writing; the last chunk may be incomplete,
+            # causing "Invalid NAL unit size" errors with -c copy.
+            # discardcorrupt drops those packets and trims to the last clean frame.
+            "-fflags", "+discardcorrupt",
             *seek_args,
-            "-c",
-            "copy",
-            "-bsf:v",
-            "h264_mp4toannexb",
-            "-avoid_negative_ts",
-            "make_zero",
+            "-c", "copy",
+            # NOTE: -bsf:v h264_mp4toannexb is intentionally absent. That filter
+            # converts MP4 length-prefixed NALUs to Annex-B start codes. TS streams
+            # are already Annex-B, so applying it produces "Invalid NAL unit size".
+            "-avoid_negative_ts", "make_zero",
             "-y",
             str(output_path),
         ]
@@ -639,10 +643,18 @@ class TwitchViewer:
             stderr_text = result.stderr.decode(errors="replace") if result.stderr else ""
             logger.debug(f"[CLIP] FFmpeg return code: {result.returncode}")
             if stderr_text:
-                logger.debug(f"[CLIP] FFmpeg stderr: {stderr_text[:500]}...")  # First 500 chars
+                logger.debug(f"[CLIP] FFmpeg stderr: {stderr_text[:500]}...")
 
-            if result.returncode == 0:
-                output_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+            output_size = output_path.stat().st_size if output_path.exists() else 0
+            if output_size > 1024:
+                # Accept the clip even on non-zero exit — with -fflags +discardcorrupt,
+                # FFmpeg may skip corrupt tail packets and still exit non-zero while
+                # having written a perfectly usable clip.
+                if result.returncode != 0:
+                    logger.debug(
+                        f"[CLIP] FFmpeg exited {result.returncode} but clip was created "
+                        f"({output_size} bytes); treating as success"
+                    )
                 logger.info(f"[CLIP] Clip saved: {output_path} ({output_size} bytes)")
                 return str(output_path)
             else:
@@ -664,3 +676,4 @@ class TwitchViewer:
             except Exception as e:
                 logger.warning(f"Failed to delete temp recording: {e}")
         self._recording_path = None
+        self._recording_start_time = None
