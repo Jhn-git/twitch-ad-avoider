@@ -21,12 +21,12 @@ def run_command(cmd, description):
 
     try:
         result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
-        print("✓ SUCCESS")
+        print("[OK] SUCCESS")
         if result.stdout:
             print("Output:", result.stdout[-500:])  # Last 500 chars
         return True
     except subprocess.CalledProcessError as e:
-        print("✗ FAILED")
+        print("[FAIL] FAILED")
         print("Error:", e.stderr)
         return False
 
@@ -65,17 +65,17 @@ def check_dependencies():
         if is_command_tool:
             # Check for command-line tool availability
             if shutil.which(package):
-                print(f"  ✓ {package}")
+                print(f"  [OK] {package}")
             else:
-                print(f"  ✗ {package} - MISSING")
+                print(f"  [FAIL] {package} - MISSING")
                 missing_packages.append(package)
         else:
             # Check for Python module
             try:
                 __import__(import_name)
-                print(f"  ✓ {package}")
+                print(f"  [OK] {package}")
             except ImportError:
-                print(f"  ✗ {package} - MISSING")
+                print(f"  [FAIL] {package} - MISSING")
                 missing_packages.append(package)
 
     if missing_packages:
@@ -88,7 +88,7 @@ def check_dependencies():
 
 def build_executable(spec_file, build_type):
     """Build executable using specified spec file."""
-    print(f"🔨 Building {build_type} executable...")
+    print(f"[BUILD] Building {build_type} executable...")
 
     if not os.path.exists(spec_file):
         print(f"[ERROR] Spec file not found: {spec_file}")
@@ -112,7 +112,7 @@ def get_file_size(filepath):
 def show_results():
     """Display build results."""
     print("\n" + "=" * 60)
-    print("📊 BUILD RESULTS")
+    print("BUILD RESULTS")
     print("=" * 60)
 
     if not os.path.exists("dist"):
@@ -123,7 +123,7 @@ def show_results():
         item_path = os.path.join("dist", item)
         if os.path.isfile(item_path):
             size = get_file_size(item_path)
-            print(f"📦 {item}: {size}")
+            print(f"  [FILE] {item}: {size}")
         elif os.path.isdir(item_path):
             total_size = sum(
                 os.path.getsize(os.path.join(dirpath, filename))
@@ -131,7 +131,7 @@ def show_results():
                 for filename in filenames
             )
             readable_size = get_file_size_from_bytes(total_size)
-            print(f"📁 {item}/: {readable_size}")
+            print(f"  [DIR]  {item}/: {readable_size}")
 
 
 def get_file_size_from_bytes(size_bytes):
@@ -145,7 +145,7 @@ def get_file_size_from_bytes(size_bytes):
 
 def create_launcher_script():
     """Create Windows launcher script."""
-    print("📝 Creating Windows launcher script...")
+    print("[LAUNCHER] Creating Windows launcher script...")
 
     # Windows batch file
     windows_launcher = """@echo off
@@ -158,10 +158,10 @@ pause
         with open("dist/launch.bat", "w") as f:
             f.write(windows_launcher)
 
-        print("  ✓ Created Windows launcher script")
+        print("  [OK] Created Windows launcher script")
         return True
     except Exception as e:
-        print(f"  ✗ Failed to create Windows launcher: {e}")
+        print(f"  [FAIL] Failed to create Windows launcher: {e}")
         return False
 
 
@@ -198,7 +198,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("🚀 TwitchAdAvoider Windows Build Script")
+    print("[START] TwitchAdAvoider Windows Build Script")
     print(f"Platform: {platform.system()} {platform.architecture()[0]}")
     print(f"Python: {sys.version.split()[0]}")
 
@@ -221,7 +221,7 @@ def main():
         create_launcher_script()
         show_results()
         print("\n[OK] Build completed successfully!")
-        print("\n📋 Next steps:")
+        print("\nNext steps:")
         print("  1. Test the Windows executable in dist/")
         print("  2. Check that GUI launches properly on Windows")
         print("  3. Verify streaming functionality")

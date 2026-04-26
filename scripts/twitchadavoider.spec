@@ -9,33 +9,34 @@ import os
 
 # Application metadata
 APP_NAME = 'TwitchAdAvoider'
-VERSION = '2.0.0'
+VERSION = '2.0.1'
+
+# Project root is one level up from the spec file (scripts/)
+ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
 
 # Collect all streamlink submodules — required for Python API usage in frozen builds
 streamlink_hiddenimports = collect_submodules('streamlink')
 
 # Minimal data files - only what's absolutely necessary
 minimal_datas = [
-    ('config/settings.json', 'config'),
-    ('config/favorites.json', 'config'),
-    ('gui_qt/styles/dark.qss', 'gui_qt/styles'),
-    ('gui_qt/styles/light.qss', 'gui_qt/styles'),
+    (os.path.join(ROOT, 'config', 'settings.json'), 'config'),
+    (os.path.join(ROOT, 'config', 'favorites.json'), 'config'),
+    (os.path.join(ROOT, 'gui_qt', 'styles', 'dark.qss'), 'gui_qt/styles'),
+    (os.path.join(ROOT, 'gui_qt', 'styles', 'light.qss'), 'gui_qt/styles'),
 ]
 
 # Check for pre-generated pycparser tables to fix cryptography/cffi runtime issues
 import glob
-pycparser_tables_dir = 'build_cache/pycparser_tables'
+pycparser_tables_dir = os.path.join(ROOT, 'build_cache', 'pycparser_tables')
 if os.path.exists(pycparser_tables_dir):
-    # Add pycparser table files to prevent runtime generation issues
     table_files = glob.glob(os.path.join(pycparser_tables_dir, '*.py'))
     for table_file in table_files:
-        filename = os.path.basename(table_file)
         minimal_datas.append((table_file, 'pycparser'))
     print(f"[OK] Found {len(table_files)} pycparser table files to bundle")
 
 a = Analysis(
-    ['main.py'],
-    pathex=['.'],
+    [os.path.join(ROOT, 'main.py')],
+    pathex=[ROOT],
     binaries=[],
     datas=minimal_datas,
     hiddenimports=[
