@@ -6,13 +6,8 @@ A Python implementation for watching Twitch streams while avoiding ads.
 
 import sys
 import argparse
-from pathlib import Path
 
-# Add src directory to Python path
-current_dir = Path(__file__).parent
-sys.path.insert(0, str(current_dir))
-
-from src.logging_config import (  # noqa: E402
+from src.logging_config import (
     setup_logging,
     get_logger,
     configure_logging_from_config,

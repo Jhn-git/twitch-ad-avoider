@@ -34,12 +34,6 @@ class PlayerError(TwitchAdAvoiderError):
     pass
 
 
-class ConfigurationError(TwitchAdAvoiderError):
-    """Exception raised for configuration-related errors."""
-
-    pass
-
-
 class ValidationError(TwitchAdAvoiderError):
     """Exception raised for input validation errors."""
 
@@ -48,11 +42,5 @@ class ValidationError(TwitchAdAvoiderError):
 
 class StreamlinkError(TwitchAdAvoiderError):
     """Exception raised for streamlink-related errors."""
-
-    pass
-
-
-class TwitchAPIError(TwitchAdAvoiderError):
-    """Exception raised for Twitch API-related errors."""
 
     pass

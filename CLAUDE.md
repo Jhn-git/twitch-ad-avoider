@@ -22,8 +22,6 @@
 | TwitchViewer | `src/twitch_viewer.py` | Streaming, player detection |
 | ConfigManager | `src/config_manager.py` | JSON config + validation |
 | Validators | `src/validators.py` | Security input validation |
-| AuthManager | `src/auth_manager.py` | OAuth authentication |
-| TwitchChatClient | `src/twitch_chat_client.py` | IRC chat (USERSTATE confirmation) |
 | StreamGUI | `gui_qt/stream_gui.py` | Qt GUI orchestrator |
 | SettingsTab | `gui_qt/components/settings_tab.py` | Settings interface |
 
@@ -101,7 +99,7 @@ TwitchAdAvoiderError (base)
 
 **Player Detection Priority**: Manual config → GUI selection → PATH → Common dirs → Env vars → Streamlink auto
 
-**Chat**: OAuth via AuthManager, IRC at `irc.chat.twitch.tv`, uses USERSTATE for confirmation, thread-safe.
+**Chat**: Browser-based via `webbrowser.open()` (Twitch popout chat URL). No IRC or OAuth.
 
 ---
 

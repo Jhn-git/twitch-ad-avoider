@@ -10,17 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.config_manager import ConfigManager
-
-# Check for streamlink availability
-try:
-    from src.streamlink_status import StreamlinkStatusChecker
-    from src.twitch_viewer import TwitchViewer
-
-    HAS_STREAMLINK = True
-except ImportError:
-    HAS_STREAMLINK = False
-    StreamlinkStatusChecker = None
-    TwitchViewer = None
+from src.twitch_viewer import TwitchViewer
 
 
 class TestNetworkConfiguration(unittest.TestCase):
@@ -140,68 +130,6 @@ class TestNetworkConfiguration(unittest.TestCase):
         self.assertEqual(self.config.get("connection_retry_attempts"), 5)  # Should still be 5
 
 
-@unittest.skipIf(
-    not HAS_STREAMLINK, "streamlink required - install with 'pip install streamlink>=5.0.0'"
-)
-class TestStreamlinkStatusChecker(unittest.TestCase):
-    """Test StreamlinkStatusChecker with network configuration"""
-
-    def setUp(self):
-        """Set up test with mock config"""
-        self.config = Mock()
-        self.config.get.side_effect = lambda key, default=None: {
-            "network_timeout": 30,
-            "connection_retry_attempts": 3,
-            "retry_delay": 5,
-            "enable_network_diagnostics": True,
-        }.get(key, default)
-
-        self.status_checker = StreamlinkStatusChecker(self.config)
-
-    @patch("src.streamlink_status.streamlink.Streamlink")
-    def test_streamlink_timeout_configuration(self, mock_streamlink):
-        """Test that streamlink session is configured with proper timeout"""
-        mock_session = Mock()
-        mock_streamlink.return_value = mock_session
-
-        # Create new checker to test initialization
-        StreamlinkStatusChecker(self.config)
-
-        # Verify session timeout was set
-        mock_session.set_option.assert_called_with("http-timeout", 30)
-
-    @patch("src.streamlink_status.requests")
-    def test_network_diagnostics_enabled(self, mock_requests):
-        """Test network diagnostics when enabled"""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
-
-        # Run diagnostics
-        results = self.status_checker.run_network_diagnostics()
-
-        # Should have results for all test endpoints
-        self.assertEqual(len(results), 3)  # 3 endpoints in NETWORK_TEST_ENDPOINTS
-
-        # All should be successful
-        for url, (success, message) in results.items():
-            self.assertTrue(success)
-            self.assertIn("OK", message)
-
-    def test_network_diagnostics_disabled(self):
-        """Test network diagnostics when disabled"""
-        self.config.get.side_effect = lambda key, default=None: {
-            "enable_network_diagnostics": False
-        }.get(key, default)
-
-        results = self.status_checker.run_network_diagnostics()
-        self.assertEqual(results, {})
-
-
-@unittest.skipIf(
-    not HAS_STREAMLINK, "streamlink required - install with 'pip install streamlink>=5.0.0'"
-)
 class TestTwitchViewerNetworkConfig(unittest.TestCase):
     """Test TwitchViewer with network configuration"""
 
