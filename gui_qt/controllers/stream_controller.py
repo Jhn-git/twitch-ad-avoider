@@ -18,7 +18,7 @@ Key Features:
 
 from PySide6.QtCore import QObject, Signal, QThread
 import subprocess
-from typing import Optional
+from typing import Any, Optional
 
 from src.twitch_viewer import TwitchViewer
 from src.config_manager import ConfigManager
@@ -30,8 +30,8 @@ logger = get_logger(__name__)
 class ClipWorker(QObject):
     """Runs create_clip() in a background thread."""
 
-    finished = Signal(str)   # output path
-    failed = Signal(str)     # error message
+    finished = Signal(str)  # output path
+    failed = Signal(str)  # error message
 
     def __init__(self, twitch_viewer: "TwitchViewer"):
         super().__init__()
@@ -42,7 +42,9 @@ class ClipWorker(QObject):
         if result:
             self.finished.emit(result)
         else:
-            self.failed.emit("Failed to create clip — check FFmpeg is installed and stream is active")
+            self.failed.emit(
+                "Failed to create clip — check FFmpeg is installed and stream is active"
+            )
 
 
 class StreamWorker(QObject):
@@ -74,7 +76,7 @@ class StreamWorker(QObject):
         self.twitch_viewer = twitch_viewer
         self.channel = channel
         self.quality = quality
-        self.process: Optional[subprocess.Popen] = None
+        self.process: Optional[Any] = None
         self.should_stop = False
 
     def run(self) -> None:
@@ -149,11 +151,11 @@ class StreamController(QObject):
     """
 
     # Signals
-    stream_started = Signal(str)   # channel
+    stream_started = Signal(str)  # channel
     stream_finished = Signal(str)  # channel
     stream_error = Signal(str, str)  # channel, error_message
-    clip_created = Signal(str)     # output file path
-    clip_failed = Signal(str)      # error message
+    clip_created = Signal(str)  # output file path
+    clip_failed = Signal(str)  # error message
 
     def __init__(self, config: ConfigManager):
         """
@@ -170,7 +172,7 @@ class StreamController(QObject):
         self.current_thread: Optional[QThread] = None
         self.current_worker: Optional[StreamWorker] = None
         self.current_channel: Optional[str] = None
-        self.current_process: Optional[subprocess.Popen] = None
+        self.current_process: Optional[Any] = None
         self.current_quality: Optional[str] = None
         self._clip_thread: Optional[QThread] = None
         self._clip_worker: Optional[ClipWorker] = None
@@ -328,7 +330,7 @@ class StreamController(QObject):
 
         logger.debug("Stream thread cleaned up")
 
-    def get_current_process(self) -> Optional[subprocess.Popen]:
+    def get_current_process(self) -> Optional[Any]:
         """
         Get the current stream process for cleanup.
 
