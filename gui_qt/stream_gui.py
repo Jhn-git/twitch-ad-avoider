@@ -320,6 +320,7 @@ class StreamGUI:
 
     def _apply_theme(self, dark_mode: bool) -> None:
         self.window.switch_theme(dark_mode)
+        self.stream_panel.set_dark_mode(dark_mode)
         self.favorites_panel.set_dark_mode(dark_mode)
         self.status_display.set_dark_mode(dark_mode)
 

@@ -71,6 +71,7 @@ class StreamControlPanel(QGroupBox):
         self._connect_signals()
 
         # Initial state
+        self._dark_mode = False
         self.set_watch_button_enabled(False)
 
     def _create_ui(self) -> None:
@@ -226,19 +227,20 @@ class StreamControlPanel(QGroupBox):
         self.validation_label.setText(message)
 
         if not message:
-            # Empty message - neutral state
             self.validation_label.setStyleSheet("")
         elif is_valid:
-            # Valid state - green checkmark
-            self.validation_label.setStyleSheet("color: #008000;")
+            color = "#3CB371" if self._dark_mode else "#006400"
+            self.validation_label.setStyleSheet(f"color: {color};")
         else:
-            # Invalid state - red X
             self.validation_label.setStyleSheet("color: #FF0000;")
 
     def clear_validation_message(self) -> None:
         """Clear the validation message."""
         self.validation_label.setText("")
         self.validation_label.setStyleSheet("")
+
+    def set_dark_mode(self, enabled: bool) -> None:
+        self._dark_mode = enabled
 
     def focus_channel_input(self) -> None:
         """Set focus to the channel input field."""
