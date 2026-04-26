@@ -4,7 +4,6 @@ import webbrowser
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer
-import sys
 
 from gui_qt.main_window import MainWindow
 from gui_qt.components.stream_control_panel import StreamControlPanel
@@ -353,19 +352,3 @@ class StreamGUI:
     def run(self) -> int:
         self.show()
         return QApplication.instance().exec()
-
-
-def main() -> int:
-    """Main entry point for Qt GUI application."""
-    app = QApplication(sys.argv)
-    app.setApplicationName("TwitchAdAvoider")
-    app.setOrganizationName("TwitchAdAvoider")
-
-    config = ConfigManager()
-    gui = StreamGUI(config)
-
-    return gui.run()
-
-
-if __name__ == "__main__":
-    sys.exit(main())

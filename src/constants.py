@@ -78,11 +78,6 @@ LOG_FILE = LOG_DIR / "twitch_ad_avoider.log"
 CLIPS_DIR = Path("clips")
 TEMP_DIR = Path("temp")
 
-# GUI settings
-GUI_TITLE = f"{APP_NAME} - Stream Manager"
-GUI_GEOMETRY = "600x800"
-GUI_MIN_SIZE = (350, 400)
-
 # Twitch username validation regex
 TWITCH_USERNAME_PATTERN = r"^[a-zA-Z0-9_]{4,25}$"
 
@@ -90,19 +85,7 @@ TWITCH_USERNAME_PATTERN = r"^[a-zA-Z0-9_]{4,25}$"
 ENV_PLAYER_PATH = "TWITCH_PLAYER_PATH"
 ENV_PLAYER_NAME = "TWITCH_PLAYER_NAME"
 
-# Network-related constants
-TWITCH_GQL_ENDPOINT = "https://gql.twitch.tv/gql"
-TWITCH_USHER_ENDPOINT = "https://usher.ttvnw.net"
-NETWORK_TEST_ENDPOINTS = [
-    "https://www.twitch.tv",
-    "https://gql.twitch.tv",
-    "https://usher.ttvnw.net",
-]
-
 # Default network timeout values
-DEFAULT_NETWORK_TIMEOUT = 30
-DEFAULT_RETRY_ATTEMPTS = 3
-DEFAULT_RETRY_DELAY = 5
 MIN_NETWORK_TIMEOUT = 10
 MAX_NETWORK_TIMEOUT = 120
 MIN_RETRY_ATTEMPTS = 1
@@ -124,59 +107,3 @@ MIN_REFRESH_INTERVAL = 30  # Minimum 30 seconds
 MAX_REFRESH_INTERVAL = 3600  # Maximum 1 hour
 MIN_CHECK_TIMEOUT = 3  # Minimum 3 seconds per channel
 MAX_CHECK_TIMEOUT = 10  # Maximum 10 seconds per channel
-
-# Error messages
-ERROR_MESSAGES = {
-    "empty_channel": "Channel name cannot be empty",
-    "invalid_channel": "Invalid channel name format",
-    "no_streams": "No streams available for channel: {}",
-    "streamlink_error": "Failed to get stream: {}",
-    "player_not_found": ("Video player not found. Please install VLC, MPV, or MPC-HC"),
-    "streamlink_not_found": (
-        "streamlink command not found. Please ensure streamlink is " "installed and in PATH"
-    ),
-    "network_timeout": (
-        "Network timeout occurred. Check your internet connection or "
-        "increase timeout in settings."
-    ),
-    "connection_failed": (
-        "Failed to connect to Twitch servers. Please check your internet " "connection."
-    ),
-    "retry_exhausted": ("Max retry attempts exceeded. Connection to {} failed after {} attempts."),
-    "network_diagnostics_failed": "Network diagnostics failed. Unable to reach Twitch servers.",
-}
-
-# Enhanced validation error messages
-VALIDATION_ERROR_MESSAGES = {
-    "channel_too_short": "Channel name must be at least 4 characters long",
-    "channel_too_long": "Channel name cannot exceed 25 characters",
-    "channel_invalid_chars": "Channel name can only contain letters, numbers, and underscores",
-    "channel_security_violation": "Channel name contains forbidden characters or patterns",
-    "player_args_injection": "Player arguments contain potentially dangerous content",
-    "player_args_malformed": "Player arguments have invalid format or unbalanced quotes",
-    "player_args_too_long": "Player arguments are too long (max 500 characters)",
-    "file_path_traversal": "File path contains path traversal sequences (..)",
-    "file_path_invalid_chars": "File path contains forbidden characters",
-    "file_path_too_long": "File path is too long (max 1000 characters)",
-    "file_not_exists": "File does not exist: {}",
-    "numeric_below_min": "Value {} is below minimum {}",
-    "numeric_above_max": "Value {} is above maximum {}",
-    "invalid_type": "Invalid {} value: {}",
-    "config_validation_failed": "Configuration validation failed: {}",
-    "string_too_long": "Input too long (max {} characters)",
-    "string_empty_not_allowed": "Input cannot be empty",
-    "network_timeout_invalid": "Network timeout must be between {} and {} seconds",
-    "retry_attempts_invalid": "Retry attempts must be between {} and {} attempts",
-    "retry_delay_invalid": "Retry delay must be between {} and {} seconds",
-    "startup_delay_invalid": "Startup delay must be between {} and {} seconds",
-    "window_width_invalid": "Window width must be between {} and {} pixels",
-    "window_height_invalid": "Window height must be between {} and {} pixels",
-    "window_maximized_invalid": "Window maximized setting must be a boolean",
-    "favorites_auto_refresh_invalid": ("Favorites auto-refresh setting must be a boolean"),
-    "favorites_refresh_interval_invalid": (
-        "Favorites refresh interval must be between {} and {} seconds"
-    ),
-    "favorites_check_timeout_invalid": (
-        "Favorites check timeout must be between {} and {} seconds"
-    ),
-}
