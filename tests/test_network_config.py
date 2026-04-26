@@ -224,8 +224,8 @@ class TestTwitchViewerNetworkConfig(unittest.TestCase):
         # Create viewer
         TwitchViewer(self.config)
 
-        # Verify session timeout was set
-        mock_session.set_option.assert_called_with("http-timeout", 45)
+        # Verify session timeout was set (among other set_option calls)
+        mock_session.set_option.assert_any_call("http-timeout", 45)
 
 
 if __name__ == "__main__":

@@ -11,13 +11,8 @@ import os
 APP_NAME = 'TwitchAdAvoider'
 VERSION = '2.0.0'
 
-# Only collect essential streamlink components for Twitch
-streamlink_hiddenimports = [
-    'streamlink.plugins.twitch',
-    'streamlink.stream.hls',
-    'streamlink.stream.http',
-    'streamlink.stream.file',
-]
+# Collect all streamlink submodules — required for Python API usage in frozen builds
+streamlink_hiddenimports = collect_submodules('streamlink')
 
 # Minimal data files - only what's absolutely necessary
 minimal_datas = [
