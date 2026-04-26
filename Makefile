@@ -83,11 +83,11 @@ dev-install:
 # Build Windows executable (skip tests for faster builds)
 build: clean
 	@echo "Building executable..."
-	$(PYTHON) build_executable.py
+	$(PYTHON) scripts/build_executable.py
 	@echo "✓ Build complete"
 
 # Build with full quality checks and tests
 build-full: clean format lint test
 	@echo "Building executable..."
-	$(PYTHON) build_executable.py
+	$(PYTHON) scripts/build_executable.py
 	@echo "✓ Build complete"
