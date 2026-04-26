@@ -17,15 +17,17 @@ See Also:
 """
 
 import os
+import shlex
 import subprocess
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List, cast
+from typing import Any, Optional, Dict, List, cast
 import streamlink
 import shutil
 
-from .exceptions import TwitchStreamError, ValidationError, StreamlinkError
+from .exceptions import TwitchStreamError, ValidationError
 from .config_manager import ConfigManager
 from .logging_config import get_logger
 from .validators import validate_channel_name
@@ -39,6 +41,41 @@ from .constants import (
 )
 
 logger = get_logger(__name__)
+
+
+class _StreamSession:
+    """Wraps a player subprocess and its open stream fd for coordinated shutdown."""
+
+    def __init__(self, player: subprocess.Popen, stream_fd: Any) -> None:
+        self._player = player
+        self._fd = stream_fd
+        self.pid: int = player.pid
+
+    def poll(self) -> Optional[int]:
+        return self._player.poll()
+
+    def wait(self, timeout: Optional[float] = None) -> int:
+        return self._player.wait(timeout=timeout)
+
+    def terminate(self) -> None:
+        try:
+            self._player.terminate()
+        except Exception:
+            pass
+        try:
+            self._fd.close()
+        except Exception:
+            pass
+
+    def kill(self) -> None:
+        try:
+            self._player.kill()
+        except Exception:
+            pass
+        try:
+            self._fd.close()
+        except Exception:
+            pass
 
 
 class TwitchViewer:
@@ -90,12 +127,20 @@ class TwitchViewer:
         self.selected_player: Optional[str] = None
         self.session = streamlink.Streamlink()
         self._recording_path: Optional[str] = None
+        self._recording_start_time: Optional[datetime] = None
         self._current_channel: Optional[str] = None
 
-        # Configure session timeouts
+        # Configure session options
         timeout = self.config.get("network_timeout", 30)
         self.session.set_option("http-timeout", timeout)
-        logger.debug(f"TwitchViewer streamlink session configured with {timeout}s timeout")
+        self.session.set_option("stream-segment-attempts", 5)
+        self.session.set_option("stream-segment-timeout", 15.0)
+        self.session.set_option("hls-playlist-reload-attempts", 5)
+        try:
+            self.session.set_plugin_option("twitch", "disable-ads", True)
+        except Exception:
+            pass
+        logger.debug(f"TwitchViewer session configured with {timeout}s timeout")
 
         # Check streamlink availability on startup
         if not self._check_streamlink_availability():
@@ -114,31 +159,6 @@ class TwitchViewer:
         # Reset player path when player choice changes to force re-detection
         self.player_path = None
         logger.debug(f"Player choice set to: {player_name}")
-
-    def _get_streamlink_executable(self) -> str:
-        """
-        Get the streamlink executable path, preferring the virtual environment version.
-
-        Returns:
-            Path to streamlink executable
-        """
-        # First, try to find streamlink in the current virtual environment
-        import sys
-        import platform
-
-        if hasattr(sys, "prefix") and sys.prefix != sys.base_prefix:
-            # We are in a virtual environment
-            if platform.system() == "Windows":
-                venv_streamlink = Path(sys.prefix) / "Scripts" / "streamlink.exe"
-            else:
-                venv_streamlink = Path(sys.prefix) / "bin" / "streamlink"
-
-            if venv_streamlink.exists():
-                logger.debug(f"Using virtual environment streamlink: {venv_streamlink}")
-                return str(venv_streamlink)
-
-        # Fallback to system streamlink
-        return "streamlink"
 
     def _check_streamlink_availability(self) -> bool:
         """
@@ -367,159 +387,158 @@ class TwitchViewer:
         return self._check_environment_player(debug) is not None
 
     def _fallback_to_streamlink_detection(self, debug: bool, player_choice: str) -> str:
-        """Fallback to streamlink's built-in player detection."""
+        """Fallback when no specific player is detected."""
         if debug:
-            logger.debug(f"Could not find {player_choice}, using streamlink auto-detection")
+            logger.debug(f"Could not find {player_choice}, will scan all known players")
         self.player_path = None
         return "auto"
 
-    def _get_stream(self, channel_name: str) -> str:
-        """
-        Get the stream URL for a channel.
+    def _find_any_player(self) -> None:
+        """Last-resort scan: try every known player in PATH and common dirs."""
+        for player_name, exes in SUPPORTED_PLAYERS.items():
+            if self._check_player_in_path(player_name, exes):
+                return
+        for player_name, paths in COMMON_PLAYER_PATHS.items():
+            if self._check_player_common_paths(player_name, paths):
+                return
 
-        Args:
-            channel_name: Name of the channel
-
-        Returns:
-            str: Stream URL for the specified quality
-
-        Raises:
-            TwitchStreamError: If no streams are available or streamlink fails
-        """
-        try:
-            streams = self.session.streams(f"twitch.tv/{channel_name}")
-            if not streams:
-                raise TwitchStreamError(f"No streams available for channel: {channel_name}")
-
-            quality = self.config.get("preferred_quality", "best")
-            if quality not in streams:
-                quality = "best"
-
-            return cast(str, streams[quality].url)
-        except streamlink.StreamlinkError as e:
-            error_msg = str(e)
-            # Check if this is a network/timeout error
-            if any(
-                keyword in error_msg.lower()
-                for keyword in ["timeout", "connection", "unable to open"]
-            ):
-                logger.error(f"Network error getting stream for {channel_name}: {error_msg}")
-                logger.info(f"Network timeout setting: {self.config.get('network_timeout', 30)}s")
-                logger.info("Consider increasing network_timeout in settings if this persists")
-            else:
-                logger.error(f"Streamlink error getting stream for {channel_name}: {error_msg}")
-            raise TwitchStreamError(f"Failed to get stream: {error_msg}")
-
-    def watch_stream(self, channel_name: str) -> Optional[subprocess.Popen]:
+    def watch_stream(self, channel_name: str) -> Optional["_StreamSession"]:
         """
         Watch a Twitch stream for the specified channel.
+
+        Uses the streamlink Python API to open the stream and pipes raw TS bytes
+        to the player's stdin, simultaneously writing to a recording file for
+        clip support. No external streamlink executable is required.
 
         Args:
             channel_name: Name of the Twitch channel to watch
 
         Returns:
-            Optional[subprocess.Popen]: The streamlink process if started
-                successfully, None if error
+            _StreamSession wrapping the player process, or None on error
 
         Raises:
             ValidationError: If channel name is invalid
-            TwitchStreamError: If stream cannot be accessed
-            FileNotFoundError: If streamlink is not installed
+            TwitchStreamError: If stream cannot be accessed or player not found
         """
-        logger.info(f"Starting stream for channel: {channel_name}")
-        logger.debug(
-            f"Configuration: player={self.config.get('player')}, "
-            f"quality={self.config.get('preferred_quality')}, "
-            f"debug={self.config.get('debug')}"
-        )
-
         try:
-            # Validate channel name
             channel_name = self._validate_channel(channel_name)
-            logger.debug(f"Channel name validated: {channel_name}")
 
-            # Detect player if not already done
+            # Ensure we have a concrete player path
             if self.player_path is None:
-                player_name = self._detect_player()
-                if self.player_path:
-                    logger.info(f"Using player: {player_name} ({self.player_path})")
-                else:
-                    logger.info(f"Using streamlink auto-detection for player: {player_name}")
+                self._detect_player()
+            if self.player_path is None:
+                self._find_any_player()
+            if self.player_path is None:
+                raise TwitchStreamError(
+                    "No video player found. Install VLC or MPV, or configure a "
+                    "custom player path in Settings."
+                )
 
-            # Get stream quality
             quality = self.config.get("preferred_quality", "best")
-
-            # Build streamlink command with proper executable path
-            streamlink_exe = self._get_streamlink_executable()
-            cmd = [streamlink_exe, f"twitch.tv/{channel_name}", quality]
-
-            # Add ad-blocking and discontinuity handling flags
-            cmd.extend(
-                [
-                    "--twitch-disable-ads",  # Try to disable ads via proxy
-                    "--stream-segment-attempts",
-                    "5",  # Retry failed segments
-                    "--stream-segment-timeout",
-                    "15",  # Timeout for segments (seconds)
-                    "--hls-playlist-reload-attempts",
-                    "5",  # Retry playlist reloads
-                ]
+            logger.info(
+                f"Starting stream: {channel_name} @ {quality} "
+                f"| player={self.config.get('player')}"
             )
 
-            # Add player if we found one, otherwise let streamlink auto-detect
-            if self.player_path:
-                cmd.extend(["--player", self.player_path])
+            # Resolve stream via streamlink Python API
+            streams = self.session.streams(f"twitch.tv/{channel_name}")
+            if not streams:
+                raise TwitchStreamError(f"No streams available for: {channel_name}")
+            if quality not in streams:
+                quality = "best"
+            if quality not in streams:
+                quality = next(iter(streams))
 
-            # Add player arguments if specified
-            player_args = self.config.get("player_args")
-            if player_args:
-                cmd.extend(["--player-args", player_args])
+            stream_fd = streams[quality].open()
 
-            # Add title if supported
-            title = f"Twitch - {channel_name}"
-            cmd.extend(["--title", title])
-
-            # Add loglevel to get stderr output for monitoring
-            cmd.extend(["--loglevel", "info"])
-
-            # Add recording for clip support (zero extra bandwidth — same download)
+            # Setup recording file (tee target for clip support)
             self._current_channel = channel_name
             self._recording_path = None
+            self._recording_start_time = None
+            recording_file = None
             if self.config.get("clip_enabled", True):
                 TEMP_DIR.mkdir(parents=True, exist_ok=True)
-                self._recording_path = str(TEMP_DIR / f"recording_{channel_name}.ts")
-                stale = Path(self._recording_path)
-                if stale.exists():
+                rec_path = TEMP_DIR / f"recording_{channel_name}.ts"
+                self._recording_path = str(rec_path)
+                self._recording_start_time = datetime.now()
+                if rec_path.exists():
                     try:
-                        stale.unlink()
-                        logger.debug(f"Removed stale recording: {self._recording_path}")
+                        rec_path.unlink()
+                        logger.debug(f"Removed stale recording: {rec_path}")
                     except Exception as e:
                         logger.warning(f"Could not remove stale recording: {e}")
-                cmd.extend(["--record", self._recording_path])
-                logger.debug(f"Recording to: {self._recording_path}")
+                try:
+                    recording_file = open(self._recording_path, "wb")
+                    logger.debug(f"Recording to: {self._recording_path}")
+                except Exception as e:
+                    logger.warning(f"Could not open recording file: {e}")
 
-            logger.info(f"Starting stream for channel: {channel_name}")
-            logger.info(f"Quality: {quality}")
-            logger.debug(f"Command: {' '.join(cmd)}")
+            # Launch player with stdin as its input source ("-" = stdin MRL)
+            player_cmd = [self.player_path, "-"]
+            player_args_str = self.config.get("player_args")
+            if player_args_str:
+                player_cmd.extend(shlex.split(player_args_str))
 
-            # Start streamlink process (non-blocking)
-            process = subprocess.Popen(cmd)
-            return process
+            logger.info(f"Launching player: {' '.join(str(a) for a in player_cmd)}")
+            try:
+                player_proc = subprocess.Popen(player_cmd, stdin=subprocess.PIPE, bufsize=0)
+            except FileNotFoundError:
+                stream_fd.close()
+                if recording_file:
+                    recording_file.close()
+                raise TwitchStreamError(
+                    f"Player not found at: {self.player_path}. "
+                    "Check the player path in Settings."
+                )
 
-        except ValueError as e:
-            logger.error(f"Validation error: {str(e)}")
-            raise ValidationError(f"Invalid input: {str(e)}") from e
-        except TwitchStreamError as e:
-            logger.error(f"Stream error: {str(e)}")
+            # Background tee: stream fd → player stdin + recording file
+            def _tee() -> None:
+                try:
+                    while True:
+                        chunk = stream_fd.read(65536)
+                        if not chunk:
+                            break
+                        if player_proc.stdin:
+                            try:
+                                player_proc.stdin.write(chunk)
+                            except (BrokenPipeError, OSError):
+                                break
+                        if recording_file:
+                            recording_file.write(chunk)
+                except Exception as e:
+                    logger.error(f"Tee thread error: {e}")
+                finally:
+                    try:
+                        stream_fd.close()
+                    except Exception:
+                        pass
+                    try:
+                        if player_proc.stdin:
+                            player_proc.stdin.close()
+                    except Exception:
+                        pass
+                    if recording_file:
+                        try:
+                            recording_file.close()
+                        except Exception:
+                            pass
+                    logger.debug("Tee thread finished")
+
+            tee = threading.Thread(target=_tee, daemon=True, name=f"tee-{channel_name}")
+            tee.start()
+
+            logger.info(f"Stream live: {channel_name} @ {quality} (player PID {player_proc.pid})")
+            return _StreamSession(player_proc, stream_fd)
+
+        except ValidationError:
             raise
-        except FileNotFoundError:
-            logger.error(
-                "streamlink command not found. Please ensure streamlink is installed and in PATH."
-            )
-            raise StreamlinkError("streamlink command not found") from None
+        except TwitchStreamError:
+            raise
+        except streamlink.StreamlinkError as e:
+            raise TwitchStreamError(f"Stream error: {e}") from e
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise TwitchStreamError(f"Unexpected error: {str(e)}") from e
+            logger.error(f"Unexpected error starting stream: {e}")
+            raise TwitchStreamError(f"Unexpected error: {e}") from e
 
     def _get_ffmpeg_executable(self) -> Optional[str]:
         """Locate FFmpeg, checking configured path then system PATH."""
@@ -528,60 +547,25 @@ class TwitchViewer:
             return configured
         return shutil.which("ffmpeg")
 
-    def _probe_clip_start(self, ffmpeg_exe: str, duration_seconds: int) -> Optional[float]:
-        """Return start offset (seconds) for a clip of duration_seconds from end of recording."""
-        # Try to find ffprobe next to ffmpeg, then in PATH
-        ffprobe_exe = str(Path(ffmpeg_exe).with_name("ffprobe.exe"))
-        logger.debug(f"[PROBE] Trying ffprobe at: {ffprobe_exe}")
-        if not Path(ffprobe_exe).exists():
-            ffprobe_exe = str(Path(ffmpeg_exe).with_name("ffprobe"))
-            logger.debug(f"[PROBE] .exe not found, trying: {ffprobe_exe}")
-        if not Path(ffprobe_exe).exists():
-            ffprobe_exe = shutil.which("ffprobe") or ""
-            logger.debug(f"[PROBE] Local not found, searching PATH: {ffprobe_exe}")
-        if not ffprobe_exe:
-            logger.warning("[PROBE] ffprobe not found in PATH or FFmpeg directory")
+    def _probe_clip_start(self, _ffmpeg_exe: str, duration_seconds: int) -> Optional[float]:
+        """Return start offset (seconds) for a clip of duration_seconds from end of recording.
+
+        Uses wall-clock elapsed time since recording started. ffprobe's format.duration
+        is unreliable for live TS files: it reflects the HLS PTS value (stream time since
+        the Twitch stream started, potentially hours ago) rather than the amount of content
+        actually recorded to disk.
+        """
+        if self._recording_start_time is None:
+            logger.warning("[PROBE] No recording start time — cannot calculate clip offset")
             return None
-        
-        logger.debug(f"[PROBE] Using ffprobe: {ffprobe_exe}")
-        logger.debug(f"[PROBE] Recording file: {self._recording_path}")
-        try:
-            # Get both duration and start_time to handle HLS-reconstructed files with offset PTS
-            cmd = [ffprobe_exe, "-v", "error", "-show_entries", 
-                   "format=duration,start_time",
-                   "-of", "default=noprint_wrappers=1:nokey=1", self._recording_path]
-            logger.debug(f"[PROBE] Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            logger.debug(f"[PROBE] Return code: {result.returncode}")
-            logger.debug(f"[PROBE] Stdout: {repr(result.stdout)}")
-            if result.stderr:
-                logger.debug(f"[PROBE] Stderr: {result.stderr}")
-            
-            if result.returncode != 0:
-                logger.warning(f"[PROBE] ffprobe failed with code {result.returncode}")
-                return None
-            
-            # Parse duration and start_time (handles HLS files with PTS offsets)
-            lines = result.stdout.strip().split('\n')
-            duration = float(lines[0]) if lines else 0.0
-            start_time = float(lines[1]) if len(lines) > 1 else 0.0
-            
-            # Actual content duration = end - start (accounts for HLS offset PTS)
-            actual_duration = duration - start_time
-            start_offset = max(0.0, actual_duration - duration_seconds)
-            
-            logger.info(f"[PROBE] Container duration: {duration}s, start_time: {start_time}s, "
-                       f"actual content: {actual_duration}s, clip start offset: {start_offset}s (last {duration_seconds}s)")
-            return start_offset
-        except ValueError as e:
-            logger.error(f"[PROBE] Could not parse duration from ffprobe: {e}")
-            return None
-        except subprocess.TimeoutExpired:
-            logger.error("[PROBE] ffprobe timed out after 10 seconds")
-            return None
-        except Exception as e:
-            logger.error(f"[PROBE] Unexpected error: {e}")
-            return None
+
+        elapsed = (datetime.now() - self._recording_start_time).total_seconds()
+        start_offset = max(0.0, elapsed - duration_seconds)
+        logger.info(
+            f"[PROBE] Elapsed recording time: {elapsed:.1f}s, "
+            f"clip start offset: {start_offset:.1f}s (last {duration_seconds}s)"
+        )
+        return start_offset
 
     def create_clip(self, duration_seconds: int = 30) -> Optional[str]:
         """
@@ -612,35 +596,51 @@ class TwitchViewer:
         # Probe the recording duration so we can seek accurately.
         # -sseof is unreliable for live-written fMP4 files (FFmpeg can't find
         # the true EOF), so we calculate the start offset explicitly.
-        logger.debug(f"[CLIP] Recording file size: {Path(self._recording_path).stat().st_size} bytes")
+        logger.debug(
+            f"[CLIP] Recording file size: {Path(self._recording_path).stat().st_size} bytes"
+        )
         start_time = self._probe_clip_start(ffmpeg_exe, duration_seconds)
 
         if start_time is not None:
-            seek_args = ["-ss", str(start_time), "-i", self._recording_path, "-t", str(duration_seconds)]
-            logger.info(f"[CLIP] Using ffprobe-based seek: -ss {start_time} -i <file> -t {duration_seconds}")
+            seek_args = [
+                "-ss",
+                str(start_time),
+                "-i",
+                self._recording_path,
+                "-t",
+                str(duration_seconds),
+            ]
+            logger.info(
+                f"[CLIP] Using ffprobe-based seek: -ss {start_time} -i <file> -t {duration_seconds}"
+            )
         else:
             seek_args = ["-sseof", f"-{duration_seconds}", "-i", self._recording_path]
-            logger.warning(f"[CLIP] ffprobe unavailable, falling back to: -sseof -{duration_seconds} -i <file>")
+            logger.warning(
+                f"[CLIP] ffprobe unavailable, falling back to: -sseof -{duration_seconds} -i <file>"
+            )
 
         cmd = [
             ffmpeg_exe,
             *seek_args,
-            "-c", "copy",
-            "-bsf:v", "h264_mp4toannexb",
-            "-avoid_negative_ts", "make_zero",
+            "-c",
+            "copy",
+            "-bsf:v",
+            "h264_mp4toannexb",
+            "-avoid_negative_ts",
+            "make_zero",
             "-y",
             str(output_path),
         ]
-        
+
         logger.debug(f"[CLIP] Full FFmpeg command: {' '.join(cmd)}")
 
         try:
             result = subprocess.run(cmd, capture_output=True, timeout=60)
-            stderr_text = result.stderr.decode(errors='replace') if result.stderr else ""
+            stderr_text = result.stderr.decode(errors="replace") if result.stderr else ""
             logger.debug(f"[CLIP] FFmpeg return code: {result.returncode}")
             if stderr_text:
                 logger.debug(f"[CLIP] FFmpeg stderr: {stderr_text[:500]}...")  # First 500 chars
-            
+
             if result.returncode == 0:
                 output_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
                 logger.info(f"[CLIP] Clip saved: {output_path} ({output_size} bytes)")

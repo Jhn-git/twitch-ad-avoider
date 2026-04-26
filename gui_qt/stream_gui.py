@@ -2,7 +2,7 @@
 
 import webbrowser
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer
 import sys
 
@@ -204,6 +204,21 @@ class StreamGUI:
 
     def _on_stream_error(self, channel: str, error: str) -> None:
         logger.error(f"Stream error for {channel}: {error}")
+
+        if "No video player found" in error:
+            msg = QMessageBox(self.window)
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowTitle("No Video Player Found")
+            msg.setText(
+                "A video player (VLC or MPV) is required to watch streams.\n\n"
+                "Download VLC, install it, then try again."
+            )
+            download_btn = msg.addButton("Download VLC", QMessageBox.ButtonRole.ActionRole)
+            msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() == download_btn:
+                webbrowser.open("https://www.videolan.org/vlc/")
+
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
         self.status_display.set_streaming(False)
         self.chat_panel.set_channel("")
