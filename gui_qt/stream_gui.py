@@ -6,13 +6,11 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer
 
 from gui_qt.main_window import MainWindow
-from gui_qt.components.stream_control_panel import StreamControlPanel
 from gui_qt.components.favorites_panel import FavoritesPanel
 from gui_qt.components.chat_panel import ChatPanel
 from gui_qt.components.settings_tab import SettingsTab
 from gui_qt.components.status_display import StatusDisplay
 
-from gui_qt.controllers.validation_controller import ValidationController
 from gui_qt.controllers.stream_controller import StreamController
 
 from src.favorites_manager import FavoritesManager
@@ -27,12 +25,6 @@ class StreamGUI:
     """Main GUI application orchestrator."""
 
     def __init__(self, config: ConfigManager):
-        """
-        Initialize the StreamGUI application.
-
-        Args:
-            config: Configuration manager instance
-        """
         self.config = config
 
         self.window = MainWindow(config)
@@ -57,7 +49,6 @@ class StreamGUI:
 
     def _create_components(self) -> None:
         """Create all GUI components."""
-        self.stream_panel = StreamControlPanel()
         self.favorites_panel = FavoritesPanel()
         self.chat_panel = ChatPanel()
         self.settings_tab = SettingsTab(self.config)
@@ -65,35 +56,23 @@ class StreamGUI:
 
     def _create_controllers(self) -> None:
         """Create all controllers."""
-        self.validation_controller = ValidationController()
         self.stream_controller = StreamController(self.config)
 
     def _setup_layout(self) -> None:
         """Setup component layout in main window."""
         self.window.add_component_to_layout(
-            self.stream_panel, row=0, column=0, row_span=1, column_span=2
+            self.favorites_panel, row=0, column=0, row_span=1, column_span=1
         )
         self.window.add_component_to_layout(
-            self.favorites_panel, row=1, column=0, row_span=1, column_span=1
+            self.chat_panel, row=0, column=1, row_span=1, column_span=1
         )
         self.window.add_component_to_layout(
-            self.chat_panel, row=1, column=1, row_span=1, column_span=1
-        )
-        self.window.add_component_to_layout(
-            self.status_display, row=2, column=0, row_span=1, column_span=2
+            self.status_display, row=1, column=0, row_span=1, column_span=2
         )
         self.window.add_settings_tab(self.settings_tab)
 
     def _connect_signals(self) -> None:
         """Connect all component and controller signals."""
-        self.stream_panel.channel_changed.connect(self._on_channel_changed)
-        self.stream_panel.watch_stream_requested.connect(self._on_watch_stream)
-
-        self.validation_controller.validation_changed.connect(self._on_validation_changed)
-        self.validation_controller.watch_button_state_changed.connect(
-            self.stream_panel.set_watch_button_enabled
-        )
-
         self.stream_controller.stream_started.connect(self._on_stream_started)
         self.stream_controller.stream_finished.connect(self._on_stream_finished)
         self.stream_controller.stream_error.connect(self._on_stream_error)
@@ -103,10 +82,12 @@ class StreamGUI:
         self.status_display.clip_requested.connect(self.stream_controller.create_clip)
 
         self.favorites_panel.favorite_double_clicked.connect(self._on_favorite_double_clicked)
-        self.favorites_panel.add_current_requested.connect(self._on_add_current_favorite)
+        self.favorites_panel.open_channel_in_browser.connect(self._on_open_channel_in_browser)
         self.favorites_panel.add_new_requested.connect(self._on_add_new_favorite)
         self.favorites_panel.remove_requested.connect(self._on_remove_favorite)
         self.favorites_panel.refresh_requested.connect(self._on_refresh_favorites)
+        self.favorites_panel.pin_toggle_requested.connect(self._on_pin_toggle)
+        self.favorites_panel.quality_changed.connect(self._on_quality_changed)
 
         self.chat_panel.open_chat_requested.connect(self._on_open_chat)
 
@@ -116,14 +97,12 @@ class StreamGUI:
     def _load_initial_data(self) -> None:
         """Load initial configuration and data."""
         quality = self.config.get("quality", "best")
-        self.stream_panel.set_quality(quality)
+        self.favorites_panel.set_quality(quality)
 
         dark_mode = self.config.get("dark_mode", False)
         self._apply_theme(dark_mode)
 
         self._load_favorites()
-
-        self.stream_panel.focus_channel_input()
 
     def _setup_refresh_timer(self) -> None:
         """Setup the auto-refresh timer for favorites status checking."""
@@ -143,8 +122,7 @@ class StreamGUI:
 
         self.status_monitor.update_timeout(check_timeout)
 
-        interval_ms = interval_seconds * 1000
-        self.refresh_timer.setInterval(interval_ms)
+        self.refresh_timer.setInterval(interval_seconds * 1000)
 
         if auto_refresh:
             if not self.refresh_timer.isActive():
@@ -160,7 +138,9 @@ class StreamGUI:
         try:
             favorites_info = self.favorites_manager.get_favorites_with_status()
             for fav_info in favorites_info:
-                self.favorites_panel.add_favorite(fav_info.channel_name, fav_info.is_live)
+                self.favorites_panel.add_favorite(
+                    fav_info.channel_name, fav_info.is_live, fav_info.is_pinned
+                )
 
             count = len(favorites_info)
             logger.info(f"Loaded {count} favorites")
@@ -169,14 +149,6 @@ class StreamGUI:
         except Exception as e:
             logger.error(f"Error loading favorites: {e}")
             self.status_display.add_error(f"Failed to load favorites: {e}")
-
-    # Channel Validation Handlers
-
-    def _on_channel_changed(self, channel: str) -> None:
-        self.validation_controller.validate_channel(channel)
-
-    def _on_validation_changed(self, is_valid: bool, message: str) -> None:
-        self.stream_panel.set_validation_message(message, is_valid)
 
     # Stream Handlers
 
@@ -233,20 +205,14 @@ class StreamGUI:
     # Favorites Handlers
 
     def _on_favorite_double_clicked(self, channel: str) -> None:
-        logger.info(f"Favorite double-clicked: {channel}")
-        self.stream_panel.set_channel(channel)
-        quality = self.stream_panel.get_quality()
+        quality = self.favorites_panel.get_quality()
+        logger.info(f"Favorite double-clicked: {channel} @ {quality}")
         self._on_watch_stream(channel, quality)
 
-    def _on_add_current_favorite(self) -> None:
-        channel = self.stream_panel.get_channel()
-        if channel and self.validation_controller.get_is_valid():
-            self.favorites_panel.add_favorite(channel, False)
-            self.favorites_manager.add_favorite(channel)
-            self.status_display.add_info(f"Added to favorites: {channel}", "FAVORITES")
-            logger.info(f"Added favorite: {channel}")
-        else:
-            self.status_display.add_warning("Enter a valid channel name first", "FAVORITES")
+    def _on_open_channel_in_browser(self, channel: str) -> None:
+        url = f"https://www.twitch.tv/{channel}"
+        webbrowser.open(url)
+        logger.info(f"Opened Twitch channel in browser: {channel}")
 
     def _on_add_new_favorite(self) -> None:
         from PySide6.QtWidgets import QInputDialog
@@ -294,6 +260,16 @@ class StreamGUI:
             logger.error(f"Error during favorites refresh: {e}")
             self.status_display.add_error(f"Failed to refresh favorites: {e}", "FAVORITES")
 
+    def _on_pin_toggle(self, channel: str) -> None:
+        new_state = self.favorites_manager.toggle_pin(channel)
+        self.favorites_panel.update_pin_status(channel, new_state)
+        action = "Pinned" if new_state else "Unpinned"
+        logger.info(f"{action}: {channel}")
+
+    def _on_quality_changed(self, quality: str) -> None:
+        self.config.set("quality", quality)
+        logger.debug(f"Quality changed to: {quality}")
+
     # Chat Handler
 
     def _on_open_chat(self) -> None:
@@ -320,7 +296,6 @@ class StreamGUI:
 
     def _apply_theme(self, dark_mode: bool) -> None:
         self.window.switch_theme(dark_mode)
-        self.stream_panel.set_dark_mode(dark_mode)
         self.favorites_panel.set_dark_mode(dark_mode)
         self.status_display.set_dark_mode(dark_mode)
 

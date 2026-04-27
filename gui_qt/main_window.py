@@ -112,8 +112,6 @@ class MainWindow(QMainWindow):
         +--------------------------------------------------+
         | Tab 1: Stream                                    |
         |   +----------------------------------------------+|
-        |   |  Stream Control Panel (top)                 ||
-        |   +--------------------+-------------------------+|
         |   |                    |                         ||
         |   |  Favorites Panel   |   Chat Panel            ||
         |   |  (left)            |   (right)               ||
@@ -146,13 +144,11 @@ class MainWindow(QMainWindow):
         self.stream_tab_layout.setContentsMargins(15, 15, 15, 15)
 
         # Grid layout weights for stream tab:
-        # Row 0: Stream controls (fixed height)
-        # Row 1: Favorites + Chat (expandable)
-        # Row 2: Status (fixed height)
+        # Row 0: Favorites + Chat (expandable)
+        # Row 1: Status (fixed height)
 
-        self.stream_tab_layout.setRowStretch(0, 0)  # Stream controls - no stretch
-        self.stream_tab_layout.setRowStretch(1, 1)  # Favorites/Chat - expand
-        self.stream_tab_layout.setRowStretch(2, 0)  # Status - no stretch
+        self.stream_tab_layout.setRowStretch(0, 1)  # Favorites/Chat - expand
+        self.stream_tab_layout.setRowStretch(1, 0)  # Status - no stretch
 
         # Column 0: Favorites (40% width)
         # Column 1: Chat (60% width)
