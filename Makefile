@@ -1,4 +1,4 @@
-.PHONY: help clean test format lint typecheck check run build install dev-install all
+.PHONY: help clean test format lint typecheck check run build install dev-install all release
 
 # Detect OS for cross-platform compatibility
 ifeq ($(OS),Windows_NT)
@@ -30,6 +30,7 @@ help:
 	@echo ""
 	@echo "Building:"
 	@echo "  make build        - Build Windows executable (clean + check + test + build)"
+	@echo "  make release      - Bump version, build, and publish GitHub release"
 	@echo ""
 
 # Run the application
@@ -91,3 +92,11 @@ build-full: clean format lint test
 	@echo "Building executable..."
 	$(PYTHON) scripts/build_executable.py
 	@echo "✓ Build complete"
+
+# Bump version, build exe, and publish GitHub release (Windows)
+# Usage: make release        (patch bump)
+#        make release BUMP=minor
+#        make release BUMP=major
+BUMP ?= patch
+release:
+	powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Bump $(BUMP)
