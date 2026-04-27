@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Application metadata
 APP_NAME = "TwitchAdAvoider"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.3"
 APP_DESCRIPTION = "A Python implementation for watching Twitch streams while avoiding ads"
 
 # Default configuration values
