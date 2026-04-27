@@ -41,11 +41,12 @@ class FavoriteChannelInfo(NamedTuple):
     Attributes:
         channel_name (str): The Twitch channel name (validated format)
         is_live (bool): Current live status of the channel
+        is_pinned (bool): Whether the channel is pinned to the top of the list
         last_checked (Optional[datetime]): UTC timestamp of last status check
         last_seen_live (Optional[datetime]): UTC timestamp when channel was last seen live
 
     Example:
-        >>> info = FavoriteChannelInfo("ninja", True, datetime.now(timezone.utc))
+        >>> info = FavoriteChannelInfo("ninja", True, False, datetime.now(timezone.utc))
         >>> print(f"{info.channel_name} is {'live' if info.is_live else 'offline'}")
 
     See Also:
@@ -55,6 +56,7 @@ class FavoriteChannelInfo(NamedTuple):
 
     channel_name: str
     is_live: bool = False
+    is_pinned: bool = False
     last_checked: Optional[datetime] = None
     last_seen_live: Optional[datetime] = None
 
@@ -120,6 +122,7 @@ class FavoritesManager:
             self.favorites_data[channel_name] = {
                 "channel_name": channel_name,
                 "is_live": False,
+                "is_pinned": False,
                 "last_checked": None,
                 "last_seen_live": None,
             }
@@ -163,12 +166,13 @@ class FavoritesManager:
                 FavoriteChannelInfo(
                     channel_name=channel_data["channel_name"],
                     is_live=channel_data.get("is_live", False),
+                    is_pinned=channel_data.get("is_pinned", False),
                     last_checked=last_checked,
                     last_seen_live=last_seen_live,
                 )
             )
 
-        return sorted(favorites, key=lambda x: x.channel_name)
+        return sorted(favorites, key=lambda x: (not x.is_pinned, x.channel_name))
 
     def update_channel_status(self, channel_name: str, is_live: bool) -> None:
         """Update status information for a favorite channel"""
@@ -212,10 +216,21 @@ class FavoritesManager:
             return FavoriteChannelInfo(
                 channel_name=channel_data["channel_name"],
                 is_live=channel_data.get("is_live", False),
+                is_pinned=channel_data.get("is_pinned", False),
                 last_checked=last_checked,
                 last_seen_live=last_seen_live,
             )
         return None
+
+    def toggle_pin(self, channel_name: str) -> bool:
+        """Toggle pin status for a channel. Returns new pin state."""
+        channel_name = channel_name.lower().strip()
+        if channel_name in self.favorites_data:
+            current = self.favorites_data[channel_name].get("is_pinned", False)
+            self.favorites_data[channel_name]["is_pinned"] = not current
+            self._save_favorites()
+            return not current
+        return False
 
     def clear_favorites(self) -> None:
         """Clear all favorites"""
