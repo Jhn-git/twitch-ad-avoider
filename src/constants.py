@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Application metadata
 APP_NAME = "TwitchAdAvoider"
-APP_VERSION = "2.0.3"
+APP_VERSION = "2.0.4"
 APP_DESCRIPTION = "A Python implementation for watching Twitch streams while avoiding ads"
 
 # Default configuration values
@@ -98,9 +98,9 @@ MAX_STARTUP_DELAY = 30
 
 # Window size validation constants
 MIN_WINDOW_WIDTH = 300
-MAX_WINDOW_WIDTH = 1920
+MAX_WINDOW_WIDTH = 7680
 MIN_WINDOW_HEIGHT = 200
-MAX_WINDOW_HEIGHT = 1080
+MAX_WINDOW_HEIGHT = 4320
 
 # Favorites refresh validation constants
 MIN_REFRESH_INTERVAL = 30  # Minimum 30 seconds

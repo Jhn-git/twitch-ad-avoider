@@ -41,8 +41,6 @@ DEFAULT_WIDTH = 800
 DEFAULT_HEIGHT = 650
 MIN_WIDTH = 700
 MIN_HEIGHT = 550
-MAX_WIDTH = 1400
-MAX_HEIGHT = 1000
 
 
 class MainWindow(QMainWindow):
@@ -98,7 +96,6 @@ class MainWindow(QMainWindow):
         # Set window size
         self.resize(width, height)
         self.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
-        self.setMaximumSize(MAX_WIDTH, MAX_HEIGHT)
 
         # Apply maximized state if saved
         if is_maximized:
@@ -112,12 +109,14 @@ class MainWindow(QMainWindow):
         +--------------------------------------------------+
         | Tab 1: Stream                                    |
         |   +----------------------------------------------+|
+        |   |  Current Stream controls                     ||
+        |   +----------------------------------------------+|
         |   |                    |                         ||
         |   |  Favorites Panel   |   Chat Panel            ||
         |   |  (left)            |   (right)               ||
         |   |                    |                         ||
         |   +--------------------+-------------------------+|
-        |   |  Status Display (bottom)                     ||
+        |   |  Activity drawer (bottom)                    ||
         |   +----------------------------------------------+|
         |                                                  |
         | Tab 2: Settings                                  |
@@ -144,11 +143,12 @@ class MainWindow(QMainWindow):
         self.stream_tab_layout.setContentsMargins(15, 15, 15, 15)
 
         # Grid layout weights for stream tab:
-        # Row 0: Favorites + Chat (expandable)
-        # Row 1: Status (fixed height)
-
-        self.stream_tab_layout.setRowStretch(0, 1)  # Favorites/Chat - expand
-        self.stream_tab_layout.setRowStretch(1, 0)  # Status - no stretch
+        # Row 0: Current stream controls
+        # Row 1: Favorites + Chat (expandable)
+        # Row 2: Activity drawer
+        self.stream_tab_layout.setRowStretch(0, 0)
+        self.stream_tab_layout.setRowStretch(1, 1)
+        self.stream_tab_layout.setRowStretch(2, 0)
 
         # Column 0: Favorites (40% width)
         # Column 1: Chat (60% width)

@@ -10,6 +10,7 @@ from gui_qt.components.favorites_panel import FavoritesPanel
 from gui_qt.components.chat_panel import ChatPanel
 from gui_qt.components.settings_tab import SettingsTab
 from gui_qt.components.status_display import StatusDisplay
+from gui_qt.components.stream_actions import StreamActions
 
 from gui_qt.controllers.stream_controller import StreamController
 
@@ -53,6 +54,7 @@ class StreamGUI:
         self.chat_panel = ChatPanel()
         self.settings_tab = SettingsTab(self.config)
         self.status_display = StatusDisplay()
+        self.stream_actions = StreamActions()
 
     def _create_controllers(self) -> None:
         """Create all controllers."""
@@ -61,13 +63,16 @@ class StreamGUI:
     def _setup_layout(self) -> None:
         """Setup component layout in main window."""
         self.window.add_component_to_layout(
-            self.favorites_panel, row=0, column=0, row_span=1, column_span=1
+            self.stream_actions, row=0, column=0, row_span=1, column_span=2
         )
         self.window.add_component_to_layout(
-            self.chat_panel, row=0, column=1, row_span=1, column_span=1
+            self.favorites_panel, row=1, column=0, row_span=1, column_span=1
         )
         self.window.add_component_to_layout(
-            self.status_display, row=1, column=0, row_span=1, column_span=2
+            self.chat_panel, row=1, column=1, row_span=1, column_span=1
+        )
+        self.window.add_component_to_layout(
+            self.status_display, row=2, column=0, row_span=1, column_span=2
         )
         self.window.add_settings_tab(self.settings_tab)
 
@@ -79,7 +84,7 @@ class StreamGUI:
         self.stream_controller.clip_created.connect(self._on_clip_created)
         self.stream_controller.clip_failed.connect(self._on_clip_failed)
 
-        self.status_display.clip_requested.connect(self.stream_controller.create_clip)
+        self.stream_actions.clip_requested.connect(self.stream_controller.create_clip)
 
         self.favorites_panel.favorite_double_clicked.connect(self._on_favorite_double_clicked)
         self.favorites_panel.open_channel_in_browser.connect(self._on_open_channel_in_browser)
@@ -98,6 +103,7 @@ class StreamGUI:
         """Load initial configuration and data."""
         quality = self.config.get("quality", "best")
         self.favorites_panel.set_quality(quality)
+        self.stream_actions.set_streaming(False, quality=quality)
 
         dark_mode = self.config.get("dark_mode", False)
         self._apply_theme(dark_mode)
@@ -155,12 +161,14 @@ class StreamGUI:
     def _on_watch_stream(self, channel: str, quality: str) -> None:
         logger.info(f"Watch stream requested: {channel} @ {quality}")
         self.status_display.add_info(f"Starting stream: {channel} @ {quality}", "STREAM")
+        self.stream_actions.set_streaming(False, channel, quality)
         self.stream_controller.start_stream(channel, quality)
 
     def _on_stream_started(self, channel: str) -> None:
         logger.info(f"Stream started: {channel}")
         self.status_display.add_system(f"Stream started: {channel}", "STREAM")
         self.status_display.set_streaming(True)
+        self.stream_actions.set_streaming(True, channel, self.favorites_panel.get_quality())
         self.chat_panel.set_channel(channel)
         process = self.stream_controller.get_current_process()
         self.window.set_stream_process(process)
@@ -169,6 +177,7 @@ class StreamGUI:
         logger.info(f"Stream finished: {channel}")
         self.status_display.add_info(f"Stream finished: {channel}", "STREAM")
         self.status_display.set_streaming(False)
+        self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
         self.chat_panel.set_channel("")
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
@@ -192,6 +201,7 @@ class StreamGUI:
 
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
         self.status_display.set_streaming(False)
+        self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
         self.chat_panel.set_channel("")
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
@@ -242,9 +252,13 @@ class StreamGUI:
         favorites = self.favorites_panel.get_favorites()
 
         if not favorites:
+            self.status_display.add_info("Refresh skipped: no favorites saved", "FAVORITES")
             return
 
         logger.info(f"Refreshing status for {len(favorites)} favorite channels")
+        self.status_display.add_info(
+            f"Refreshing {len(favorites)} favorite channel statuses", "FAVORITES"
+        )
 
         try:
             status_results = self.status_monitor.check_channels(favorites)
@@ -255,6 +269,17 @@ class StreamGUI:
 
             live_count = sum(status_results.values())
             logger.info(f"Status refresh complete: {live_count}/{len(favorites)} channels live")
+            live_channels = sorted(
+                channel for channel, is_live in status_results.items() if is_live
+            )
+            if live_channels:
+                live_summary = ", ".join(live_channels[:5])
+                if len(live_channels) > 5:
+                    live_summary += f", +{len(live_channels) - 5} more"
+                message = f"Refresh complete: {live_count}/{len(favorites)} live ({live_summary})"
+            else:
+                message = f"Refresh complete: 0/{len(favorites)} channels live"
+            self.status_display.add_info(message, "FAVORITES")
 
         except Exception as e:
             logger.error(f"Error during favorites refresh: {e}")
@@ -268,6 +293,8 @@ class StreamGUI:
 
     def _on_quality_changed(self, quality: str) -> None:
         self.config.set("quality", quality)
+        if not self.stream_controller.is_streaming():
+            self.stream_actions.set_streaming(False, quality=quality)
         logger.debug(f"Quality changed to: {quality}")
 
     # Chat Handler

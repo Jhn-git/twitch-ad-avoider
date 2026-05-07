@@ -1,4 +1,5 @@
 # CLAUDE.md
+
 <!-- Last Updated: 2025-11-27 | Target: AI Assistants, Developers -->
 
 ## Project Context
@@ -17,37 +18,41 @@
 
 **Data Flow**: `User Input → Validators → ConfigManager → TwitchViewer → Player`
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| TwitchViewer | `src/twitch_viewer.py` | Streaming, player detection |
-| ConfigManager | `src/config_manager.py` | JSON config + validation |
-| Validators | `src/validators.py` | Security input validation |
-| StreamGUI | `gui_qt/stream_gui.py` | Qt GUI orchestrator |
-| SettingsTab | `gui_qt/components/settings_tab.py` | Settings interface |
+| Component     | File                                | Purpose                     |
+| ------------- | ----------------------------------- | --------------------------- |
+| TwitchViewer  | `src/twitch_viewer.py`              | Streaming, player detection |
+| ConfigManager | `src/config_manager.py`             | JSON config + validation    |
+| Validators    | `src/validators.py`                 | Security input validation   |
+| StreamGUI     | `gui_qt/stream_gui.py`              | Qt GUI orchestrator         |
+| SettingsTab   | `gui_qt/components/settings_tab.py` | Settings interface          |
 
 ---
 
 ## Security (CRITICAL)
 
 **Principles**:
+
 - ✅ Always use `src/validators.py` for user input
 - ✅ Use subprocess with argument lists (never `shell=True` with user input)
 - ✅ Validate file paths for traversal
 - ✅ Test with malicious inputs
 
 **Validators** (`src/validators.py`):
+
 - `validate_channel_name()` - 4-25 chars, alphanumeric + underscore only
 - `validate_player_path()` - Path traversal prevention
 - `validate_player_args()` - Command injection prevention
 - `validate_quality()` / `validate_log_level()` - Enum validation
 
 **Blocked Patterns**:
+
 - Path traversal: `../`, `..\\`
 - Command injection: `;`, `|`, `&`, `$()`, backticks
 - Control chars: null bytes, dangerous chars
 - Windows reserved names: con, prn, aux, etc.
 
 **Security Test Pattern** (required for new validators/input handling):
+
 ```python
 def test_security_validation(self):
     malicious = ["../../../etc/passwd", "test;whoami", "test`id`", "test\x00name"]
@@ -61,6 +66,7 @@ def test_security_validation(self):
 ## Commands
 
 **Use Makefile** (recommended):
+
 ```bash
 make run      # Run app
 make test     # Run tests
@@ -70,6 +76,7 @@ make build    # Full build workflow
 ```
 
 **Direct**:
+
 ```bash
 python main.py                                 # GUI
 python main.py --channel ninja --quality 720p  # CLI
@@ -84,6 +91,7 @@ black . && flake8 . && python -m mypy src/     # Quality
 **Config**: `ConfigManager` uses JSON (`config/settings.json`), validates all settings, atomic saves.
 
 **Exceptions** (`src/exceptions.py`):
+
 ```
 TwitchAdAvoiderError (base)
 ├── ValidationError    # Input validation
@@ -93,6 +101,7 @@ TwitchAdAvoiderError (base)
 ```
 
 **File Locations**:
+
 - `config/settings.json` - Settings
 - `config/favorites.json` - Favorites
 - `logs/twitch_ad_avoider.log` - Logs
@@ -112,7 +121,7 @@ TwitchAdAvoiderError (base)
 ```python
 def validate_channel_name(channel_name: str) -> str:
     """Validate Twitch channel name with security controls.
-    
+
     Args:
         channel_name: Raw channel name input
     Returns:
@@ -123,6 +132,7 @@ def validate_channel_name(channel_name: str) -> str:
 ```
 
 **Error Handling**: Use specific exceptions, log with context:
+
 ```python
 try:
     channel = validate_channel_name(input)
@@ -135,17 +145,20 @@ except ValidationError as e:
 ## Development Patterns
 
 **Adding Config Option**:
+
 1. Add default in `ConfigManager.DEFAULT_CONFIG`
 2. Add validation in `ConfigManager._validate_config()`
 3. Update `gui_qt/components/settings_tab.py`
 4. Add tests
 
 **Adding Validator**:
+
 1. Create in `src/validators.py`, raise `ValidationError`
 2. Add tests (valid + malicious inputs)
 3. Use in components
 
 **Adding GUI Component**:
+
 1. Create in `gui_qt/components/`
 2. Use Qt signals, validate inputs real-time
 3. Test manually
