@@ -108,7 +108,9 @@ class StreamWorker(QObject):
                         logger.warning(error_msg)
                         # Log streamlink's own output so the cause is visible in the log
                         if self.process.stderr:
-                            stderr_text = self.process.stderr.read().decode(errors="replace").strip()
+                            stderr_text = (
+                                self.process.stderr.read().decode(errors="replace").strip()
+                            )
                             if stderr_text:
                                 logger.warning(f"Streamlink output:\n{stderr_text}")
                         self.error.emit(error_msg)
@@ -181,6 +183,8 @@ class StreamController(QObject):
         self.current_quality: Optional[str] = None
         self._clip_thread: Optional[QThread] = None
         self._clip_worker: Optional[ClipWorker] = None
+        self._stream_generation = 0
+        self._cleaned_stream_threads: set[int] = set()
 
     def start_stream(self, channel: str, quality: str) -> None:
         """
@@ -195,58 +199,91 @@ class StreamController(QObject):
         # Stop any existing stream first
         if self.is_streaming():
             logger.warning("Stream already running, stopping it first")
-            self.stop_stream()
+            if not self.stop_stream():
+                self.stream_error.emit(
+                    self.current_channel or channel,
+                    "Could not stop the current stream before starting a new one",
+                )
+                return
 
         # Update config with current quality
         self.config.set("quality", quality)
         logger.info(f"[DEBUG] Config updated with quality: {quality}")
 
         # Create worker and thread
-        self.current_worker = StreamWorker(self.twitch_viewer, channel, quality)
-        self.current_thread = QThread()
+        worker = StreamWorker(self.twitch_viewer, channel, quality)
+        thread = QThread()
+        self._stream_generation += 1
+        generation = self._stream_generation
+
+        self.current_worker = worker
+        self.current_thread = thread
         self.current_channel = channel
         self.current_quality = quality
         logger.info("[DEBUG] Created worker and thread")
 
         # Move worker to thread
-        self.current_worker.moveToThread(self.current_thread)
+        worker.moveToThread(thread)
         logger.info("[DEBUG] Worker moved to thread")
 
         # Connect signals
-        self.current_thread.started.connect(self.current_worker.run)
-        self.current_worker.started.connect(self._on_stream_started)
-        self.current_worker.finished.connect(self._on_stream_finished)
-        self.current_worker.error.connect(self._on_stream_error)
+        thread.started.connect(worker.run)
+        worker.started.connect(
+            lambda ch=channel, stream_worker=worker, gen=generation: self._on_stream_started(
+                ch, stream_worker, gen
+            )
+        )
+        worker.finished.connect(
+            lambda ch=channel, gen=generation: self._on_stream_finished(ch, gen)
+        )
+        worker.error.connect(
+            lambda error, ch=channel, gen=generation: self._on_stream_error(ch, error, gen)
+        )
         logger.info("[DEBUG] Signals connected")
 
         # Cleanup when finished
-        self.current_worker.finished.connect(self.current_thread.quit)
-        self.current_worker.error.connect(self.current_thread.quit)
-        self.current_thread.finished.connect(self._cleanup_thread)
+        worker.finished.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        thread.finished.connect(
+            lambda stream_thread=thread, stream_worker=worker, gen=generation: (
+                self._cleanup_thread(stream_thread, stream_worker, gen)
+            )
+        )
 
         # Start the thread
         logger.info(f"[DEBUG] Starting thread for channel: {channel}")
-        self.current_thread.start()
+        thread.start()
         logger.info("[DEBUG] Thread started successfully")
 
         logger.info(f"Stream thread started for channel: {channel}")
 
-    def stop_stream(self) -> None:
-        """Stop the current stream."""
+    def stop_stream(self) -> bool:
+        """Stop the current stream.
+
+        Returns:
+            True if no stream is active or the active stream stopped, False otherwise.
+        """
         if not self.is_streaming():
             logger.warning("No stream to stop")
-            return
+            return True
 
         logger.info(f"Stopping stream: {self.current_channel}")
 
-        if self.current_worker:
-            self.current_worker.stop()
+        thread = self.current_thread
+        worker = self.current_worker
+        generation = self._stream_generation
 
-        if self.current_thread:
-            self.current_thread.quit()
-            self.current_thread.wait(2000)  # Wait up to 2 seconds
+        if worker:
+            worker.stop()
 
-        self._cleanup_thread()
+        if thread:
+            thread.quit()
+            if not thread.wait(3000):
+                logger.error("Stream thread did not stop within timeout")
+                return False
+
+        self._cleanup_thread(thread, worker, generation)
+        return True
 
     def is_streaming(self) -> bool:
         """
@@ -294,44 +331,71 @@ class StreamController(QObject):
         """
         return self.current_channel if self.is_streaming() else None
 
-    def _on_stream_started(self) -> None:
+    def _on_stream_started(self, channel: str, worker: StreamWorker, generation: int) -> None:
         """Handle stream started signal from worker."""
-        if self.current_worker:
-            self.current_process = self.current_worker.process
+        if generation != self._stream_generation or worker is not self.current_worker:
+            logger.debug(f"Ignoring stale stream started signal for {channel}")
+            return
 
-        logger.info(f"Stream started: {self.current_channel}")
-        self.stream_started.emit(self.current_channel)
+        self.current_process = worker.process
 
-    def _on_stream_finished(self) -> None:
+        logger.info(f"Stream started: {channel}")
+        self.stream_started.emit(channel)
+
+    def _on_stream_finished(self, channel: str, generation: int) -> None:
         """Handle stream finished signal from worker."""
-        channel = self.current_channel
+        if generation != self._stream_generation:
+            logger.debug(f"Ignoring stale stream finished signal for {channel}")
+            return
+
         logger.info(f"Stream finished: {channel}")
         self.stream_finished.emit(channel)
 
-    def _on_stream_error(self, error_message: str) -> None:
+    def _on_stream_error(self, channel: str, error_message: str, generation: int) -> None:
         """
         Handle stream error signal from worker.
 
         Args:
+            channel: Channel associated with the worker that failed
             error_message: Error message from worker
+            generation: Stream lifecycle generation for stale signal filtering
         """
-        channel = self.current_channel
+        if generation != self._stream_generation:
+            logger.debug(f"Ignoring stale stream error signal for {channel}: {error_message}")
+            return
+
         logger.error(f"Stream error for {channel}: {error_message}")
         self.stream_error.emit(channel, error_message)
 
-    def _cleanup_thread(self) -> None:
-        """Clean up thread and worker references."""
-        if self.current_thread:
-            self.current_thread.deleteLater()
+    def _cleanup_thread(
+        self,
+        thread: Optional[QThread] = None,
+        worker: Optional[StreamWorker] = None,
+        generation: Optional[int] = None,
+    ) -> None:
+        """Clean up a completed stream thread and worker."""
+        thread = thread or self.current_thread
+        worker = worker or self.current_worker
+
+        if thread is None and worker is None:
+            return
+
+        if thread is not None:
+            thread_id = id(thread)
+            if thread_id in self._cleaned_stream_threads:
+                return
+            self._cleaned_stream_threads.add(thread_id)
+            thread.deleteLater()
+
+        if worker is not None:
+            worker.deleteLater()
+
+        if generation is None or generation == self._stream_generation:
             self.current_thread = None
-
-        if self.current_worker:
-            self.current_worker.deleteLater()
             self.current_worker = None
-
-        self.current_channel = None
-        self.current_process = None
-        self.current_quality = None
+            self.current_channel = None
+            self.current_process = None
+            self.current_quality = None
 
         logger.debug("Stream thread cleaned up")
 

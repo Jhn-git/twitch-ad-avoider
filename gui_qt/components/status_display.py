@@ -1,11 +1,12 @@
 """
-Status display component for TwitchAdAvoider Qt GUI.
+Activity display component for TwitchAdAvoider Qt GUI.
 
-This module provides a read-only status message display with
-color-coded messages and timestamps.
+This module provides a collapsible activity drawer with color-coded
+messages and timestamps.
 
 The StatusDisplay handles:
-    - Multi-line status message display
+    - Compact latest activity summary
+    - Collapsible multi-line activity history
     - Timestamped messages
     - Color-coded message levels (INFO, WARNING, ERROR, SYSTEM)
     - Auto-scrolling to latest messages
@@ -18,15 +19,20 @@ Key Features:
     - Message trimming to prevent memory bloat
 """
 
-from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QPushButton, QTextEdit, QVBoxLayout
-from PySide6.QtCore import Signal, QUrl
-from PySide6.QtGui import QTextCursor, QFont, QDesktopServices
+from PySide6.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
+)
+from PySide6.QtGui import QTextCursor, QFont
 from datetime import datetime
 from typing import Optional
 from enum import Enum
-from pathlib import Path
 
-from src.constants import CLIPS_DIR
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -44,13 +50,11 @@ class MessageLevel(Enum):
 
 class StatusDisplay(QGroupBox):
     """
-    Displays status messages with timestamps and color coding.
+    Displays activity messages with timestamps and color coding.
 
-    This component provides a read-only display for system messages
-    with automatic scrolling and message history management.
+    This component keeps the main stream view compact while still making
+    recent activity available when the user expands the drawer.
     """
-
-    clip_requested = Signal()
 
     # Color mapping for message levels (light theme colors)
     LEVEL_COLORS = {
@@ -78,47 +82,56 @@ class StatusDisplay(QGroupBox):
             parent: Parent widget
             max_messages: Maximum number of messages to keep in history
         """
-        super().__init__("Status", parent)
+        super().__init__("Activity", parent)
 
         self.max_messages = max_messages
         self.message_count = 0
         self.dark_mode = False
+        self.expanded = False
+        self.unread_count = 0
 
         # Create UI components
         self._create_ui()
 
         # Add initial message
         self.add_message("Ready", MessageLevel.SYSTEM)
+        self.unread_count = 0
+        self.toggle_button.setText(self._collapsed_button_text())
 
     def _create_ui(self) -> None:
         """Create the UI components."""
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 15, 10, 10)
+        layout.setSpacing(8)
 
-        # Clip button row
-        button_layout = QHBoxLayout()
-        self.clip_button = QPushButton("Clip (30s)")
-        self.clip_button.setToolTip("Save the last 30 seconds to a local file (requires FFmpeg)")
-        self.clip_button.setEnabled(False)
-        self.clip_button.setMaximumWidth(120)
-        self.clip_button.clicked.connect(self.clip_requested)
-        button_layout.addWidget(self.clip_button)
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
 
-        self.open_clips_button = QPushButton("Open Clips Folder")
-        self.open_clips_button.setToolTip(f"Open the clips folder ({CLIPS_DIR})")
-        self.open_clips_button.setMaximumWidth(140)
-        self.open_clips_button.clicked.connect(self._open_clips_folder)
-        button_layout.addWidget(self.open_clips_button)
+        self.summary_label = QLabel("Ready")
+        self.summary_label.setObjectName("activitySummary")
+        self.summary_label.setMinimumWidth(0)
+        self.summary_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        header_layout.addWidget(self.summary_label, 1)
 
-        button_layout.addStretch()
-        layout.addLayout(button_layout)
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.setMaximumWidth(80)
+        self.clear_button.clicked.connect(self.clear)
+        header_layout.addWidget(self.clear_button)
+
+        self.toggle_button = QPushButton("Show Log")
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setMaximumWidth(110)
+        self.toggle_button.clicked.connect(self._on_toggle_clicked)
+        header_layout.addWidget(self.toggle_button)
+
+        layout.addLayout(header_layout)
 
         # Text display (read-only)
         self.text_display = QTextEdit()
         self.text_display.setObjectName("statusDisplay")
         self.text_display.setReadOnly(True)
-        self.text_display.setMinimumHeight(80)
-        self.text_display.setMaximumHeight(120)
+        self.text_display.setMinimumHeight(110)
+        self.text_display.setMaximumHeight(180)
 
         # Set monospace font
         font = QFont("Consolas", 9)
@@ -131,12 +144,28 @@ class StatusDisplay(QGroupBox):
 
         layout.addWidget(self.text_display)
         self.setLayout(layout)
+        self._set_expanded(False)
 
-    def _open_clips_folder(self) -> None:
-        """Open the clips folder in the system file explorer."""
-        clips_path = Path(CLIPS_DIR).resolve()
-        clips_path.mkdir(parents=True, exist_ok=True)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(clips_path)))
+    def _on_toggle_clicked(self, checked: bool) -> None:
+        """Handle the log drawer toggle button."""
+        self._set_expanded(checked)
+
+    def _set_expanded(self, expanded: bool) -> None:
+        """Expand or collapse the activity history."""
+        self.expanded = expanded
+        self.text_display.setVisible(expanded)
+
+        if expanded:
+            self.unread_count = 0
+            self.toggle_button.setText("Hide Log")
+        else:
+            self.toggle_button.setText(self._collapsed_button_text())
+
+    def _collapsed_button_text(self) -> str:
+        """Return the collapsed drawer button text."""
+        if self.unread_count:
+            return f"Show Log ({self.unread_count})"
+        return "Show Log"
 
     def add_message(
         self, message: str, level: MessageLevel = MessageLevel.INFO, category: Optional[str] = None
@@ -164,6 +193,9 @@ class StatusDisplay(QGroupBox):
 
         # Get current timestamp
         timestamp = datetime.now().strftime("%H:%M:%S")
+        summary_text = (
+            f"[{timestamp}] {message}" if not category else f"[{timestamp}] {category}: {message}"
+        )
 
         # Select color based on theme
         colors = self.LEVEL_COLORS_DARK if self.dark_mode else self.LEVEL_COLORS
@@ -183,6 +215,11 @@ class StatusDisplay(QGroupBox):
 
         # Append message
         self.text_display.append(html_message)
+        self.summary_label.setText(summary_text)
+
+        if not self.expanded:
+            self.unread_count += 1
+            self.toggle_button.setText(self._collapsed_button_text())
 
         # Increment message count
         self.message_count += 1
@@ -221,11 +258,14 @@ class StatusDisplay(QGroupBox):
         """Clear all messages from the display."""
         self.text_display.clear()
         self.message_count = 0
+        self.unread_count = 0
+        self.summary_label.setText("Activity cleared")
+        self.toggle_button.setText(self._collapsed_button_text())
         logger.debug("Status display cleared")
 
     def set_streaming(self, active: bool) -> None:
-        """Enable or disable the Clip button based on stream state."""
-        self.clip_button.setEnabled(active)
+        """Keep API compatibility for stream state updates."""
+        return None
 
     def set_dark_mode(self, enabled: bool) -> None:
         """

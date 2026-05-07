@@ -188,6 +188,18 @@ QLabel#statusLabel {
     padding: 4px;
 }
 
+QLabel#streamStateLabel {
+    color: #005A9E;
+    font-weight: bold;
+    padding: 4px 8px;
+}
+
+QLabel#activitySummary {
+    color: #333333;
+    font-size: 9pt;
+    padding: 4px;
+}
+
 /* Scroll Bars */
 QScrollBar:vertical {
     background-color: #F0F0F0;
