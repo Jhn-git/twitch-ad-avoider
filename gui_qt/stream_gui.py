@@ -16,6 +16,7 @@ from gui_qt.controllers.stream_controller import StreamController
 
 from src.favorites_manager import FavoritesManager
 from src.config_manager import ConfigManager
+from src.exceptions import ValidationError
 from src.status_monitor import StatusMonitor
 from src.logging_config import get_logger
 
@@ -101,7 +102,7 @@ class StreamGUI:
 
     def _load_initial_data(self) -> None:
         """Load initial configuration and data."""
-        quality = self.config.get("quality", "best")
+        quality = self.config.get("preferred_quality", "best")
         self.favorites_panel.set_quality(quality)
         self.stream_actions.set_streaming(False, quality=quality)
 
@@ -233,12 +234,14 @@ class StreamGUI:
             try:
                 from src.validators import validate_channel_name
 
-                validate_channel_name(channel.strip())
-                self.favorites_panel.add_favorite(channel.strip(), False)
-                self.favorites_manager.add_favorite(channel.strip())
-                self.status_display.add_info(f"Added to favorites: {channel}", "FAVORITES")
-                logger.info(f"Added favorite: {channel}")
-            except ValueError as e:
+                normalized_channel = validate_channel_name(channel)
+                self.favorites_panel.add_favorite(normalized_channel, False)
+                self.favorites_manager.add_favorite(normalized_channel)
+                self.status_display.add_info(
+                    f"Added to favorites: {normalized_channel}", "FAVORITES"
+                )
+                logger.info(f"Added favorite: {normalized_channel}")
+            except ValidationError as e:
                 self.status_display.add_error(f"Invalid channel name: {e}", "FAVORITES")
 
     def _on_remove_favorite(self, channel: str) -> None:
@@ -292,7 +295,10 @@ class StreamGUI:
         logger.info(f"{action}: {channel}")
 
     def _on_quality_changed(self, quality: str) -> None:
-        self.config.set("quality", quality)
+        if not self.config.set("preferred_quality", quality):
+            self.status_display.add_error(f"Invalid quality: {quality}", "SETTINGS")
+            logger.warning(f"Rejected invalid quality change: {quality}")
+            return
         if not self.stream_controller.is_streaming():
             self.stream_actions.set_streaming(False, quality=quality)
         logger.debug(f"Quality changed to: {quality}")
@@ -313,6 +319,10 @@ class StreamGUI:
         from src.logging_config import reconfigure_logging_from_config
 
         reconfigure_logging_from_config(self.config)
+        quality = self.config.get("preferred_quality", "best")
+        self.favorites_panel.set_quality(quality)
+        if not self.stream_controller.is_streaming():
+            self.stream_actions.set_streaming(False, quality=quality)
         self._update_refresh_timer_settings()
         self.status_display.add_info("Settings saved successfully", "SETTINGS")
         logger.info("Settings updated from settings tab")

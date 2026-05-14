@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QGroupBox,
     QFileDialog,
+    QMessageBox,
 )
 from PySide6.QtCore import Signal, Qt
 
@@ -362,36 +363,42 @@ class SettingsTab(QWidget):
     def _on_apply_settings(self) -> None:
         """Apply and save all settings."""
         try:
-            # Stream settings
-            self.config.set("player", self.player_combo.currentText())
-            self.config.set("preferred_quality", self.quality_combo.currentText())
-            self.config.set("cache_duration", self.cache_spin.value())
-
             player_path = self.player_path_edit.text().strip()
-            self.config.set("player_path", player_path if player_path else None)
-
             player_args = self.player_args_edit.text().strip()
-            self.config.set("player_args", player_args if player_args else None)
 
-            # Network settings
-            self.config.set("network_timeout", self.timeout_spin.value())
-            self.config.set("connection_retry_attempts", self.retry_attempts_spin.value())
-            self.config.set("retry_delay", self.retry_delay_spin.value())
+            settings = {
+                "player": self.player_combo.currentText(),
+                "preferred_quality": self.quality_combo.currentText(),
+                "cache_duration": self.cache_spin.value(),
+                "player_path": player_path if player_path else None,
+                "player_args": player_args if player_args else None,
+                "network_timeout": self.timeout_spin.value(),
+                "connection_retry_attempts": self.retry_attempts_spin.value(),
+                "retry_delay": self.retry_delay_spin.value(),
+                "favorites_auto_refresh": self.favorites_auto_refresh_check.isChecked(),
+                "favorites_refresh_interval": self.favorites_refresh_interval_spin.value(),
+                "favorites_check_timeout": self.favorites_check_timeout_spin.value(),
+                "dark_mode": self.dark_mode_check.isChecked(),
+                "debug": self.debug_check.isChecked(),
+                "log_to_file": self.log_to_file_check.isChecked(),
+                "log_level": self.log_level_combo.currentText(),
+            }
 
-            # Favorites settings
-            self.config.set("favorites_auto_refresh", self.favorites_auto_refresh_check.isChecked())
-            self.config.set(
-                "favorites_refresh_interval", self.favorites_refresh_interval_spin.value()
-            )
-            self.config.set("favorites_check_timeout", self.favorites_check_timeout_spin.value())
+            failed_keys = self.config.validate_update(settings)
+            if failed_keys:
+                message = "Invalid setting value(s): " + ", ".join(sorted(failed_keys))
+                logger.warning(message)
+                QMessageBox.warning(self, "Invalid Settings", message)
+                return
 
-            # Appearance
-            self.config.set("dark_mode", self.dark_mode_check.isChecked())
-
-            # Advanced settings
-            self.config.set("debug", self.debug_check.isChecked())
-            self.config.set("log_to_file", self.log_to_file_check.isChecked())
-            self.config.set("log_level", self.log_level_combo.currentText())
+            if not self.config.update(settings):
+                logger.error("Settings validation failed during update")
+                QMessageBox.warning(
+                    self,
+                    "Invalid Settings",
+                    "Settings could not be applied because validation failed.",
+                )
+                return
 
             # Save to file
             if self.config.save_settings():
@@ -399,9 +406,15 @@ class SettingsTab(QWidget):
                 self.settings_changed.emit()
             else:
                 logger.error("Failed to save settings")
+                QMessageBox.critical(
+                    self,
+                    "Save Failed",
+                    "Settings were valid, but could not be saved to disk.",
+                )
 
         except Exception as e:
             logger.error(f"Error applying settings: {e}")
+            QMessageBox.critical(self, "Settings Error", f"Error applying settings: {e}")
 
     def _on_reset_to_defaults(self) -> None:
         """Reset all settings to default values."""

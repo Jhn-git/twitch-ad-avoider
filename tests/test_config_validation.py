@@ -4,6 +4,7 @@ Tests the enhanced security-focused validation in configuration management.
 """
 
 import unittest
+import json
 import tempfile
 import os
 from pathlib import Path
@@ -38,6 +39,21 @@ class TestConfigManagerValidation(unittest.TestCase):
         invalid_qualities = ["1080p", "4k", "ultra", "", None]
         for quality in invalid_qualities:
             self.assertFalse(self.config.set("preferred_quality", quality))
+
+    def test_legacy_quality_key_is_rejected_for_runtime_updates(self):
+        """Test old quality key is not accepted after load migration."""
+        self.assertFalse(self.config.set("quality", "720p"))
+        self.assertNotIn("quality", self.config.get_all())
+
+    def test_legacy_quality_key_migrates_on_load(self):
+        """Test legacy quality setting loads into preferred_quality and is removed."""
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump({"quality": "720p"}, f)
+
+        config = ConfigManager(self.config_path)
+
+        self.assertEqual(config.get("preferred_quality"), "720p")
+        self.assertNotIn("quality", config.get_all())
 
     def test_valid_player_settings(self):
         """Test valid player settings"""
@@ -135,17 +151,11 @@ class TestConfigManagerValidation(unittest.TestCase):
             self.assertFalse(self.config.set("player_args", args))
 
     def test_unknown_setting_handling(self):
-        """Test handling of unknown settings"""
-        # Unknown settings should be allowed but strings should be sanitized
-        self.assertTrue(self.config.set("unknown_setting", "test_value"))
-        self.assertTrue(self.config.set("custom_option", True))
-        self.assertTrue(self.config.set("number_setting", 42))
-
-        # But malicious strings should be sanitized
-        self.assertTrue(self.config.set("unknown_string", "normal_value"))
-        # Very long strings should be rejected
-        long_string = "a" * 1001
-        self.assertFalse(self.config.set("unknown_string", long_string))
+        """Test unknown settings are rejected."""
+        self.assertFalse(self.config.set("unknown_setting", "test_value"))
+        self.assertFalse(self.config.set("custom_option", True))
+        self.assertFalse(self.config.set("number_setting", 42))
+        self.assertNotIn("unknown_setting", self.config.get_all())
 
     def test_validation_error_logging(self):
         """Test that validation errors are properly logged"""
@@ -183,6 +193,30 @@ class TestConfigManagerValidation(unittest.TestCase):
         # Verify original values weren't changed
         self.assertEqual(self.config.get("preferred_quality"), "best")
         self.assertEqual(self.config.get("cache_duration"), 60)  # Should still be 60
+
+    def test_validate_update_reports_failed_keys_without_mutation(self):
+        """Test batch validation reports all failed keys before applying settings."""
+        original_quality = self.config.get("preferred_quality")
+        failures = self.config.validate_update(
+            {
+                "preferred_quality": "invalid_quality",
+                "quality": "720p",
+                "cache_duration": 30,
+            }
+        )
+
+        self.assertEqual(set(failures), {"preferred_quality", "quality"})
+        self.assertEqual(self.config.get("preferred_quality"), original_quality)
+
+    def test_save_settings_writes_valid_json(self):
+        """Test atomic save path writes a complete JSON settings file."""
+        self.assertTrue(self.config.set("preferred_quality", "480p"))
+        self.assertTrue(self.config.save_settings())
+
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.assertEqual(data["preferred_quality"], "480p")
 
     def test_theme_validation(self):
         """Test theme setting validation"""
