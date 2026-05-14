@@ -172,7 +172,10 @@ class FavoritesManager:
                 )
             )
 
-        return sorted(favorites, key=lambda x: (not x.is_pinned, x.channel_name))
+        return sorted(
+            favorites,
+            key=lambda x: (not x.is_live, not x.is_pinned, x.channel_name.lower()),
+        )
 
     def update_channel_status(self, channel_name: str, is_live: bool) -> None:
         """Update status information for a favorite channel"""
