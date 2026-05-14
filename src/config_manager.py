@@ -22,8 +22,10 @@ See Also:
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from .constants import (
     DEFAULT_SETTINGS,
     CONFIG_FILE,
@@ -50,11 +52,19 @@ from .validators import (
     validate_file_path,
     sanitize_player_args,
     validate_numeric_range,
-    sanitize_string_input,
 )
 from .exceptions import ValidationError
 
 logger = get_logger(__name__)
+
+
+_OPTIONAL_SETTINGS = {
+    "current_theme",
+    "enable_status_monitoring",
+    "status_check_interval",
+    "status_cache_duration",
+}
+_KNOWN_SETTINGS = set(DEFAULT_SETTINGS) | _OPTIONAL_SETTINGS
 
 
 class ConfigManager:
@@ -83,11 +93,14 @@ class ConfigManager:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     file_settings = json.load(f)
 
+                file_settings = self._migrate_loaded_settings(file_settings)
+
                 # Merge with defaults, prioritizing file settings
                 self._settings = {**DEFAULT_SETTINGS, **file_settings}
 
                 # Validate settings
-                self._validate_settings()
+                if not self._validate_settings():
+                    raise ValueError("Configuration contains invalid settings")
 
                 # Synchronize debug flag and log_level for consistency
                 self._sync_debug_and_log_level()
@@ -119,19 +132,37 @@ class ConfigManager:
         Returns:
             True if settings were saved successfully, False otherwise
         """
+        temp_path = None
         try:
             # Create config directory if it doesn't exist
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Save settings to file
-            with open(self.config_path, "w", encoding="utf-8") as f:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.config_path.parent,
+                prefix=f".{self.config_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                temp_path = Path(f.name)
                 json.dump(self._settings, f, indent=4, ensure_ascii=False)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+
+            os.replace(temp_path, self.config_path)
 
             logger.info(f"Settings saved to {self.config_path}")
             return True
 
-        except (OSError, json.JSONDecodeError) as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.error(f"Failed to save settings to {self.config_path}: {e}")
+            if temp_path and Path(temp_path).exists():
+                try:
+                    Path(temp_path).unlink()
+                except OSError:
+                    logger.warning(f"Failed to remove temp settings file: {temp_path}")
             return False
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -158,10 +189,6 @@ class ConfigManager:
         Returns:
             True if setting was updated, False if validation failed
         """
-        # Create a temporary copy for validation
-        temp_settings = self._settings.copy()
-        temp_settings[key] = value
-
         # Validate the setting
         if self._validate_setting(key, value):
             self._settings[key] = value
@@ -181,17 +208,26 @@ class ConfigManager:
         Returns:
             True if all settings were updated, False if any validation failed
         """
-        # Validate all settings first
-        temp_settings = self._settings.copy()
-        temp_settings.update(settings)
-
-        if self._validate_settings(temp_settings):
+        failed_keys = self.validate_update(settings)
+        if not failed_keys:
             self._settings.update(settings)
             logger.debug(f"Settings updated: {settings}")
             return True
         else:
-            logger.warning("Failed to update settings due to validation errors")
+            logger.warning(f"Failed to update settings due to validation errors: {failed_keys}")
             return False
+
+    def validate_update(self, settings: Dict[str, Any]) -> List[str]:
+        """
+        Validate a batch of settings without mutating current settings.
+
+        Args:
+            settings: Dictionary of settings to validate
+
+        Returns:
+            List of keys that failed validation
+        """
+        return [key for key, value in settings.items() if not self._validate_setting(key, value)]
 
     def reset_to_defaults(self) -> None:
         """Reset all settings to their default values."""
@@ -226,6 +262,27 @@ class ConfigManager:
 
         return True
 
+    def _migrate_loaded_settings(self, file_settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply legacy key migrations before strict validation."""
+        if not isinstance(file_settings, dict):
+            raise ValueError("Configuration root must be a JSON object")
+
+        migrated = file_settings.copy()
+
+        if "quality" in migrated:
+            if "preferred_quality" not in migrated:
+                migrated["preferred_quality"] = migrated["quality"]
+                logger.info("Migrated legacy 'quality' setting to 'preferred_quality'")
+            migrated.pop("quality", None)
+
+        if "current_theme" in migrated:
+            if "dark_mode" not in migrated:
+                migrated["dark_mode"] = migrated["current_theme"] == "dark"
+                logger.info("Migrated legacy 'current_theme' setting to 'dark_mode'")
+            migrated.pop("current_theme", None)
+
+        return migrated
+
     def _validate_setting(self, key: str, value: Any) -> bool:
         """
         Validate a single setting using enhanced security-focused validators.
@@ -238,6 +295,9 @@ class ConfigManager:
             True if setting is valid, False otherwise
         """
         try:
+            if key not in _KNOWN_SETTINGS:
+                raise ValidationError(f"Unknown setting key: {key}")
+
             if key == "preferred_quality":
                 validate_quality_option(value)
                 return True
@@ -391,14 +451,6 @@ class ConfigManager:
             elif key == "current_theme":
                 if not isinstance(value, str) or value not in ("light", "dark"):
                     raise ValidationError("Theme must be 'light' or 'dark'")
-                return True
-
-            else:
-                # Unknown setting keys are allowed but logged
-                logger.debug(f"Unknown setting key: {key}")
-                # Apply basic string sanitization for unknown string values
-                if isinstance(value, str):
-                    sanitize_string_input(value, max_length=1000)
                 return True
 
         except ValidationError as e:

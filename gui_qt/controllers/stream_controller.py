@@ -106,13 +106,6 @@ class StreamWorker(QObject):
                     else:
                         error_msg = f"Stream exited with code {return_code}"
                         logger.warning(error_msg)
-                        # Log streamlink's own output so the cause is visible in the log
-                        if self.process.stderr:
-                            stderr_text = (
-                                self.process.stderr.read().decode(errors="replace").strip()
-                            )
-                            if stderr_text:
-                                logger.warning(f"Streamlink output:\n{stderr_text}")
                         self.error.emit(error_msg)
             else:
                 error_msg = "Failed to start stream process"
@@ -196,6 +189,13 @@ class StreamController(QObject):
         """
         logger.info(f"[DEBUG] start_stream called: channel={channel}, quality={quality}")
 
+        # Update config with current quality before launch; TwitchViewer reads this key.
+        if not self.config.set("preferred_quality", quality):
+            logger.warning(f"Rejected invalid stream quality: {quality}")
+            self.stream_error.emit(channel, f"Invalid stream quality: {quality}")
+            return
+        logger.info(f"[DEBUG] Config updated with preferred_quality: {quality}")
+
         # Stop any existing stream first
         if self.is_streaming():
             logger.warning("Stream already running, stopping it first")
@@ -205,10 +205,6 @@ class StreamController(QObject):
                     "Could not stop the current stream before starting a new one",
                 )
                 return
-
-        # Update config with current quality
-        self.config.set("quality", quality)
-        logger.info(f"[DEBUG] Config updated with quality: {quality}")
 
         # Create worker and thread
         worker = StreamWorker(self.twitch_viewer, channel, quality)

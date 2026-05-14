@@ -81,6 +81,14 @@ class TestFavoritesManager(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(len(self.manager.get_favorites()), 0)
 
+    def test_add_favorite_rejects_invalid_channel(self):
+        """Test adding invalid favorite input returns False and does not persist."""
+        result = self.manager.add_favorite("test;whoami")
+
+        self.assertFalse(result)
+        self.assertEqual(self.manager.get_favorites(), [])
+        self.assertFalse(self.favorites_file.exists())
+
     def test_remove_favorite(self):
         """Test removing a favorite channel"""
         self.manager.add_favorite("ninja")
@@ -265,7 +273,7 @@ class TestFavoritesManager(unittest.TestCase):
     def test_backward_compatibility_old_format(self):
         """Test loading old format (list of strings) migrates to new format"""
         # Create old format favorites file
-        old_format = {"favorites": ["ninja", "shroud", "pokimane"]}
+        old_format = {"favorites": ["ninja", "shroud", "pokimane", "bad;channel"]}
         with open(self.favorites_file, "w") as f:
             json.dump(old_format, f)
 
@@ -282,6 +290,11 @@ class TestFavoritesManager(unittest.TestCase):
             self.assertFalse(info.is_live)
             self.assertIsNone(info.last_checked)
             self.assertIsNone(info.last_seen_live)
+
+        with open(self.favorites_file, "r") as f:
+            data = json.load(f)
+        self.assertIn("channels", data)
+        self.assertNotIn("bad;channel", data["channels"])
 
     def test_backward_compatibility_corrupted_file(self):
         """Test handling of corrupted favorites file"""
@@ -369,6 +382,42 @@ class TestFavoritesManager(unittest.TestCase):
         # Should handle gracefully by setting to None
         self.assertIsNone(info.last_checked)
         self.assertIsNone(info.last_seen_live)
+
+    def test_new_format_drops_invalid_channels_and_cleans_file(self):
+        """Test invalid new-format favorite records are removed on load."""
+        data = {
+            "channels": {
+                "ninja": {
+                    "channel_name": "NINJA",
+                    "is_live": True,
+                    "is_pinned": True,
+                    "last_checked": None,
+                    "last_seen_live": None,
+                },
+                "bad;channel": {
+                    "channel_name": "bad;channel",
+                    "is_live": True,
+                    "is_pinned": False,
+                    "last_checked": None,
+                    "last_seen_live": None,
+                },
+            },
+            "version": "2.0",
+        }
+        with open(self.favorites_file, "w") as f:
+            json.dump(data, f)
+
+        manager = FavoritesManager(self.favorites_file)
+
+        self.assertEqual(manager.get_favorites(), ["ninja"])
+        info = manager.get_channel_info("ninja")
+        self.assertTrue(info.is_live)
+        self.assertTrue(info.is_pinned)
+
+        with open(self.favorites_file, "r") as f:
+            cleaned = json.load(f)
+        self.assertEqual(list(cleaned["channels"].keys()), ["ninja"])
+        self.assertEqual(cleaned["channels"]["ninja"]["channel_name"], "ninja")
 
 
 if __name__ == "__main__":
