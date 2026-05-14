@@ -96,7 +96,10 @@ Settings are stored in `config/settings.json` and created with defaults on first
 | `retry_delay` | `5` | Seconds between retries (1–30) |
 | `debug` | `false` | Enable verbose debug logging |
 | `log_to_file` | `false` | Write logs to `logs/twitch_ad_avoider.log` |
-| `dark_mode` | `false` | Dark theme |
+| `log_level` | `"INFO"` | Minimum log level |
+| `dark_mode` | `true` | Dark theme |
+| `window_width` | `940` | Main window width in pixels |
+| `window_height` | `680` | Main window height in pixels |
 
 ### Example Configs
 

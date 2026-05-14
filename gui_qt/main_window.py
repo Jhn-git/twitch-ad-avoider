@@ -37,8 +37,8 @@ from src.logging_config import get_logger
 logger = get_logger(__name__)
 
 # GUI Configuration Constants
-DEFAULT_WIDTH = 800
-DEFAULT_HEIGHT = 650
+DEFAULT_WIDTH = 940
+DEFAULT_HEIGHT = 680
 MIN_WIDTH = 700
 MIN_HEIGHT = 550
 
@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
         self.on_closing_callbacks: List[Callable[[], None]] = []
 
         # Current theme
-        self.current_theme = config.get("dark_mode", False)
+        self.current_theme = config.get("dark_mode", True)
 
         # Initialize window
         self._setup_window()

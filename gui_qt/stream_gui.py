@@ -106,7 +106,7 @@ class StreamGUI:
         self.favorites_panel.set_quality(quality)
         self.stream_actions.set_streaming(False, quality=quality)
 
-        dark_mode = self.config.get("dark_mode", False)
+        dark_mode = self.config.get("dark_mode", True)
         self._apply_theme(dark_mode)
 
         self._load_favorites()

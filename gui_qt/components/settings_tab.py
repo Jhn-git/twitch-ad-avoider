@@ -313,7 +313,7 @@ class SettingsTab(QWidget):
         self.favorites_check_timeout_spin.setValue(self.config.get("favorites_check_timeout", 5))
 
         # Appearance
-        dark_mode = self.config.get("dark_mode", False)
+        dark_mode = self.config.get("dark_mode", True)
         self.dark_mode_check.setChecked(dark_mode)
 
         # Advanced settings
