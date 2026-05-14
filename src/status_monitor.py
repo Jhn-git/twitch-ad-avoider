@@ -9,7 +9,9 @@ stream-url lookups.
 
 import requests
 from typing import Dict, List
+from src.exceptions import ValidationError
 from src.logging_config import get_logger
+from src.validators import validate_channel_name
 
 logger = get_logger(__name__)
 
@@ -40,16 +42,26 @@ class StatusMonitor:
         if not channels:
             return {}
 
-        logger.info(f"Checking status for {len(channels)} channels")
+        valid_channels = []
+        for channel in channels:
+            try:
+                valid_channels.append(validate_channel_name(channel))
+            except ValidationError as e:
+                logger.warning(f"Skipping invalid channel during status check: {channel!r}: {e}")
+
+        if not valid_channels:
+            return {ch: False for ch in channels}
+
+        logger.info(f"Checking status for {len(valid_channels)} channels")
 
         try:
-            results = self._batch_check(channels)
+            results = self._batch_check(valid_channels)
             live_count = sum(results.values())
-            logger.info(f"Status check complete: {live_count}/{len(channels)} live")
+            logger.info(f"Status check complete: {live_count}/{len(valid_channels)} live")
             return results
         except Exception as e:
             logger.error(f"Status check failed: {e}")
-            return {ch: False for ch in channels}
+            return {ch: False for ch in valid_channels}
 
     def _batch_check(self, channels: List[str]) -> Dict[str, bool]:
         """Single GQL request that checks all channels at once."""
