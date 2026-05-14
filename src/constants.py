@@ -16,7 +16,7 @@ DEFAULT_SETTINGS = {
     "cache_duration": 30,
     "debug": False,
     "log_to_file": True,
-    "log_level": "DEBUG",
+    "log_level": "INFO",
     "player_path": None,
     "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
     # Clip settings
@@ -24,10 +24,10 @@ DEFAULT_SETTINGS = {
     "clip_directory": "clips",  # Where to save clips
     "ffmpeg_path": "",  # FFmpeg executable path (empty = auto-detect from PATH)
     # GUI theme settings
-    "dark_mode": False,  # Enable dark theme
+    "dark_mode": True,  # Enable dark theme
     # Window settings
-    "window_width": 640,  # Main window width in pixels
-    "window_height": 650,  # Main window height in pixels
+    "window_width": 940,  # Main window width in pixels
+    "window_height": 680,  # Main window height in pixels
     "window_maximized": False,  # Whether window is maximized
     # Network settings
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
