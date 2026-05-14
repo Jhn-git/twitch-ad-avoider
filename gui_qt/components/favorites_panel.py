@@ -6,7 +6,7 @@ The FavoritesPanel handles:
     - Add/remove favorites with right-click context menu
     - Manual refresh button and quality selector
     - Double-click to stream, Ctrl+double-click to open in browser
-    - Pin/unpin channels to keep them at the top of the list
+    - Pin/unpin channels to prioritize them within live/offline groups
 """
 
 from PySide6.QtWidgets import (
@@ -238,7 +238,7 @@ class FavoritesPanel(QGroupBox):
             self.remove_requested.emit(channel)
 
     def _sort_favorites(self) -> None:
-        """Re-order list: pinned channels (alpha) then unpinned (alpha)."""
+        """Re-order list: live channels first, pinned within each group, then alpha."""
         items_data = []
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
@@ -248,7 +248,7 @@ class FavoritesPanel(QGroupBox):
                 item.data(_PIN_ROLE) or False,
             ))
 
-        items_data.sort(key=lambda x: (not x[2], x[0].lower()))
+        items_data.sort(key=lambda x: (not x[1], not x[2], x[0].lower()))
 
         self.list_widget.clear()
         for channel, is_live, is_pinned in items_data:
@@ -283,9 +283,10 @@ class FavoritesPanel(QGroupBox):
         items = self.list_widget.findItems(channel, Qt.MatchExactly)
         if items:
             items[0].setData(_LIVE_ROLE, is_live)
-            self.list_widget.viewport().update()
             if channel in self.favorites_data:
                 self.favorites_data[channel]["is_live"] = is_live
+            self._sort_favorites()
+            self.list_widget.viewport().update()
             logger.debug(f"Updated {channel} status: live={is_live}")
 
     def update_pin_status(self, channel: str, is_pinned: bool) -> None:

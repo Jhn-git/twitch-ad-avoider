@@ -6,6 +6,7 @@ A Python implementation for watching Twitch streams while avoiding ads.
 
 import sys
 import argparse
+from pathlib import Path
 
 from src.logging_config import (
     setup_logging,
@@ -13,6 +14,13 @@ from src.logging_config import (
     configure_logging_from_config,
 )
 from src.config_manager import ConfigManager  # noqa: E402
+
+
+def get_resource_path(relative_path: str) -> Path:
+    """Return a bundled or source-tree resource path."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / relative_path
+    return Path(__file__).resolve().parent / relative_path
 
 
 def main():
@@ -58,6 +66,7 @@ def main():
         # Otherwise launch Qt GUI
         import os
         from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QIcon
         from gui_qt.stream_gui import StreamGUI
 
         logger.info("Starting TwitchAdAvoider Qt GUI")
@@ -86,6 +95,11 @@ def main():
         app.setApplicationName("TwitchAdAvoider")
         app.setOrganizationName("TwitchAdAvoider")
         app.setApplicationDisplayName("TwitchAdAvoider - Stream Manager")
+        icon_path = get_resource_path("assets/twitch-cartoon-logo.ico")
+        if icon_path.exists():
+            app.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            logger.warning(f"Application icon not found: {icon_path}")
 
         # Use Fusion style for consistent cross-platform appearance
         app.setStyle("Fusion")
