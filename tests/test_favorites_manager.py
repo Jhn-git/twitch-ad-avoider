@@ -194,6 +194,19 @@ class TestFavoritesManager(unittest.TestCase):
         self.assertTrue(ninja_info.is_live)
         self.assertIsNotNone(ninja_info.last_checked)
 
+    def test_get_favorites_with_status_sorts_live_first(self):
+        """Test live favorites are returned before offline favorites."""
+        self.manager.add_favorite("zebra")
+        self.manager.add_favorite("alpha")
+        self.manager.add_favorite("middle")
+        self.manager.toggle_pin("middle")
+
+        self.manager.update_channel_status("zebra", is_live=True)
+
+        favorites = self.manager.get_favorites_with_status()
+
+        self.assertEqual([fav.channel_name for fav in favorites], ["zebra", "middle", "alpha"])
+
     def test_get_channel_info_exists(self):
         """Test getting channel info for existing favorite"""
         self.manager.add_favorite("ninja")

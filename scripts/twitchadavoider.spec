@@ -13,12 +13,14 @@ VERSION = '2.0.5'
 
 # Project root is one level up from the spec file (scripts/)
 ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
+ICON_PATH = os.path.join(ROOT, 'assets', 'twitch-cartoon-logo.ico')
 
 # Collect all streamlink submodules — required for Python API usage in frozen builds
 streamlink_hiddenimports = collect_submodules('streamlink')
 
 # Minimal data files - only what's absolutely necessary
 minimal_datas = [
+    (ICON_PATH, 'assets'),
     (os.path.join(ROOT, 'config', 'settings.json'), 'config'),
     (os.path.join(ROOT, 'config', 'favorites.json'), 'config'),
     (os.path.join(ROOT, 'gui_qt', 'styles', 'dark.qss'), 'gui_qt/styles'),
@@ -151,4 +153,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICON_PATH,
 )
