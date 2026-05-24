@@ -1,6 +1,7 @@
 """Qt sound effects for lightweight GUI polish."""
 
 from pathlib import Path
+import sys
 from typing import Dict, Set
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QObject, QUrl
@@ -33,7 +34,7 @@ class GuiSoundManager(QObject):
 
     def _create_player(self, name: str, relative_path: Path, volume: float) -> None:
         """Create a media player for a bundled sound if the asset exists."""
-        asset_path = Path(__file__).resolve().parents[2] / relative_path
+        asset_path = self._resource_path(relative_path)
         if not asset_path.exists():
             logger.warning(f"Sound asset missing: {asset_path}")
             return
@@ -47,6 +48,12 @@ class GuiSoundManager(QObject):
 
         self._audio_outputs[name] = audio_output
         self._players[name] = player
+
+    def _resource_path(self, relative_path: Path) -> Path:
+        """Return a source-tree or PyInstaller bundled asset path."""
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            return Path(sys._MEIPASS) / relative_path
+        return Path(__file__).resolve().parents[2] / relative_path
 
     def install_button_hover_sounds(self, root_widget: QWidget) -> None:
         """Install hover sound handling on all current QPushButton children."""

@@ -9,11 +9,17 @@ import os
 
 # Application metadata
 APP_NAME = 'TwitchAdAvoider'
-VERSION = '2.0.6'
+VERSION = '2.0.7'
 
 # Project root is one level up from the spec file (scripts/)
 ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
 ICON_PATH = os.path.join(ROOT, 'assets', 'twitch-cartoon-logo.ico')
+LIVE_NOTIFICATION_SOUND_PATH = os.path.join(
+    ROOT, 'assets', 'live-notification-sound-effect-52434.mp3'
+)
+BUTTON_HOVER_SOUND_PATH = os.path.join(
+    ROOT, 'assets', 'minimalist-button-hover-sound-effect-399749.mp3'
+)
 
 # Collect all streamlink submodules — required for Python API usage in frozen builds
 streamlink_hiddenimports = collect_submodules('streamlink')
@@ -21,6 +27,8 @@ streamlink_hiddenimports = collect_submodules('streamlink')
 # Minimal data files - only what's absolutely necessary
 minimal_datas = [
     (ICON_PATH, 'assets'),
+    (LIVE_NOTIFICATION_SOUND_PATH, 'assets'),
+    (BUTTON_HOVER_SOUND_PATH, 'assets'),
     (os.path.join(ROOT, 'config', 'settings.json'), 'config'),
     (os.path.join(ROOT, 'config', 'favorites.json'), 'config'),
     (os.path.join(ROOT, 'gui_qt', 'styles', 'dark.qss'), 'gui_qt/styles'),
@@ -70,6 +78,7 @@ a = Analysis(
         'PySide6',
         'PySide6.QtCore',
         'PySide6.QtGui',
+        'PySide6.QtMultimedia',
         'PySide6.QtWidgets',
         
         # Streamlink essentials
