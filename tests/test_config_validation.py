@@ -93,7 +93,14 @@ class TestConfigManagerValidation(unittest.TestCase):
 
     def test_boolean_validation(self):
         """Test boolean setting validation"""
-        boolean_settings = ["debug", "log_to_file", "enable_status_monitoring"]
+        boolean_settings = [
+            "debug",
+            "log_to_file",
+            "enable_status_monitoring",
+            "favorite_live_notifications_enabled",
+            "favorite_live_notification_sound_enabled",
+            "button_hover_sound_enabled",
+        ]
 
         for setting in boolean_settings:
             self.assertTrue(self.config.set(setting, True))
