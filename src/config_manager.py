@@ -404,6 +404,23 @@ class ConfigManager:
                 )
                 return True
 
+            elif key == "favorite_live_notifications_enabled":
+                if not isinstance(value, bool):
+                    raise ValidationError("Favorite live notifications setting must be a boolean")
+                return True
+
+            elif key == "favorite_live_notification_sound_enabled":
+                if not isinstance(value, bool):
+                    raise ValidationError(
+                        "Favorite live notification sound setting must be a boolean"
+                    )
+                return True
+
+            elif key == "button_hover_sound_enabled":
+                if not isinstance(value, bool):
+                    raise ValidationError("Button hover sound setting must be a boolean")
+                return True
+
             # Window settings validation
             elif key == "window_width":
                 if not isinstance(value, int):
