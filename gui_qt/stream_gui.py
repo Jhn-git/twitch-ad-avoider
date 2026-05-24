@@ -1,6 +1,7 @@
 """Main GUI orchestrator for TwitchAdAvoider Qt application."""
 
 import webbrowser
+from typing import Dict, List
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer
@@ -11,6 +12,8 @@ from gui_qt.components.chat_panel import ChatPanel
 from gui_qt.components.settings_tab import SettingsTab
 from gui_qt.components.status_display import StatusDisplay
 from gui_qt.components.stream_actions import StreamActions
+from gui_qt.components.live_notification_toast import LiveNotificationToast
+from gui_qt.components.sound_manager import GuiSoundManager
 
 from gui_qt.controllers.stream_controller import StreamController
 
@@ -37,6 +40,7 @@ class StreamGUI:
         self.favorites_manager = FavoritesManager()
 
         self._setup_layout()
+        self.sound_manager.install_button_hover_sounds(self.window)
         self._connect_signals()
         self._load_initial_data()
 
@@ -56,6 +60,8 @@ class StreamGUI:
         self.settings_tab = SettingsTab(self.config)
         self.status_display = StatusDisplay()
         self.stream_actions = StreamActions()
+        self.live_notification_toast = LiveNotificationToast(self.window)
+        self.sound_manager = GuiSoundManager(self.config, self.window)
 
     def _create_controllers(self) -> None:
         """Create all controllers."""
@@ -265,10 +271,13 @@ class StreamGUI:
 
         try:
             status_results = self.status_monitor.check_channels(favorites)
+            newly_live_channels = self._get_newly_live_channels(status_results)
 
             for channel, is_live in status_results.items():
                 self.favorites_panel.update_favorite_status(channel, is_live)
                 self.favorites_manager.update_channel_status(channel, is_live)
+
+            self._notify_favorites_live(newly_live_channels)
 
             live_count = sum(status_results.values())
             logger.info(f"Status refresh complete: {live_count}/{len(favorites)} channels live")
@@ -287,6 +296,40 @@ class StreamGUI:
         except Exception as e:
             logger.error(f"Error during favorites refresh: {e}")
             self.status_display.add_error(f"Failed to refresh favorites: {e}", "FAVORITES")
+
+    def _get_newly_live_channels(self, status_results: Dict[str, bool]) -> List[str]:
+        """Return channels that changed from saved offline status to live."""
+        newly_live_channels = []
+        for channel, is_live in status_results.items():
+            if not is_live:
+                continue
+
+            channel_info = self.favorites_manager.get_channel_info(channel)
+            was_live = bool(channel_info.is_live) if channel_info else False
+            if not was_live:
+                newly_live_channels.append(channel)
+
+        return sorted(newly_live_channels)
+
+    def _notify_favorites_live(self, channels: List[str]) -> None:
+        """Show and sound a deduped live notification for newly-live favorites."""
+        if not channels or not self.config.get("favorite_live_notifications_enabled", True):
+            return
+
+        if len(channels) == 1:
+            message = f"{channels[0]} is live"
+        else:
+            preview = ", ".join(channels[:5])
+            if len(channels) > 5:
+                preview += f", +{len(channels) - 5} more"
+            message = f"{len(channels)} favorites are live: {preview}"
+
+        self.status_display.add_info(message, "FAVORITES")
+
+        if hasattr(self, "live_notification_toast"):
+            self.live_notification_toast.show_live_channels(channels)
+        if hasattr(self, "sound_manager"):
+            self.sound_manager.play_live_notification()
 
     def _on_pin_toggle(self, channel: str) -> None:
         new_state = self.favorites_manager.toggle_pin(channel)

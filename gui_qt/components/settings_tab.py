@@ -244,6 +244,19 @@ class SettingsTab(QWidget):
         self.favorites_check_timeout_spin.setSuffix(" seconds")
         layout.addRow("Status Check Timeout:", self.favorites_check_timeout_spin)
 
+        self.favorite_live_notifications_check = QCheckBox(
+            "Notify when favorite channels go live"
+        )
+        layout.addRow(self.favorite_live_notifications_check)
+
+        self.favorite_live_notification_sound_check = QCheckBox(
+            "Play sound for live notifications"
+        )
+        layout.addRow(self.favorite_live_notification_sound_check)
+
+        self.button_hover_sound_check = QCheckBox("Play button hover sounds")
+        layout.addRow(self.button_hover_sound_check)
+
         group.setLayout(layout)
         return group
 
@@ -311,6 +324,15 @@ class SettingsTab(QWidget):
         self.favorites_refresh_interval_spin.setValue(interval_value)
         self._update_interval_label(interval_value)  # Update the minute display
         self.favorites_check_timeout_spin.setValue(self.config.get("favorites_check_timeout", 5))
+        self.favorite_live_notifications_check.setChecked(
+            self.config.get("favorite_live_notifications_enabled", True)
+        )
+        self.favorite_live_notification_sound_check.setChecked(
+            self.config.get("favorite_live_notification_sound_enabled", True)
+        )
+        self.button_hover_sound_check.setChecked(
+            self.config.get("button_hover_sound_enabled", True)
+        )
 
         # Appearance
         dark_mode = self.config.get("dark_mode", True)
@@ -378,6 +400,13 @@ class SettingsTab(QWidget):
                 "favorites_auto_refresh": self.favorites_auto_refresh_check.isChecked(),
                 "favorites_refresh_interval": self.favorites_refresh_interval_spin.value(),
                 "favorites_check_timeout": self.favorites_check_timeout_spin.value(),
+                "favorite_live_notifications_enabled": (
+                    self.favorite_live_notifications_check.isChecked()
+                ),
+                "favorite_live_notification_sound_enabled": (
+                    self.favorite_live_notification_sound_check.isChecked()
+                ),
+                "button_hover_sound_enabled": self.button_hover_sound_check.isChecked(),
                 "dark_mode": self.dark_mode_check.isChecked(),
                 "debug": self.debug_check.isChecked(),
                 "log_to_file": self.log_to_file_check.isChecked(),
