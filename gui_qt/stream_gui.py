@@ -91,9 +91,10 @@ class StreamGUI:
         self.stream_controller.clip_created.connect(self._on_clip_created)
         self.stream_controller.clip_failed.connect(self._on_clip_failed)
 
-        self.stream_actions.clip_requested.connect(self.stream_controller.create_clip)
+        self.chat_panel.clip_requested.connect(self.stream_controller.create_clip)
 
         self.favorites_panel.favorite_double_clicked.connect(self._on_favorite_double_clicked)
+        self.favorites_panel.favorite_selected.connect(self._on_favorite_selected)
         self.favorites_panel.open_channel_in_browser.connect(self._on_open_channel_in_browser)
         self.favorites_panel.add_new_requested.connect(self._on_add_new_favorite)
         self.favorites_panel.remove_requested.connect(self._on_remove_favorite)
@@ -102,6 +103,7 @@ class StreamGUI:
         self.favorites_panel.quality_changed.connect(self._on_quality_changed)
 
         self.chat_panel.open_chat_requested.connect(self._on_open_chat)
+        self.chat_panel.open_channel_requested.connect(self._on_open_channel)
 
         self.settings_tab.settings_changed.connect(self._on_settings_changed)
         self.settings_tab.dark_mode_changed.connect(self._on_dark_mode_changed)
@@ -177,6 +179,7 @@ class StreamGUI:
         self.status_display.set_streaming(True)
         self.stream_actions.set_streaming(True, channel, self.favorites_panel.get_quality())
         self.chat_panel.set_channel(channel)
+        self.chat_panel.set_streaming(True)
         process = self.stream_controller.get_current_process()
         self.window.set_stream_process(process)
 
@@ -185,7 +188,8 @@ class StreamGUI:
         self.status_display.add_info(f"Stream finished: {channel}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        self.chat_panel.set_channel("")
+        self.chat_panel.set_channel(self.favorites_panel.get_selected_favorite() or "")
+        self.chat_panel.set_streaming(False)
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
 
@@ -209,7 +213,8 @@ class StreamGUI:
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        self.chat_panel.set_channel("")
+        self.chat_panel.set_channel(self.favorites_panel.get_selected_favorite() or "")
+        self.chat_panel.set_streaming(False)
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
 
@@ -220,6 +225,10 @@ class StreamGUI:
         self.status_display.add_error(f"Clip failed: {error}", "CLIP")
 
     # Favorites Handlers
+
+    def _on_favorite_selected(self, channel: str) -> None:
+        if not self.stream_controller.is_streaming():
+            self.chat_panel.set_channel(channel)
 
     def _on_favorite_double_clicked(self, channel: str) -> None:
         quality = self.favorites_panel.get_quality()
@@ -355,6 +364,14 @@ class StreamGUI:
             url = f"https://www.twitch.tv/popout/{channel}/chat?popout="
             webbrowser.open(url)
             logger.info(f"Opened Twitch chat in browser: {channel}")
+
+    def _on_open_channel(self) -> None:
+        """Open the streamer's Twitch channel page in the default browser."""
+        channel = self.chat_panel.channel
+        if channel:
+            url = f"https://www.twitch.tv/{channel}"
+            webbrowser.open(url)
+            logger.info(f"Opened Twitch channel in browser: {channel}")
 
     # Settings Handlers
 

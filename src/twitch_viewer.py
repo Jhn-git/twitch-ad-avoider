@@ -591,7 +591,7 @@ class TwitchViewer:
 
         channel = self._current_channel or "unknown"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = clip_dir / f"{channel}_{timestamp}.ts"
+        output_path = clip_dir / f"{channel}_{timestamp}.mp4"
 
         # Probe the recording duration so we can seek accurately.
         # -sseof is unreliable for live-written TS files (FFmpeg can't find
@@ -632,6 +632,7 @@ class TwitchViewer:
             # converts MP4 length-prefixed NALUs to Annex-B start codes. TS streams
             # are already Annex-B, so applying it produces "Invalid NAL unit size".
             "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart",
             "-y",
             str(output_path),
         ]
