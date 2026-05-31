@@ -33,12 +33,13 @@ class ClipWorker(QObject):
     finished = Signal(str)  # output path
     failed = Signal(str)  # error message
 
-    def __init__(self, twitch_viewer: "TwitchViewer"):
+    def __init__(self, twitch_viewer: "TwitchViewer", duration_seconds: int = 30):
         super().__init__()
         self.twitch_viewer = twitch_viewer
+        self.duration_seconds = duration_seconds
 
     def run(self) -> None:
-        result = self.twitch_viewer.create_clip()
+        result = self.twitch_viewer.create_clip(self.duration_seconds)
         if result:
             self.finished.emit(result)
         else:
@@ -290,13 +291,13 @@ class StreamController(QObject):
         """
         return self.current_thread is not None and self.current_thread.isRunning()
 
-    def create_clip(self) -> None:
-        """Save the last 30 seconds of the current stream as a local clip."""
+    def create_clip(self, duration_seconds: int = 30) -> None:
+        """Save the last N seconds of the current stream as a local clip."""
         if not self.is_streaming():
             self.clip_failed.emit("No active stream to clip")
             return
 
-        self._clip_worker = ClipWorker(self.twitch_viewer)
+        self._clip_worker = ClipWorker(self.twitch_viewer, duration_seconds)
         self._clip_thread = QThread()
         self._clip_worker.moveToThread(self._clip_thread)
 
