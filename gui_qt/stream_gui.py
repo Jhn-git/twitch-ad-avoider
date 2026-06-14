@@ -88,6 +88,7 @@ class StreamGUI:
         self.stream_controller.stream_started.connect(self._on_stream_started)
         self.stream_controller.stream_finished.connect(self._on_stream_finished)
         self.stream_controller.stream_error.connect(self._on_stream_error)
+        self.stream_controller.stream_reconnecting.connect(self._on_stream_reconnecting)
         self.stream_controller.clip_created.connect(self._on_clip_created)
         self.stream_controller.clip_failed.connect(self._on_clip_failed)
 
@@ -217,6 +218,11 @@ class StreamGUI:
         self.chat_panel.set_streaming(False)
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
+
+    def _on_stream_reconnecting(self, channel: str, message: str) -> None:
+        """Display reconnect progress without switching the GUI out of streaming mode."""
+        logger.info(f"Stream reconnecting for {channel}: {message}")
+        self.status_display.add_info(message, "STREAM")
 
     def _on_clip_created(self, path: str) -> None:
         self.status_display.add_system(f"Clip saved: {path}", "CLIP")
