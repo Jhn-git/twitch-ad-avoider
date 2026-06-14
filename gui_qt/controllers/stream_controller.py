@@ -18,8 +18,10 @@ Key Features:
 
 from PySide6.QtCore import QObject, Signal, QThread
 import subprocess
+import time
 from typing import Any, Optional
 
+from src.exceptions import ValidationError
 from src.twitch_viewer import TwitchViewer
 from src.config_manager import ConfigManager
 from src.logging_config import get_logger
@@ -62,6 +64,7 @@ class StreamWorker(QObject):
     started = Signal()
     finished = Signal()
     error = Signal(str)  # error message
+    reconnecting = Signal(str)  # status message
 
     def __init__(self, twitch_viewer: TwitchViewer, channel: str, quality: str):
         """
@@ -83,15 +86,26 @@ class StreamWorker(QObject):
     def run(self) -> None:
         """Run the stream process (executed in background thread)."""
         logger.info("[DEBUG] StreamWorker.run() ENTERED")
-        try:
-            logger.info(f"Starting stream: {self.channel} @ {self.quality}")
-            logger.info(f"[DEBUG] About to call watch_stream for {self.channel}")
+        reconnect_attempts = self._get_reconnect_attempts()
+        retry_delay = self._get_retry_delay()
+        attempt = 0
 
-            # Launch stream (quality is set in config before this call)
-            self.process = self.twitch_viewer.watch_stream(self.channel)
-            logger.info(f"[DEBUG] watch_stream returned: {self.process}")
+        while not self.should_stop:
+            try:
+                logger.info(f"Starting stream: {self.channel} @ {self.quality}")
+                logger.info(f"[DEBUG] About to call watch_stream for {self.channel}")
 
-            if self.process:
+                # Launch stream (quality is set in config before this call)
+                self.process = self.twitch_viewer.watch_stream(self.channel)
+                logger.info(f"[DEBUG] watch_stream returned: {self.process}")
+
+                if not self.process:
+                    error_msg = "Failed to start stream process"
+                    logger.error(error_msg)
+                    logger.error("[DEBUG] watch_stream returned None - stream failed to start")
+                    self.error.emit(error_msg)
+                    return
+
                 logger.info("[DEBUG] Process created successfully, about to emit started signal")
                 self.started.emit()
                 logger.info(f"Stream process started: PID {self.process.pid}")
@@ -100,25 +114,64 @@ class StreamWorker(QObject):
                 return_code = self.process.wait()
                 logger.info(f"[DEBUG] Process finished with return code: {return_code}")
 
-                if not self.should_stop:
-                    if return_code == 0:
-                        logger.info("Stream finished normally")
-                        self.finished.emit()
-                    else:
-                        error_msg = f"Stream exited with code {return_code}"
-                        logger.warning(error_msg)
-                        self.error.emit(error_msg)
-            else:
-                error_msg = "Failed to start stream process"
-                logger.error(error_msg)
-                logger.error("[DEBUG] watch_stream returned None - stream failed to start")
-                self.error.emit(error_msg)
+                if self.should_stop:
+                    return
 
-        except Exception as e:
-            error_msg = f"Stream error: {str(e)}"
-            logger.error(f"[DEBUG] Exception in StreamWorker.run(): {type(e).__name__}: {str(e)}")
-            logger.error(error_msg, exc_info=True)
-            self.error.emit(error_msg)
+                if return_code == 0:
+                    logger.info("Stream finished normally")
+                    self.finished.emit()
+                    return
+
+                attempt += 1
+                if attempt > reconnect_attempts:
+                    error_msg = (
+                        f"Stream exited with code {return_code} after "
+                        f"{reconnect_attempts} reconnect attempts"
+                    )
+                    logger.warning(error_msg)
+                    self.error.emit(error_msg)
+                    return
+
+                message = (
+                    f"Stream crashed; reconnecting in {retry_delay}s "
+                    f"(attempt {attempt}/{reconnect_attempts})"
+                )
+                logger.warning(message)
+                self.reconnecting.emit(message)
+
+                if not self._wait_before_retry(retry_delay):
+                    return
+
+            except ValidationError as e:
+                error_msg = f"Stream error: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                self.error.emit(error_msg)
+                return
+            except Exception as e:
+                error_msg = f"Stream error: {str(e)}"
+                logger.error(
+                    f"[DEBUG] Exception in StreamWorker.run(): {type(e).__name__}: {str(e)}"
+                )
+                logger.error(error_msg, exc_info=True)
+                self.error.emit(error_msg)
+                return
+
+    def _get_reconnect_attempts(self) -> int:
+        """Return configured reconnect attempts after the initial launch."""
+        attempts = self.twitch_viewer.config.get("connection_retry_attempts", 3)
+        return attempts if isinstance(attempts, int) else 3
+
+    def _get_retry_delay(self) -> int:
+        """Return configured delay between reconnect attempts."""
+        delay = self.twitch_viewer.config.get("retry_delay", 5)
+        return delay if isinstance(delay, int) else 5
+
+    def _wait_before_retry(self, retry_delay: int) -> bool:
+        """Wait before reconnecting, returning False if stop was requested."""
+        deadline = time.monotonic() + retry_delay
+        while not self.should_stop and time.monotonic() < deadline:
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+        return not self.should_stop
 
     def stop(self) -> None:
         """Stop the stream process."""
@@ -155,6 +208,7 @@ class StreamController(QObject):
     stream_started = Signal(str)  # channel
     stream_finished = Signal(str)  # channel
     stream_error = Signal(str, str)  # channel, error_message
+    stream_reconnecting = Signal(str, str)  # channel, status_message
     clip_created = Signal(str)  # output file path
     clip_failed = Signal(str)  # error message
 
@@ -235,6 +289,11 @@ class StreamController(QObject):
         )
         worker.error.connect(
             lambda error, ch=channel, gen=generation: self._on_stream_error(ch, error, gen)
+        )
+        worker.reconnecting.connect(
+            lambda message, ch=channel, gen=generation: self._on_stream_reconnecting(
+                ch, message, gen
+            )
         )
         logger.info("[DEBUG] Signals connected")
 
@@ -363,6 +422,15 @@ class StreamController(QObject):
 
         logger.error(f"Stream error for {channel}: {error_message}")
         self.stream_error.emit(channel, error_message)
+
+    def _on_stream_reconnecting(self, channel: str, message: str, generation: int) -> None:
+        """Handle reconnect status signal from worker."""
+        if generation != self._stream_generation:
+            logger.debug(f"Ignoring stale reconnect signal for {channel}: {message}")
+            return
+
+        logger.info(f"Stream reconnecting for {channel}: {message}")
+        self.stream_reconnecting.emit(channel, message)
 
     def _cleanup_thread(
         self,
