@@ -98,6 +98,7 @@ class TestConfigManagerValidation(unittest.TestCase):
             "log_to_file",
             "enable_status_monitoring",
             "favorite_live_notifications_enabled",
+            "favorite_live_highlight_test_mode",
             "favorite_live_notification_sound_enabled",
             "button_hover_sound_enabled",
         ]

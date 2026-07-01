@@ -1,0 +1,25 @@
+{
+  "channel_name": "yourchannelhere",
+  "keywords": [
+    "dead by daylight",
+    "dracula",
+    "juice box"
+  ],
+  "preferred_quality": "best",
+  "whisper_model": "small.en",
+  "language": "en",
+  "device": "cuda",
+  "compute_type": "float16",
+  "chunk_duration_seconds": 3,
+  "preroll_seconds": 20,
+  "postroll_seconds": 10,
+  "keyword_cooldown_seconds": 20,
+  "sample_rate": 16000,
+  "beam_size": 1,
+  "vad_filter": true,
+  "ffmpeg_path": null,
+  "recording_directory": "katch_output/recordings",
+  "clips_directory": "katch_output/clips",
+  "temp_directory": "katch_output/temp",
+  "event_log_path": "katch_output/events.jsonl"
+}

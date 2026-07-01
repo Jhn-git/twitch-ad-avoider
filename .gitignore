@@ -69,3 +69,6 @@ $RECYCLE.BIN/
 config/auth_token.enc
 
 clips/
+katch_output/
+mockups/favorites-layout-options.html
+mockups/pinned-indicator-options.html

@@ -249,6 +249,11 @@ class SettingsTab(QWidget):
         )
         layout.addRow(self.favorite_live_notifications_check)
 
+        self.favorite_live_highlight_test_mode_check = QCheckBox(
+            "Always retrigger recent-live highlight on refresh (testing)"
+        )
+        layout.addRow(self.favorite_live_highlight_test_mode_check)
+
         self.favorite_live_notification_sound_check = QCheckBox(
             "Play sound for live notifications"
         )
@@ -327,6 +332,9 @@ class SettingsTab(QWidget):
         self.favorite_live_notifications_check.setChecked(
             self.config.get("favorite_live_notifications_enabled", True)
         )
+        self.favorite_live_highlight_test_mode_check.setChecked(
+            self.config.get("favorite_live_highlight_test_mode", False)
+        )
         self.favorite_live_notification_sound_check.setChecked(
             self.config.get("favorite_live_notification_sound_enabled", True)
         )
@@ -402,6 +410,9 @@ class SettingsTab(QWidget):
                 "favorites_check_timeout": self.favorites_check_timeout_spin.value(),
                 "favorite_live_notifications_enabled": (
                     self.favorite_live_notifications_check.isChecked()
+                ),
+                "favorite_live_highlight_test_mode": (
+                    self.favorite_live_highlight_test_mode_check.isChecked()
                 ),
                 "favorite_live_notification_sound_enabled": (
                     self.favorite_live_notification_sound_check.isChecked()

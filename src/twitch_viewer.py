@@ -49,7 +49,26 @@ class _StreamSession:
     def __init__(self, player: subprocess.Popen, stream_fd: Any) -> None:
         self._player = player
         self._fd = stream_fd
+        self._end_reason: Optional[str] = None
+        self._end_reason_lock = threading.Lock()
         self.pid: int = player.pid
+
+    @property
+    def end_reason(self) -> Optional[str]:
+        """Reason the stream/player bridge ended, if the tee thread knows it."""
+        with self._end_reason_lock:
+            return self._end_reason
+
+    @property
+    def ended_from_stream(self) -> bool:
+        """Whether playback ended because the upstream stream stopped producing data."""
+        return self.end_reason in {"stream_ended", "stream_error"}
+
+    def mark_end_reason(self, reason: str) -> None:
+        """Record the first known reason this stream session ended."""
+        with self._end_reason_lock:
+            if self._end_reason is None:
+                self._end_reason = reason
 
     def poll(self) -> Optional[int]:
         return self._player.poll()
@@ -58,6 +77,7 @@ class _StreamSession:
         return self._player.wait(timeout=timeout)
 
     def terminate(self) -> None:
+        self.mark_end_reason("stopped")
         try:
             self._player.terminate()
         except Exception:
@@ -68,6 +88,7 @@ class _StreamSession:
             pass
 
     def kill(self) -> None:
+        self.mark_end_reason("stopped")
         try:
             self._player.kill()
         except Exception:
@@ -491,21 +512,26 @@ class TwitchViewer:
                     "Check the player path in Settings."
                 )
 
+            stream_session = _StreamSession(player_proc, stream_fd)
+
             # Background tee: stream fd → player stdin + recording file
             def _tee() -> None:
                 try:
                     while True:
                         chunk = stream_fd.read(65536)
                         if not chunk:
+                            stream_session.mark_end_reason("stream_ended")
                             break
                         if player_proc.stdin:
                             try:
                                 player_proc.stdin.write(chunk)
                             except (BrokenPipeError, OSError):
+                                stream_session.mark_end_reason("player_closed")
                                 break
                         if recording_file:
                             recording_file.write(chunk)
                 except Exception as e:
+                    stream_session.mark_end_reason("stream_error")
                     logger.error(f"Tee thread error: {e}")
                 finally:
                     try:
@@ -528,7 +554,7 @@ class TwitchViewer:
             tee.start()
 
             logger.info(f"Stream live: {channel_name} @ {quality} (player PID {player_proc.pid})")
-            return _StreamSession(player_proc, stream_fd)
+            return stream_session
 
         except ValidationError:
             raise

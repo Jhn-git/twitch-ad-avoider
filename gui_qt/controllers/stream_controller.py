@@ -117,7 +117,8 @@ class StreamWorker(QObject):
                 if self.should_stop:
                     return
 
-                if return_code == 0:
+                recoverable_exit = return_code != 0 or self._process_ended_from_stream()
+                if not recoverable_exit:
                     logger.info("Stream finished normally")
                     self.finished.emit()
                     return
@@ -125,15 +126,21 @@ class StreamWorker(QObject):
                 attempt += 1
                 if attempt > reconnect_attempts:
                     error_msg = (
-                        f"Stream exited with code {return_code} after "
+                        f"Stream ended unexpectedly with code {return_code} after "
                         f"{reconnect_attempts} reconnect attempts"
                     )
                     logger.warning(error_msg)
                     self.error.emit(error_msg)
                     return
 
+                end_reason = self._get_process_end_reason()
+                reason_text = (
+                    "stream input ended" if return_code == 0 else f"exit code {return_code}"
+                )
+                if end_reason == "stream_error":
+                    reason_text = "stream input errored"
                 message = (
-                    f"Stream crashed; reconnecting in {retry_delay}s "
+                    f"Stream ended unexpectedly ({reason_text}); reconnecting in {retry_delay}s "
                     f"(attempt {attempt}/{reconnect_attempts})"
                 )
                 logger.warning(message)
@@ -165,6 +172,14 @@ class StreamWorker(QObject):
         """Return configured delay between reconnect attempts."""
         delay = self.twitch_viewer.config.get("retry_delay", 5)
         return delay if isinstance(delay, int) else 5
+
+    def _get_process_end_reason(self) -> Optional[str]:
+        """Return the stream session end reason when supported."""
+        return getattr(self.process, "end_reason", None)
+
+    def _process_ended_from_stream(self) -> bool:
+        """Return whether the stream pipe ended before the player did."""
+        return bool(getattr(self.process, "ended_from_stream", False))
 
     def _wait_before_retry(self, retry_delay: int) -> bool:
         """Wait before reconnecting, returning False if stop was requested."""

@@ -72,12 +72,17 @@ def test_add_new_favorite_catches_validation_error(monkeypatch):
 class RefreshFavoritesPanel:
     def __init__(self, statuses):
         self.statuses = statuses.copy()
+        self.recently_live_marked = []
 
     def get_favorites(self):
         return list(self.statuses)
 
     def update_favorite_status(self, channel, is_live):
         self.statuses[channel] = is_live
+
+    def mark_recently_live(self, channels):
+        if channels:
+            self.recently_live_marked.append(list(channels))
 
 
 class RefreshFavoritesManager:
@@ -145,6 +150,7 @@ def test_refresh_notifies_when_favorite_changes_from_offline_to_live():
 
     gui._on_refresh_favorites()
 
+    assert gui.favorites_panel.recently_live_marked == [["ninja"]]
     assert gui.live_notification_toast.shown == [["ninja"]]
     assert gui.sound_manager.live_notifications == 1
     assert ("ninja is live", "FAVORITES") in gui.status_display.info
@@ -157,9 +163,26 @@ def test_refresh_does_not_renotify_favorite_that_was_already_live():
 
     gui._on_refresh_favorites()
 
+    assert gui.favorites_panel.recently_live_marked == []
     assert gui.live_notification_toast.shown == []
     assert gui.sound_manager.live_notifications == 0
     assert gui.favorites_manager.updated == [("ninja", True)]
+
+
+def test_refresh_test_mode_rehighlights_currently_live_channels_without_renotifying():
+    """Testing mode retriggers the visual highlight for live channels on every refresh."""
+    gui = make_refresh_gui(
+        {"ninja": True, "shroud": False},
+        {"ninja": True, "shroud": True},
+        {"favorite_live_highlight_test_mode": True},
+    )
+
+    gui._on_refresh_favorites()
+
+    assert gui.favorites_panel.recently_live_marked == [["ninja", "shroud"]]
+    assert gui.live_notification_toast.shown == [["shroud"]]
+    assert gui.sound_manager.live_notifications == 1
+    assert gui.favorites_manager.updated == [("ninja", True), ("shroud", True)]
 
 
 def test_refresh_does_not_notify_when_favorite_goes_offline():
@@ -168,6 +191,7 @@ def test_refresh_does_not_notify_when_favorite_goes_offline():
 
     gui._on_refresh_favorites()
 
+    assert gui.favorites_panel.recently_live_marked == []
     assert gui.live_notification_toast.shown == []
     assert gui.sound_manager.live_notifications == 0
     assert gui.favorites_manager.updated == [("ninja", False)]
@@ -183,7 +207,22 @@ def test_refresh_respects_disabled_live_notifications():
 
     gui._on_refresh_favorites()
 
+    assert gui.favorites_panel.recently_live_marked == [["ninja"]]
     assert gui.live_notification_toast.shown == []
     assert gui.sound_manager.live_notifications == 0
     assert ("ninja is live", "FAVORITES") not in gui.status_display.info
     assert gui.favorites_manager.updated == [("ninja", True)]
+
+
+def test_refresh_marks_multiple_newly_live_favorites_together():
+    """Multiple offline -> live transitions are highlighted in one refresh."""
+    gui = make_refresh_gui(
+        {"ninja": False, "shroud": False, "pokimane": True},
+        {"ninja": True, "shroud": True, "pokimane": True},
+    )
+
+    gui._on_refresh_favorites()
+
+    assert gui.favorites_panel.recently_live_marked == [["ninja", "shroud"]]
+    assert gui.live_notification_toast.shown == [["ninja", "shroud"]]
+    assert gui.sound_manager.live_notifications == 1

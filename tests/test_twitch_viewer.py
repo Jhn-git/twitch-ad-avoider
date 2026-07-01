@@ -11,8 +11,63 @@ from unittest.mock import patch, MagicMock
 sys.modules["streamlink"] = MagicMock()
 sys.modules["shutil"] = MagicMock()
 
-from src.twitch_viewer import TwitchViewer  # noqa: E402
+from src.twitch_viewer import TwitchViewer, _StreamSession  # noqa: E402
 from src.exceptions import ValidationError  # noqa: E402
+
+
+class FakeSessionPlayer:
+    """Minimal subprocess stand-in for _StreamSession tests."""
+
+    pid = 4321
+
+    def __init__(self):
+        self.terminated = False
+        self.killed = False
+
+    def poll(self):
+        return None
+
+    def wait(self, timeout=None):
+        return 0
+
+    def terminate(self):
+        self.terminated = True
+
+    def kill(self):
+        self.killed = True
+
+
+class FakeStreamFd:
+    """Minimal stream fd stand-in for _StreamSession tests."""
+
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class TestStreamSession(unittest.TestCase):
+    def test_end_reason_tracks_stream_ended(self):
+        session = _StreamSession(FakeSessionPlayer(), FakeStreamFd())
+
+        session.mark_end_reason("stream_ended")
+
+        self.assertEqual(session.end_reason, "stream_ended")
+        self.assertTrue(session.ended_from_stream)
+
+    def test_end_reason_keeps_first_reason_and_marks_stop(self):
+        player = FakeSessionPlayer()
+        stream_fd = FakeStreamFd()
+        session = _StreamSession(player, stream_fd)
+
+        session.terminate()
+        session.mark_end_reason("stream_ended")
+
+        self.assertEqual(session.end_reason, "stopped")
+        self.assertFalse(session.ended_from_stream)
+        self.assertTrue(player.terminated)
+        self.assertTrue(stream_fd.closed)
 
 
 class TestTwitchViewer(unittest.TestCase):

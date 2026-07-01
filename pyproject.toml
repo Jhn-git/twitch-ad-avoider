@@ -43,6 +43,9 @@ dev = [
     "mypy>=1.0.0",
     "coverage>=6.0.0"
 ]
+katch = [
+    "faster-whisper>=1.0.0"
+]
 
 [project.urls]
 "Homepage" = "https://github.com/Jhn-git/TwitchAdAvoider-lite"
@@ -52,6 +55,7 @@ dev = [
 
 [project.scripts]
 twitchadavoider = "main:main"
+katch = "katch.main:main"
 
 # Tool configurations
 [tool.black]

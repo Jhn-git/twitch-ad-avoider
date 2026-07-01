@@ -138,9 +138,11 @@ class FakeProcess:
 
     pid = 1234
 
-    def __init__(self, return_code, on_wait=None):
+    def __init__(self, return_code, on_wait=None, end_reason=None, ended_from_stream=False):
         self.return_code = return_code
         self.on_wait = on_wait
+        self.end_reason = end_reason
+        self.ended_from_stream = ended_from_stream
 
     def wait(self, timeout=None):
         if self.on_wait:
@@ -194,7 +196,9 @@ def test_stream_worker_retries_after_nonzero_exit(monkeypatch, mock_config_manag
     assert len(started) == 2
     assert len(finished) == 1
     assert errors == []
-    assert reconnecting == ["Stream crashed; reconnecting in 5s (attempt 1/3)"]
+    assert reconnecting == [
+        "Stream ended unexpectedly (exit code 1); reconnecting in 5s (attempt 1/3)"
+    ]
 
 
 def test_stream_worker_errors_after_retries_exhausted(monkeypatch, mock_config_manager):
@@ -217,7 +221,7 @@ def test_stream_worker_errors_after_retries_exhausted(monkeypatch, mock_config_m
     assert finished == []
     assert len(reconnecting) == 2
     assert len(errors) == 1
-    assert errors[0] == "Stream exited with code 1 after 2 reconnect attempts"
+    assert errors[0] == "Stream ended unexpectedly with code 1 after 2 reconnect attempts"
 
 
 def test_stream_worker_does_not_retry_when_stop_requested(monkeypatch, mock_config_manager):
@@ -253,6 +257,33 @@ def test_stream_worker_does_not_retry_after_normal_exit(monkeypatch, mock_config
     assert len(finished) == 1
     assert errors == []
     assert reconnecting == []
+
+
+def test_stream_worker_retries_zero_exit_when_stream_pipe_ended(monkeypatch, mock_config_manager):
+    """VLC can exit 0 after Streamlink stops producing input; that should reconnect."""
+    QCoreApplication.instance() or QCoreApplication([])
+    mock_config_manager.set("connection_retry_attempts", 3)
+    mock_config_manager.set("retry_delay", 5)
+    viewer = FakeRetryTwitchViewer(
+        mock_config_manager,
+        [
+            FakeProcess(0, end_reason="stream_ended", ended_from_stream=True),
+            FakeProcess(0),
+        ],
+    )
+    worker = StreamWorker(viewer, "ninja", "best")
+    started, finished, errors, reconnecting = _collect_worker_signals(worker)
+    monkeypatch.setattr(worker, "_wait_before_retry", lambda delay: True)
+
+    worker.run()
+
+    assert viewer.watch_calls == 2
+    assert len(started) == 2
+    assert len(finished) == 1
+    assert errors == []
+    assert reconnecting == [
+        "Stream ended unexpectedly (stream input ended); reconnecting in 5s (attempt 1/3)"
+    ]
 
 
 def test_start_stream_forwards_reconnecting_signal(monkeypatch, mock_config_manager):
