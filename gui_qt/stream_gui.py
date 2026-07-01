@@ -287,11 +287,15 @@ class StreamGUI:
         try:
             status_results = self.status_monitor.check_channels(favorites)
             newly_live_channels = self._get_newly_live_channels(status_results)
+            highlight_channels = self._get_recent_live_highlight_channels(
+                status_results, newly_live_channels
+            )
 
             for channel, is_live in status_results.items():
                 self.favorites_panel.update_favorite_status(channel, is_live)
                 self.favorites_manager.update_channel_status(channel, is_live)
 
+            self.favorites_panel.mark_recently_live(highlight_channels)
             self._notify_favorites_live(newly_live_channels)
 
             live_count = sum(status_results.values())
@@ -325,6 +329,14 @@ class StreamGUI:
                 newly_live_channels.append(channel)
 
         return sorted(newly_live_channels)
+
+    def _get_recent_live_highlight_channels(
+        self, status_results: Dict[str, bool], newly_live_channels: List[str]
+    ) -> List[str]:
+        """Choose which live channels should get the temporary recent-live highlight."""
+        if self.config.get("favorite_live_highlight_test_mode", False):
+            return sorted(channel for channel, is_live in status_results.items() if is_live)
+        return newly_live_channels
 
     def _notify_favorites_live(self, channels: List[str]) -> None:
         """Show and sound a deduped live notification for newly-live favorites."""

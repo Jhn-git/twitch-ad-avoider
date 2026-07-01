@@ -39,6 +39,7 @@ DEFAULT_SETTINGS = {
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
     "favorites_check_timeout": 5,  # Timeout per channel check in seconds
     "favorite_live_notifications_enabled": True,  # Show in-app live notifications
+    "favorite_live_highlight_test_mode": False,  # Re-trigger recent-live highlight each refresh
     "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
     "button_hover_sound_enabled": True,  # Play subtle UI hover sounds
 }

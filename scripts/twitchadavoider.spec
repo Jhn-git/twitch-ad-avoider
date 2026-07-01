@@ -20,6 +20,7 @@ LIVE_NOTIFICATION_SOUND_PATH = os.path.join(
 BUTTON_HOVER_SOUND_PATH = os.path.join(
     ROOT, 'assets', 'minimalist-button-hover-sound-effect-399749.mp3'
 )
+PIN_ICON_PATH = os.path.join(ROOT, 'assets', 'pin.svg')
 
 # Collect all streamlink submodules — required for Python API usage in frozen builds
 streamlink_hiddenimports = collect_submodules('streamlink')
@@ -29,6 +30,7 @@ minimal_datas = [
     (ICON_PATH, 'assets'),
     (LIVE_NOTIFICATION_SOUND_PATH, 'assets'),
     (BUTTON_HOVER_SOUND_PATH, 'assets'),
+    (PIN_ICON_PATH, 'assets'),
     (os.path.join(ROOT, 'config', 'settings.json'), 'config'),
     (os.path.join(ROOT, 'config', 'favorites.json'), 'config'),
     (os.path.join(ROOT, 'gui_qt', 'styles', 'dark.qss'), 'gui_qt/styles'),
@@ -79,6 +81,7 @@ a = Analysis(
         'PySide6.QtCore',
         'PySide6.QtGui',
         'PySide6.QtMultimedia',
+        'PySide6.QtSvg',
         'PySide6.QtWidgets',
         
         # Streamlink essentials

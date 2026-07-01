@@ -409,6 +409,13 @@ class ConfigManager:
                     raise ValidationError("Favorite live notifications setting must be a boolean")
                 return True
 
+            elif key == "favorite_live_highlight_test_mode":
+                if not isinstance(value, bool):
+                    raise ValidationError(
+                        "Favorite live highlight test mode setting must be a boolean"
+                    )
+                return True
+
             elif key == "favorite_live_notification_sound_enabled":
                 if not isinstance(value, bool):
                     raise ValidationError(
