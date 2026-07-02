@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Qt
 
+from gui_qt.popup_utils import configure_combo_popup_container
 from src.config_manager import ConfigManager
 from src.constants import QUALITY_OPTIONS
 from src.logging_config import get_logger
@@ -150,11 +151,13 @@ class SettingsTab(QWidget):
         # Player selection
         self.player_combo = QComboBox()
         self.player_combo.addItems(["vlc", "mpv", "mpc-hc", "auto"])
+        configure_combo_popup_container(self.player_combo)
         layout.addRow("Video Player:", self.player_combo)
 
         # Quality preference
         self.quality_combo = QComboBox()
         self.quality_combo.addItems(QUALITY_OPTIONS)
+        configure_combo_popup_container(self.quality_combo)
         layout.addRow("Preferred Quality:", self.quality_combo)
 
         # Cache duration
@@ -177,7 +180,9 @@ class SettingsTab(QWidget):
 
         # Player arguments
         self.player_args_edit = QLineEdit()
-        self.player_args_edit.setPlaceholderText("Optional custom player arguments")
+        self.player_args_edit.setPlaceholderText(
+            "Optional custom player arguments (cache is managed above)"
+        )
         layout.addRow("Player Arguments:", self.player_args_edit)
 
         group.setLayout(layout)
@@ -296,6 +301,7 @@ class SettingsTab(QWidget):
         # Log level
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        configure_combo_popup_container(self.log_level_combo)
         layout.addRow("Log Level:", self.log_level_combo)
 
         group.setLayout(layout)

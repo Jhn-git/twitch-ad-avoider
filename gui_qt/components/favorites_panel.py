@@ -29,6 +29,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QIcon, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from typing import Dict, List, Optional, Set, Tuple
 
+from gui_qt.popup_utils import configure_combo_popup_container, configure_menu_popup_surface
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -233,6 +234,7 @@ class FavoritesPanel(QGroupBox):
         self.quality_combo.addItems(QUALITY_OPTIONS)
         self.quality_combo.setCurrentText("best")
         self.quality_combo.setMinimumWidth(80)
+        configure_combo_popup_container(self.quality_combo)
 
         button_layout.addWidget(quality_label)
         button_layout.addWidget(self.quality_combo)
@@ -285,6 +287,8 @@ class FavoritesPanel(QGroupBox):
         is_pinned = self.favorites_data.get(channel, {}).get("is_pinned", False)
 
         menu = QMenu(self.list_widget)
+        menu.setObjectName("favoritesContextMenu")
+        configure_menu_popup_surface(menu)
         pin_action = menu.addAction("Unpin" if is_pinned else "Pin to top")
         menu.addSeparator()
         remove_action = menu.addAction("Remove")

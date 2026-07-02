@@ -2,10 +2,19 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Signal, Qt
+from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QFrame, QGroupBox, QMenu, QPushButton, QToolButton, QVBoxLayout, QLabel
+from PySide6.QtWidgets import (
+    QFrame,
+    QGroupBox,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QToolButton,
+    QVBoxLayout,
+)
 
+from gui_qt.popup_utils import configure_menu_popup_surface
 from src.constants import CLIPS_DIR
 from src.logging_config import get_logger
 
@@ -50,6 +59,10 @@ class ChatPanel(QGroupBox):
         self._open_chat_button = QPushButton("Open Chat")
         self._open_chat_button.setEnabled(False)
         self._open_chat_button.setMinimumWidth(160)
+        self._open_chat_button.setToolTip(
+            "Open Twitch chat in your default browser. If that browser is already logged into "
+            "Twitch, you will chat as that account."
+        )
         self._open_chat_button.clicked.connect(self.open_chat_requested)
         layout.addWidget(self._open_chat_button)
 
@@ -60,9 +73,15 @@ class ChatPanel(QGroupBox):
         layout.addWidget(separator)
         layout.addSpacing(6)
 
-        _clip_durations = [("Last 30s", 30), ("Last 1 min", 60), ("Last 2 min", 120), ("Last 5 min", 300)]
+        _clip_durations = [
+            ("Last 30s", 30),
+            ("Last 1 min", 60),
+            ("Last 2 min", 120),
+            ("Last 5 min", 300),
+        ]
 
         self._clip_button = QToolButton()
+        self._clip_button.setObjectName("clipSplitButton")
         self._clip_button.setText("Clip (30s)")
         self._clip_button.setToolTip("Click to clip last 30s, or use the arrow for more durations")
         self._clip_button.setEnabled(False)
@@ -70,10 +89,13 @@ class ChatPanel(QGroupBox):
         self._clip_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
         clip_menu = QMenu(self._clip_button)
+        clip_menu.setObjectName("clipDurationMenu")
+        configure_menu_popup_surface(clip_menu)
         for label, seconds in _clip_durations:
             action = clip_menu.addAction(label)
             action.triggered.connect(lambda checked=False, s=seconds: self.clip_requested.emit(s))
 
+        self._clip_menu = clip_menu
         self._clip_button.setMenu(clip_menu)
         self._clip_button.clicked.connect(lambda: self.clip_requested.emit(30))
         layout.addWidget(self._clip_button)

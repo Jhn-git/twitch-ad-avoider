@@ -8,6 +8,8 @@ from gui_qt.components.favorites_panel import (
     _ITEM_KIND_HEADER,
     _ITEM_KIND_ROLE,
 )
+from gui_qt.popup_utils import COMBO_POPUP_CONTAINER_NAME
+from conftest import assert_popup_surface
 
 
 RECENT_LIVE_ROLE = Qt.UserRole + 2
@@ -111,4 +113,23 @@ def test_update_favorite_status_offline_clears_recent_live_state():
     assert "ninja" not in panel._recent_live_channels
     assert "ninja" not in panel._recent_live_timers
 
+    panel.deleteLater()
+
+
+def test_quality_combo_popup_container_uses_shaped_host():
+    """Quality combo popup host gets a shaped top-level surface when shown."""
+    app = _ensure_app()
+    panel = FavoritesPanel()
+    panel.show()
+    app.processEvents()
+
+    panel.quality_combo.showPopup()
+    app.processEvents()
+
+    popup_container = panel.quality_combo.view().window()
+
+    assert popup_container.objectName() == COMBO_POPUP_CONTAINER_NAME
+    assert_popup_surface(popup_container)
+
+    panel.quality_combo.hidePopup()
     panel.deleteLater()

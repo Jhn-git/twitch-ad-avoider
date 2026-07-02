@@ -54,6 +54,11 @@ from .validators import (
     validate_numeric_range,
 )
 from .exceptions import ValidationError
+from .player_args import (
+    serialize_player_args,
+    split_player_args,
+    strip_all_managed_cache_args,
+)
 
 logger = get_logger(__name__)
 
@@ -65,6 +70,13 @@ _OPTIONAL_SETTINGS = {
     "status_cache_duration",
 }
 _KNOWN_SETTINGS = set(DEFAULT_SETTINGS) | _OPTIONAL_SETTINGS
+
+
+def _strip_managed_cache_player_args(player_args: Optional[str]) -> Optional[str]:
+    """Remove cache flags that are now controlled by cache_duration."""
+    normalized_args = split_player_args(player_args)
+    stripped_args = strip_all_managed_cache_args(normalized_args)
+    return serialize_player_args(stripped_args)
 
 
 class ConfigManager:
@@ -280,6 +292,15 @@ class ConfigManager:
                 migrated["dark_mode"] = migrated["current_theme"] == "dark"
                 logger.info("Migrated legacy 'current_theme' setting to 'dark_mode'")
             migrated.pop("current_theme", None)
+
+        if "player_args" in migrated:
+            migrated_player_args = _strip_managed_cache_player_args(migrated.get("player_args"))
+            if migrated_player_args != migrated.get("player_args"):
+                migrated["player_args"] = migrated_player_args
+                logger.info(
+                    "Migrated VLC cache flags out of 'player_args'; "
+                    "cache_duration now controls player buffering"
+                )
 
         return migrated
 

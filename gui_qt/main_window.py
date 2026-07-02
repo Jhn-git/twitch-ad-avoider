@@ -21,15 +21,16 @@ Key Features:
 
 from PySide6.QtWidgets import (
     QMainWindow,
-    QWidget,
     QGridLayout,
-    QVBoxLayout,
     QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 from PySide6.QtGui import QCloseEvent
-from typing import Optional, List, Callable
-import subprocess
 from pathlib import Path
+import subprocess
+import sys
+from typing import Callable, List, Optional
 
 from src.config_manager import ConfigManager
 from src.logging_config import get_logger
@@ -41,6 +42,14 @@ DEFAULT_WIDTH = 940
 DEFAULT_HEIGHT = 680
 MIN_WIDTH = 700
 MIN_HEIGHT = 550
+ASSETS_DIR_TOKEN = "__ASSETS_DIR__"
+
+
+def _assets_dir() -> Path:
+    """Return the assets directory for source and frozen app runs."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "assets"
+    return Path(__file__).resolve().parents[1] / "assets"
 
 
 class MainWindow(QMainWindow):
@@ -198,6 +207,7 @@ class MainWindow(QMainWindow):
             if stylesheet_path.exists():
                 with open(stylesheet_path, "r", encoding="utf-8") as f:
                     stylesheet = f.read()
+                    stylesheet = stylesheet.replace(ASSETS_DIR_TOKEN, _assets_dir().as_posix())
                     self.setStyleSheet(stylesheet)
                 logger.info(f"Applied {theme_name} theme")
             else:

@@ -18,7 +18,7 @@ DEFAULT_SETTINGS = {
     "log_to_file": True,
     "log_level": "INFO",
     "player_path": None,
-    "player_args": "--network-caching=10000 --file-caching=10000 --live-caching=10000",
+    "player_args": None,
     # Clip settings
     "clip_enabled": True,  # Record stream for clipping (near-zero CPU/network overhead)
     "clip_directory": "clips",  # Where to save clips
