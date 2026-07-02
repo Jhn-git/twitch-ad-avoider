@@ -6,9 +6,17 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
+from PySide6.QtCore import Qt
 
 # Mock streamlink globally for all tests
 sys.modules["streamlink"] = MagicMock()
+
+
+def assert_popup_surface(window) -> None:
+    """Assert a popup host window has the rounded-corner shaping treatment applied."""
+    assert window.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert window.windowFlags() & Qt.WindowType.NoDropShadowWindowHint
+    assert not window.mask().isEmpty()
 
 
 @pytest.fixture

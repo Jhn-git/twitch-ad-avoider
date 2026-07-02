@@ -26,7 +26,7 @@ Watch Twitch streams ad-free through an external video player, with a modern Qt 
 - **Qt GUI**: Tabbed PySide6 interface — Stream, Favorites, Chat, and Settings tabs
 - **CLI**: Full command-line support for scripting or headless use
 - **Favorites**: Save channels with live status auto-refresh
-- **Chat**: Opens Twitch chat in your browser alongside the stream
+- **Chat**: Opens Twitch chat in your browser alongside the stream. It uses your normal browser session, so if you're already logged into Twitch there, you'll join/chat as that account; the app itself does not log you into Twitch.
 - **Theming**: Light and dark mode with QSS stylesheets
 
 ### Configuration & Security

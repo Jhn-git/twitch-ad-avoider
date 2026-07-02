@@ -17,7 +17,6 @@ See Also:
 """
 
 import os
-import shlex
 import subprocess
 import threading
 import uuid
@@ -38,6 +37,12 @@ from .constants import (
     ENV_PLAYER_NAME,
     CLIPS_DIR,
     TEMP_DIR,
+)
+from .player_args import (
+    MANAGED_CACHE_FLAGS,
+    build_managed_cache_args_for_player,
+    split_player_args,
+    strip_managed_cache_args_for_player,
 )
 
 logger = get_logger(__name__)
@@ -423,6 +428,28 @@ class TwitchViewer:
             if self._check_player_common_paths(player_name, paths):
                 return
 
+    def _managed_cache_player_key(self) -> Optional[str]:
+        """Return the managed-cache registry key for the current player, if any."""
+        if not self.player_path:
+            return None
+        player_key = Path(self.player_path).stem.lower()
+        return player_key if player_key in MANAGED_CACHE_FLAGS else None
+
+    def _get_effective_player_args(self) -> List[str]:
+        """Return runtime player args with cache_duration controlling player buffering."""
+        player_args = split_player_args(self.config.get("player_args"))
+
+        player_key = self._managed_cache_player_key()
+        if player_key is None:
+            return player_args
+
+        cache_duration = self.config.get("cache_duration", 30)
+        cache_seconds = cache_duration if isinstance(cache_duration, int) else 30
+
+        normalized_args = strip_managed_cache_args_for_player(player_key, player_args)
+        normalized_args.extend(build_managed_cache_args_for_player(player_key, cache_seconds))
+        return normalized_args
+
     def watch_stream(self, channel_name: str) -> Optional["_StreamSession"]:
         """
         Watch a Twitch stream for the specified channel.
@@ -496,9 +523,7 @@ class TwitchViewer:
 
             # Launch player with stdin as its input source ("-" = stdin MRL)
             player_cmd = [self.player_path, "-"]
-            player_args_str = self.config.get("player_args")
-            if player_args_str:
-                player_cmd.extend(shlex.split(player_args_str))
+            player_cmd.extend(self._get_effective_player_args())
 
             logger.info(f"Launching player: {' '.join(str(a) for a in player_cmd)}")
             try:

@@ -4,6 +4,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread
 
 from gui_qt.controllers import stream_controller
 from gui_qt.controllers.stream_controller import StreamController, StreamWorker
+from src.exceptions import TwitchStreamError
 
 
 class DummyTwitchViewer:
@@ -163,7 +164,10 @@ class FakeRetryTwitchViewer:
 
     def watch_stream(self, channel):
         self.watch_calls += 1
-        return self.processes.pop(0)
+        result = self.processes.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 def _collect_worker_signals(worker):
@@ -284,6 +288,58 @@ def test_stream_worker_retries_zero_exit_when_stream_pipe_ended(monkeypatch, moc
     assert reconnecting == [
         "Stream ended unexpectedly (stream input ended); reconnecting in 5s (attempt 1/3)"
     ]
+
+
+def test_stream_worker_retries_reconnect_startup_failure(monkeypatch, mock_config_manager):
+    """Reconnect launch failures should keep using the remaining retry budget."""
+    QCoreApplication.instance() or QCoreApplication([])
+    mock_config_manager.set("connection_retry_attempts", 3)
+    mock_config_manager.set("retry_delay", 5)
+    viewer = FakeRetryTwitchViewer(
+        mock_config_manager,
+        [
+            FakeProcess(0, end_reason="stream_ended", ended_from_stream=True),
+            TwitchStreamError("No streams available for: ninja"),
+            FakeProcess(0),
+        ],
+    )
+    worker = StreamWorker(viewer, "ninja", "best")
+    started, finished, errors, reconnecting = _collect_worker_signals(worker)
+    monkeypatch.setattr(worker, "_wait_before_retry", lambda delay: True)
+
+    worker.run()
+
+    assert viewer.watch_calls == 3
+    assert len(started) == 2
+    assert len(finished) == 1
+    assert errors == []
+    assert reconnecting == [
+        "Stream ended unexpectedly (stream input ended); reconnecting in 5s (attempt 1/3)",
+        "Reconnect attempt failed (No streams available for: ninja); retrying in 5s "
+        "(attempt 2/3)",
+    ]
+
+
+def test_stream_worker_initial_startup_failure_does_not_retry(monkeypatch, mock_config_manager):
+    """The first launch should still fail immediately when no stream is available."""
+    QCoreApplication.instance() or QCoreApplication([])
+    mock_config_manager.set("connection_retry_attempts", 3)
+    mock_config_manager.set("retry_delay", 5)
+    viewer = FakeRetryTwitchViewer(
+        mock_config_manager,
+        [TwitchStreamError("No streams available for: ninja")],
+    )
+    worker = StreamWorker(viewer, "ninja", "best")
+    started, finished, errors, reconnecting = _collect_worker_signals(worker)
+    monkeypatch.setattr(worker, "_wait_before_retry", lambda delay: True)
+
+    worker.run()
+
+    assert viewer.watch_calls == 1
+    assert started == []
+    assert finished == []
+    assert errors == ["Stream error: No streams available for: ninja"]
+    assert reconnecting == []
 
 
 def test_start_stream_forwards_reconnecting_signal(monkeypatch, mock_config_manager):

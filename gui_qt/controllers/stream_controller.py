@@ -21,7 +21,7 @@ import subprocess
 import time
 from typing import Any, Optional
 
-from src.exceptions import ValidationError
+from src.exceptions import TwitchStreamError, ValidationError
 from src.twitch_viewer import TwitchViewer
 from src.config_manager import ConfigManager
 from src.logging_config import get_logger
@@ -123,37 +123,56 @@ class StreamWorker(QObject):
                     self.finished.emit()
                     return
 
-                attempt += 1
-                if attempt > reconnect_attempts:
-                    error_msg = (
-                        f"Stream ended unexpectedly with code {return_code} after "
-                        f"{reconnect_attempts} reconnect attempts"
-                    )
-                    logger.warning(error_msg)
-                    self.error.emit(error_msg)
-                    return
-
                 end_reason = self._get_process_end_reason()
                 reason_text = (
                     "stream input ended" if return_code == 0 else f"exit code {return_code}"
                 )
                 if end_reason == "stream_error":
                     reason_text = "stream input errored"
-                message = (
-                    f"Stream ended unexpectedly ({reason_text}); reconnecting in {retry_delay}s "
-                    f"(attempt {attempt}/{reconnect_attempts})"
+                next_attempt = self._schedule_reconnect_attempt(
+                    attempt=attempt,
+                    reconnect_attempts=reconnect_attempts,
+                    retry_delay=retry_delay,
+                    reconnect_message=(
+                        f"Stream ended unexpectedly ({reason_text}); reconnecting in "
+                        f"{retry_delay}s (attempt {{attempt}}/{reconnect_attempts})"
+                    ),
+                    exhausted_error=(
+                        f"Stream ended unexpectedly with code {return_code} after "
+                        f"{reconnect_attempts} reconnect attempts"
+                    ),
                 )
-                logger.warning(message)
-                self.reconnecting.emit(message)
-
-                if not self._wait_before_retry(retry_delay):
+                if next_attempt is None:
                     return
+                attempt = next_attempt
 
             except ValidationError as e:
                 error_msg = f"Stream error: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 self.error.emit(error_msg)
                 return
+            except TwitchStreamError as e:
+                if attempt == 0:
+                    error_msg = f"Stream error: {str(e)}"
+                    logger.error(error_msg, exc_info=True)
+                    self.error.emit(error_msg)
+                    return
+
+                next_attempt = self._schedule_reconnect_attempt(
+                    attempt=attempt,
+                    reconnect_attempts=reconnect_attempts,
+                    retry_delay=retry_delay,
+                    reconnect_message=(
+                        f"Reconnect attempt failed ({str(e)}); retrying in {retry_delay}s "
+                        f"(attempt {{attempt}}/{reconnect_attempts})"
+                    ),
+                    exhausted_error=(
+                        f"Stream error after {reconnect_attempts} reconnect attempts: {str(e)}"
+                    ),
+                )
+                if next_attempt is None:
+                    return
+                attempt = next_attempt
             except Exception as e:
                 error_msg = f"Stream error: {str(e)}"
                 logger.error(
@@ -187,6 +206,30 @@ class StreamWorker(QObject):
         while not self.should_stop and time.monotonic() < deadline:
             time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
         return not self.should_stop
+
+    def _schedule_reconnect_attempt(
+        self,
+        attempt: int,
+        reconnect_attempts: int,
+        retry_delay: int,
+        reconnect_message: str,
+        exhausted_error: str,
+    ) -> Optional[int]:
+        """Consume a reconnect attempt, emitting status or a final error."""
+        next_attempt = attempt + 1
+        if next_attempt > reconnect_attempts:
+            logger.warning(exhausted_error)
+            self.error.emit(exhausted_error)
+            return None
+
+        message = reconnect_message.format(attempt=next_attempt)
+        logger.warning(message)
+        self.reconnecting.emit(message)
+
+        if not self._wait_before_retry(retry_delay):
+            return None
+
+        return next_attempt
 
     def stop(self) -> None:
         """Stop the stream process."""

@@ -253,6 +253,35 @@ class TestTwitchViewer(unittest.TestCase):
         result = self.viewer._check_streamlink_availability()
         self.assertFalse(result)
 
+    def test_effective_player_args_uses_cache_duration_for_vlc(self):
+        self.viewer.player_path = r"C:\Program Files\VideoLAN\VLC\vlc.exe"
+        self.viewer.config.set("cache_duration", 12)
+        self.viewer.config.set(
+            "player_args",
+            "--fullscreen --network-caching=10000 --file-caching=10000 --live-caching=10000",
+        )
+
+        args = self.viewer._get_effective_player_args()
+
+        self.assertEqual(
+            args,
+            [
+                "--fullscreen",
+                "--network-caching=12000",
+                "--file-caching=12000",
+                "--live-caching=12000",
+            ],
+        )
+
+    def test_effective_player_args_leaves_non_vlc_players_unchanged(self):
+        self.viewer.player_path = r"C:\Program Files\mpv\mpv.exe"
+        self.viewer.config.set("cache_duration", 12)
+        self.viewer.config.set("player_args", "--fullscreen --keep-open")
+
+        args = self.viewer._get_effective_player_args()
+
+        self.assertEqual(args, ["--fullscreen", "--keep-open"])
+
 
 if __name__ == "__main__":
     unittest.main()

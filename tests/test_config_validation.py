@@ -55,6 +55,25 @@ class TestConfigManagerValidation(unittest.TestCase):
         self.assertEqual(config.get("preferred_quality"), "720p")
         self.assertNotIn("quality", config.get_all())
 
+    def test_player_args_cache_flags_migrate_to_cache_duration_control(self):
+        """Managed VLC cache flags are stripped from freeform player args on load."""
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "cache_duration": 30,
+                    "player_args": (
+                        "--fullscreen --network-caching=10000 "
+                        "--file-caching=10000 --live-caching=10000"
+                    ),
+                },
+                f,
+            )
+
+        config = ConfigManager(self.config_path)
+
+        self.assertEqual(config.get("player_args"), "--fullscreen")
+        self.assertEqual(config.get("cache_duration"), 30)
+
     def test_valid_player_settings(self):
         """Test valid player settings"""
         valid_players = ["vlc", "mpv", "mpc-hc", "auto"]
