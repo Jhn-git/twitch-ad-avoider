@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QSize, QUrl, Qt, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -34,11 +34,14 @@ class _LandscapePreviewLabel(QLabel):
     """
 
     _ASPECT_RATIO = 16 / 9  # width / height
+    _DIMMED_OPACITY = 0.55
+    _DIMMED_TITLE_STYLE = "background-color: rgba(0, 0, 0, 90); color: rgba(255, 255, 255, 140);"
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._source_pixmap: Optional[QPixmap] = None
         self._max_height: Optional[int] = None
+        self._dimmed = False
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMinimumWidth(160)
@@ -72,6 +75,26 @@ class _LandscapePreviewLabel(QLabel):
         self.title_label.setText(text)
         self.title_label.setVisible(bool(text))
         self._position_title_overlay()
+
+    def set_dimmed(self, dimmed: bool) -> None:
+        """Desaturate and fade the preview, or restore it to normal.
+
+        Used while a stream is actively being watched: the preview stays
+        visible (so context isn't lost) but recedes visually instead of
+        competing with the video for attention.
+
+        Both the image and the title's dimming are baked into pixel data /
+        an inline stylesheet rather than a QGraphicsEffect on this widget -
+        a QGraphicsEffect here was found to suppress title_label's own
+        stylesheet-painted background entirely (a Qt quirk where a parent
+        widget's effect breaks rendering of a child that has its own
+        separate QGraphicsEffect, i.e. title_label's drop shadow).
+        """
+        if dimmed == self._dimmed:
+            return
+        self._dimmed = dimmed
+        self.title_label.setStyleSheet(self._DIMMED_TITLE_STYLE if dimmed else "")
+        self._apply_scaled_pixmap()
 
     def set_max_height(self, max_height: int) -> None:
         """Cap the width-driven height to whatever vertical room is available.
@@ -138,7 +161,22 @@ class _LandscapePreviewLabel(QLabel):
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
+        if self._dimmed:
+            scaled = self._dim_pixmap(scaled)
         self.setPixmap(scaled)
+
+    @classmethod
+    def _dim_pixmap(cls, pixmap: QPixmap) -> QPixmap:
+        """Desaturate a pixmap and fade it, baked directly into its pixels."""
+        grayscale = pixmap.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
+        grayscale = grayscale.convertToFormat(QImage.Format.Format_ARGB32)
+        result = QPixmap(pixmap.size())
+        result.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(result)
+        painter.setOpacity(cls._DIMMED_OPACITY)
+        painter.drawImage(0, 0, grayscale)
+        painter.end()
+        return result
 
 
 class ChatPanel(QGroupBox):
@@ -328,13 +366,18 @@ class ChatPanel(QGroupBox):
         self._preview_image_label.setText("")
         self._preview_image_label.set_title("")
 
+    def set_preview_dimmed(self, dimmed: bool) -> None:
+        """Fade and desaturate the preview, e.g. while its stream is playing."""
+        self._preview_image_label.set_dimmed(dimmed)
+
     def set_streaming(self, active: bool) -> None:
-        """Enable or disable the clip button based on stream state.
+        """Enable/disable the clip button and dim the preview based on stream state.
 
         Args:
             active: Whether a stream is currently running.
         """
         self._clip_button.setEnabled(active)
+        self.set_preview_dimmed(active)
 
     @property
     def channel(self) -> str:
