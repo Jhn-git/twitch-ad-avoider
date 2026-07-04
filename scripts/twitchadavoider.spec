@@ -9,7 +9,7 @@ import os
 
 # Application metadata
 APP_NAME = 'TwitchAdAvoider'
-VERSION = '2.0.10'
+VERSION = '2.0.11'
 
 # Project root is one level up from the spec file (scripts/)
 ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
