@@ -32,6 +32,8 @@ class StreamGUI:
 
     def __init__(self, config: ConfigManager):
         self.config = config
+        self._is_closing = False
+        self._stream_active = False
 
         self.window = MainWindow(config)
 
@@ -46,7 +48,7 @@ class StreamGUI:
         self._load_initial_data()
 
         timeout = self.config.get("favorites_check_timeout", 5)
-        self.status_monitor = StatusMonitor(check_timeout=timeout, max_workers=3)
+        self.status_monitor = StatusMonitor(check_timeout=timeout)
 
         self._setup_refresh_timer()
 
@@ -131,10 +133,13 @@ class StreamGUI:
         self.refresh_timer = QTimer()
         self.refresh_timer.setSingleShot(False)
         self.refresh_timer.timeout.connect(self._on_refresh_favorites)
+        self._initial_refresh_timer = QTimer()
+        self._initial_refresh_timer.setSingleShot(True)
+        self._initial_refresh_timer.timeout.connect(self._on_refresh_favorites)
         self._update_refresh_timer_settings()
 
         if self.config.get("favorites_auto_refresh", True):
-            QTimer.singleShot(0, self._on_refresh_favorites)
+            self._initial_refresh_timer.start(0)
 
     def _update_refresh_timer_settings(self) -> None:
         """Update refresh timer settings from configuration."""
@@ -182,24 +187,24 @@ class StreamGUI:
 
     def _on_stream_started(self, channel: str) -> None:
         logger.info(f"Stream started: {channel}")
+        self._stream_active = True
         self.status_display.add_system(f"Stream started: {channel}", "STREAM")
         self.status_display.set_streaming(True)
         self.stream_actions.set_streaming(True, channel, self.favorites_panel.get_quality())
         self.chat_panel.set_channel(channel)
         self.chat_panel.set_streaming(True)
-        self.preview_controller.clear()
+        self._sync_preview_state()
         process = self.stream_controller.get_current_process()
         self.window.set_stream_process(process)
 
     def _on_stream_finished(self, channel: str) -> None:
         logger.info(f"Stream finished: {channel}")
+        self._stream_active = False
         self.status_display.add_info(f"Stream finished: {channel}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        selected_channel = self.favorites_panel.get_selected_favorite() or ""
-        self.chat_panel.set_channel(selected_channel)
-        self._request_preview_for_selection(selected_channel)
         self.chat_panel.set_streaming(False)
+        self._sync_preview_state()
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
 
@@ -220,13 +225,12 @@ class StreamGUI:
             if msg.clickedButton() == download_btn:
                 webbrowser.open("https://www.videolan.org/vlc/")
 
+        self._stream_active = False
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        selected_channel = self.favorites_panel.get_selected_favorite() or ""
-        self.chat_panel.set_channel(selected_channel)
-        self._request_preview_for_selection(selected_channel)
         self.chat_panel.set_streaming(False)
+        self._sync_preview_state()
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
 
@@ -244,24 +248,55 @@ class StreamGUI:
     # Favorites Handlers
 
     def _on_favorite_selected(self, channel: str) -> None:
-        if not self.stream_controller.is_streaming():
-            self.chat_panel.set_channel(channel)
-            self._request_preview_for_selection(channel)
-        else:
-            self.preview_controller.clear()
+        self._sync_preview_state()
 
-    def _request_preview_for_selection(self, channel: str) -> None:
-        """Fetch and display a live preview for the selected favorite, if enabled."""
-        if not channel:
-            self.preview_controller.clear()
+    def _selected_preview_channel(self) -> str:
+        """Return the currently selected favorite, if any."""
+        return self.favorites_panel.get_selected_favorite() or ""
+
+    def _preview_timeout_seconds(self) -> int:
+        """Return the configured timeout for preview HTTP requests."""
+        timeout = self.config.get("network_timeout", 30)
+        return timeout if isinstance(timeout, int) else 30
+
+    def _should_fetch_preview_for_channel(self, channel: str) -> bool:
+        """Return whether the UI should actively fetch/show a preview right now."""
+        if getattr(self, "_is_closing", False) or getattr(self, "_stream_active", False):
+            return False
+        return bool(channel) and self.config.get("show_stream_preview", True)
+
+    def _can_apply_preview_result(self, channel: str) -> bool:
+        """Return whether an incoming preview result is still relevant to the UI."""
+        return channel == self._selected_preview_channel() and self._should_fetch_preview_for_channel(
+            channel
+        )
+
+    def _sync_preview_state(self) -> None:
+        """Reconcile preview UI with the selected favorite, settings, and stream state."""
+        selected_channel = self._selected_preview_channel()
+        stream_active = getattr(self, "_stream_active", False)
+        self.preview_controller.clear()
+
+        if not stream_active:
+            self.chat_panel.set_channel(selected_channel)
+
+        if stream_active:
+            if not self.config.get("show_stream_preview", True):
+                self.chat_panel.clear_preview()
             return
-        if not self.config.get("show_stream_preview", True):
+
+        if not self._should_fetch_preview_for_channel(selected_channel):
+            self.chat_panel.clear_preview()
             return
+
         self.chat_panel.show_preview_loading()
-        self.preview_controller.request_preview(channel)
+        self.preview_controller.request_preview(
+            selected_channel,
+            timeout_seconds=self._preview_timeout_seconds(),
+        )
 
     def _on_preview_ready(self, channel: str, info) -> None:
-        if channel != self.favorites_panel.get_selected_favorite():
+        if not self._can_apply_preview_result(channel):
             return
         if info.is_live:
             self.chat_panel.set_preview_title(info.title or "")
@@ -271,12 +306,12 @@ class StreamGUI:
             self.chat_panel.set_preview_offline()
 
     def _on_preview_image_ready(self, channel: str, data: bytes) -> None:
-        if channel != self.favorites_panel.get_selected_favorite():
+        if not self._can_apply_preview_result(channel):
             return
         self.chat_panel.set_preview_image(data)
 
     def _on_preview_image_failed(self, channel: str) -> None:
-        if channel != self.favorites_panel.get_selected_favorite():
+        if not self._can_apply_preview_result(channel):
             return
         self.chat_panel.set_preview_image_unavailable()
 
@@ -317,6 +352,10 @@ class StreamGUI:
 
     def _on_refresh_favorites(self) -> None:
         """Perform lightweight live-status checks for all favourite channels."""
+        if getattr(self, "_is_closing", False):
+            logger.debug("Skipping favorites refresh while shutdown is in progress")
+            return
+
         favorites = self.favorites_panel.get_favorites()
 
         if not favorites:
@@ -443,9 +482,10 @@ class StreamGUI:
         reconfigure_logging_from_config(self.config)
         quality = self.config.get("preferred_quality", "best")
         self.favorites_panel.set_quality(quality)
-        if not self.stream_controller.is_streaming():
+        if not getattr(self, "_stream_active", False):
             self.stream_actions.set_streaming(False, quality=quality)
         self._update_refresh_timer_settings()
+        self._sync_preview_state()
         self.status_display.add_info("Settings saved successfully", "SETTINGS")
         logger.info("Settings updated from settings tab")
 
@@ -463,9 +503,12 @@ class StreamGUI:
     def _cleanup(self) -> None:
         """Cleanup resources before shutdown."""
         logger.info("Performing application cleanup")
+        self._is_closing = True
 
         if hasattr(self, "refresh_timer") and self.refresh_timer.isActive():
             self.refresh_timer.stop()
+        if hasattr(self, "_initial_refresh_timer") and self._initial_refresh_timer.isActive():
+            self._initial_refresh_timer.stop()
 
         self.preview_controller.clear()
 

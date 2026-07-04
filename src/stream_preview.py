@@ -7,10 +7,11 @@ time rather than batched live/offline checks.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, cast
 
 import requests
 
+from src.constants import DEFAULT_SETTINGS
 from src.exceptions import ValidationError
 from src.logging_config import get_logger
 from src.validators import validate_channel_name
@@ -21,6 +22,7 @@ _GQL_URL = "https://gql.twitch.tv/gql"
 # Public client ID embedded in the Twitch website — used by streamlink and
 # other open-source Twitch clients for anonymous GQL queries.
 _CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+_DEFAULT_TIMEOUT_SECONDS = cast(int, DEFAULT_SETTINGS["network_timeout"])
 
 
 @dataclass
@@ -33,7 +35,10 @@ class StreamPreviewInfo:
     preview_image_url: Optional[str] = None
 
 
-def fetch_stream_preview_info(channel: str, timeout: int = 10) -> StreamPreviewInfo:
+def fetch_stream_preview_info(
+    channel: str,
+    timeout: int = _DEFAULT_TIMEOUT_SECONDS,
+) -> StreamPreviewInfo:
     """
     Fetch stream title and preview thumbnail URL for a single channel.
 
@@ -88,7 +93,10 @@ def fetch_stream_preview_info(channel: str, timeout: int = 10) -> StreamPreviewI
         return StreamPreviewInfo(channel=validated_channel, is_live=False)
 
 
-def fetch_image_bytes(url: str, timeout: int = 10) -> Optional[bytes]:
+def fetch_image_bytes(
+    url: str,
+    timeout: int = _DEFAULT_TIMEOUT_SECONDS,
+) -> Optional[bytes]:
     """
     Download raw image bytes from a URL.
 

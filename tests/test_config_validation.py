@@ -55,6 +55,40 @@ class TestConfigManagerValidation(unittest.TestCase):
         self.assertEqual(config.get("preferred_quality"), "720p")
         self.assertNotIn("quality", config.get_all())
 
+    def test_retired_status_settings_are_rejected_for_runtime_updates(self):
+        """Legacy status-monitor settings should no longer be runtime-supported."""
+        self.assertFalse(self.config.set("enable_status_monitoring", True))
+        self.assertFalse(self.config.set("status_check_interval", 300))
+        self.assertFalse(self.config.set("status_cache_duration", 60))
+
+    def test_retired_status_settings_are_dropped_during_load(self):
+        """Older config files should load cleanly while dropping retired settings."""
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "preferred_quality": "720p",
+                    "enable_status_monitoring": True,
+                    "status_check_interval": 300,
+                    "status_cache_duration": 60,
+                },
+                f,
+            )
+
+        config = ConfigManager(self.config_path)
+
+        self.assertEqual(config.get("preferred_quality"), "720p")
+        self.assertNotIn("enable_status_monitoring", config.get_all())
+        self.assertNotIn("status_check_interval", config.get_all())
+        self.assertNotIn("status_cache_duration", config.get_all())
+
+        self.assertTrue(config.save_settings())
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+
+        self.assertNotIn("enable_status_monitoring", saved)
+        self.assertNotIn("status_check_interval", saved)
+        self.assertNotIn("status_cache_duration", saved)
+
     def test_player_args_cache_flags_migrate_to_cache_duration_control(self):
         """Managed VLC cache flags are stripped from freeform player args on load."""
         with open(self.config_path, "w", encoding="utf-8") as f:
@@ -96,30 +130,32 @@ class TestConfigManagerValidation(unittest.TestCase):
         self.assertFalse(self.config.set("cache_duration", -1))
         self.assertFalse(self.config.set("cache_duration", 3601))
 
-        # Status check interval validation (10-86400)
-        self.assertTrue(self.config.set("status_check_interval", 300))
-        self.assertTrue(self.config.set("status_check_interval", 10))
-        self.assertTrue(self.config.set("status_check_interval", 86400))
-        self.assertFalse(self.config.set("status_check_interval", 9))
-        self.assertFalse(self.config.set("status_check_interval", 86401))
+        # Network timeout validation (10-120)
+        self.assertTrue(self.config.set("network_timeout", 30))
+        self.assertTrue(self.config.set("network_timeout", 10))
+        self.assertTrue(self.config.set("network_timeout", 120))
+        self.assertFalse(self.config.set("network_timeout", 9))
+        self.assertFalse(self.config.set("network_timeout", 121))
 
-        # Status cache duration validation (1-3600)
-        self.assertTrue(self.config.set("status_cache_duration", 60))
-        self.assertTrue(self.config.set("status_cache_duration", 1))
-        self.assertTrue(self.config.set("status_cache_duration", 3600))
-        self.assertFalse(self.config.set("status_cache_duration", 0))
-        self.assertFalse(self.config.set("status_cache_duration", 3601))
+        # Favorites check timeout validation (3-10)
+        self.assertTrue(self.config.set("favorites_check_timeout", 5))
+        self.assertTrue(self.config.set("favorites_check_timeout", 3))
+        self.assertTrue(self.config.set("favorites_check_timeout", 10))
+        self.assertFalse(self.config.set("favorites_check_timeout", 2))
+        self.assertFalse(self.config.set("favorites_check_timeout", 11))
 
     def test_boolean_validation(self):
         """Test boolean setting validation"""
         boolean_settings = [
             "debug",
             "log_to_file",
-            "enable_status_monitoring",
+            "dark_mode",
+            "enable_network_diagnostics",
             "favorite_live_notifications_enabled",
             "favorite_live_highlight_test_mode",
             "favorite_live_notification_sound_enabled",
             "button_hover_sound_enabled",
+            "show_stream_preview",
         ]
 
         for setting in boolean_settings:
@@ -245,22 +281,16 @@ class TestConfigManagerValidation(unittest.TestCase):
 
         self.assertEqual(data["preferred_quality"], "480p")
 
-    def test_theme_validation(self):
-        """Test theme setting validation"""
-        # Valid themes
-        valid_themes = ["light", "dark"]
-        for theme in valid_themes:
-            with self.subTest(theme=theme):
-                result = self.config.set("current_theme", theme)
-                self.assertTrue(result, f"Theme '{theme}' should be valid")
-                self.assertEqual(self.config.get("current_theme"), theme)
+    def test_dark_mode_validation(self):
+        """Test the runtime-supported theme toggle validation."""
+        self.assertTrue(self.config.set("dark_mode", True))
+        self.assertTrue(self.config.set("dark_mode", False))
 
-        # Invalid themes
-        invalid_themes = ["blue", "green", "invalid", "", None, 123, True]
-        for theme in invalid_themes:
-            with self.subTest(theme=theme):
-                result = self.config.set("current_theme", theme)
-                self.assertFalse(result, f"Theme '{theme}' should be invalid")
+        invalid_values = ["dark", "light", "", None, 1, 0]
+        for value in invalid_values:
+            with self.subTest(value=value):
+                result = self.config.set("dark_mode", value)
+                self.assertFalse(result, f"Dark mode value {value!r} should be invalid")
 
     def test_every_default_setting_has_a_validator_branch(self):
         """Every DEFAULT_SETTINGS key must validate successfully with its default value.

@@ -63,13 +63,13 @@ from .player_args import (
 logger = get_logger(__name__)
 
 
-_OPTIONAL_SETTINGS = {
+_LEGACY_LOAD_ONLY_SETTINGS = {
     "current_theme",
     "enable_status_monitoring",
     "status_check_interval",
     "status_cache_duration",
 }
-_KNOWN_SETTINGS = set(DEFAULT_SETTINGS) | _OPTIONAL_SETTINGS
+_KNOWN_SETTINGS = set(DEFAULT_SETTINGS)
 
 
 def _strip_managed_cache_player_args(player_args: Optional[str]) -> Optional[str]:
@@ -302,7 +302,156 @@ class ConfigManager:
                     "cache_duration now controls player buffering"
                 )
 
+        for legacy_key in _LEGACY_LOAD_ONLY_SETTINGS - {"current_theme"}:
+            if legacy_key in migrated:
+                migrated.pop(legacy_key, None)
+                logger.info(f"Removed retired legacy setting during load: {legacy_key}")
+
         return migrated
+
+    def _validate_bool_setting(self, value: Any, label: str) -> None:
+        """Require an actual bool, not a truthy/falsy stand-in."""
+        if type(value) is not bool:
+            raise ValidationError(f"{label} must be a boolean")
+
+    def _validate_int_range_setting(
+        self,
+        value: Any,
+        label: str,
+        min_val: int,
+        max_val: int,
+    ) -> None:
+        """Require an actual int and validate its allowed range."""
+        if type(value) is not int:
+            raise ValidationError(f"{label} must be an integer")
+        validate_numeric_range(value, min_val=min_val, max_val=max_val, data_type=int)
+
+    def _validate_optional_file_path_setting(self, value: Any) -> None:
+        """Validate an optional file path string."""
+        validate_file_path(value, must_exist=False)
+
+    def _validate_required_file_path_setting(self, value: Any, label: str) -> None:
+        """Validate a required file path string."""
+        if not isinstance(value, str):
+            raise ValidationError(f"{label} must be a string")
+        validate_file_path(value, must_exist=False)
+
+    def _validate_ffmpeg_path_setting(self, value: Any) -> None:
+        """Validate FFmpeg path, allowing an empty string for auto-detect."""
+        if not isinstance(value, str):
+            raise ValidationError("FFmpeg path must be a string")
+        if value:
+            validate_file_path(value, must_exist=False)
+
+    def _setting_validators(self) -> Dict[str, Any]:
+        """Return the runtime-supported validator map for settings."""
+        return {
+            "preferred_quality": validate_quality_option,
+            "player": validate_player_choice,
+            "cache_duration": lambda value: self._validate_int_range_setting(
+                value,
+                "Cache duration",
+                0,
+                3600,
+            ),
+            "debug": lambda value: self._validate_bool_setting(value, "Debug setting"),
+            "log_to_file": lambda value: self._validate_bool_setting(
+                value,
+                "Log to file setting",
+            ),
+            "log_level": validate_log_level,
+            "player_path": self._validate_optional_file_path_setting,
+            "clip_enabled": lambda value: self._validate_bool_setting(
+                value,
+                "Clip enabled setting",
+            ),
+            "clip_directory": lambda value: self._validate_required_file_path_setting(
+                value,
+                "Clip directory",
+            ),
+            "ffmpeg_path": self._validate_ffmpeg_path_setting,
+            "player_args": sanitize_player_args,
+            "dark_mode": lambda value: self._validate_bool_setting(
+                value,
+                "Dark mode setting",
+            ),
+            "network_timeout": lambda value: self._validate_int_range_setting(
+                value,
+                "Network timeout",
+                MIN_NETWORK_TIMEOUT,
+                MAX_NETWORK_TIMEOUT,
+            ),
+            "connection_retry_attempts": lambda value: self._validate_int_range_setting(
+                value,
+                "Connection retry attempts",
+                MIN_RETRY_ATTEMPTS,
+                MAX_RETRY_ATTEMPTS,
+            ),
+            "retry_delay": lambda value: self._validate_int_range_setting(
+                value,
+                "Retry delay",
+                MIN_RETRY_DELAY,
+                MAX_RETRY_DELAY,
+            ),
+            "favorites_auto_refresh": lambda value: self._validate_bool_setting(
+                value,
+                "Favorites auto-refresh setting",
+            ),
+            "favorites_refresh_interval": lambda value: self._validate_int_range_setting(
+                value,
+                "Favorites refresh interval",
+                MIN_REFRESH_INTERVAL,
+                MAX_REFRESH_INTERVAL,
+            ),
+            "favorites_check_timeout": lambda value: self._validate_int_range_setting(
+                value,
+                "Favorites check timeout",
+                MIN_CHECK_TIMEOUT,
+                MAX_CHECK_TIMEOUT,
+            ),
+            "favorite_live_notifications_enabled": lambda value: self._validate_bool_setting(
+                value,
+                "Favorite live notifications setting",
+            ),
+            "favorite_live_highlight_test_mode": lambda value: self._validate_bool_setting(
+                value,
+                "Favorite live highlight test mode setting",
+            ),
+            "favorite_live_notification_sound_enabled": (
+                lambda value: self._validate_bool_setting(
+                    value,
+                    "Favorite live notification sound setting",
+                )
+            ),
+            "button_hover_sound_enabled": lambda value: self._validate_bool_setting(
+                value,
+                "Button hover sound setting",
+            ),
+            "show_stream_preview": lambda value: self._validate_bool_setting(
+                value,
+                "Show stream preview setting",
+            ),
+            "window_width": lambda value: self._validate_int_range_setting(
+                value,
+                "Window width",
+                MIN_WINDOW_WIDTH,
+                MAX_WINDOW_WIDTH,
+            ),
+            "window_height": lambda value: self._validate_int_range_setting(
+                value,
+                "Window height",
+                MIN_WINDOW_HEIGHT,
+                MAX_WINDOW_HEIGHT,
+            ),
+            "window_maximized": lambda value: self._validate_bool_setting(
+                value,
+                "Window maximized setting",
+            ),
+            "enable_network_diagnostics": lambda value: self._validate_bool_setting(
+                value,
+                "Enable network diagnostics",
+            ),
+        }
 
     def _validate_setting(self, key: str, value: Any) -> bool:
         """
@@ -316,192 +465,11 @@ class ConfigManager:
             True if setting is valid, False otherwise
         """
         try:
-            if key not in _KNOWN_SETTINGS:
+            validator = self._setting_validators().get(key)
+            if key not in _KNOWN_SETTINGS or validator is None:
                 raise ValidationError(f"Unknown setting key: {key}")
-
-            if key == "preferred_quality":
-                validate_quality_option(value)
-                return True
-
-            elif key == "player":
-                validate_player_choice(value)
-                return True
-
-            elif key == "cache_duration":
-                validate_numeric_range(value, min_val=0, max_val=3600, data_type=int)
-                return True
-
-            elif key == "debug":
-                if not isinstance(value, bool):
-                    raise ValidationError("Debug setting must be a boolean")
-                return True
-
-            elif key == "log_to_file":
-                if not isinstance(value, bool):
-                    raise ValidationError("Log to file setting must be a boolean")
-                return True
-
-            elif key == "log_level":
-                validate_log_level(value)
-                return True
-
-            elif key == "player_path":
-                validate_file_path(value, must_exist=False)
-                return True
-
-            elif key == "clip_enabled":
-                if not isinstance(value, bool):
-                    raise ValidationError("Clip enabled setting must be a boolean")
-                return True
-
-            elif key == "clip_directory":
-                if not isinstance(value, str):
-                    raise ValidationError("Clip directory must be a string")
-                validate_file_path(value, must_exist=False)
-                return True
-
-            elif key == "ffmpeg_path":
-                if not isinstance(value, str):
-                    raise ValidationError("FFmpeg path must be a string")
-                if value:
-                    validate_file_path(value, must_exist=False)
-                return True
-
-            elif key == "player_args":
-                sanitize_player_args(value)
-                return True
-
-            elif key == "dark_mode":
-                if not isinstance(value, bool):
-                    raise ValidationError("Dark mode setting must be a boolean")
-                return True
-
-            elif key == "network_timeout":
-                # Network settings should be strict about type (only accept actual integers)
-                if not isinstance(value, int):
-                    raise ValidationError("Network timeout must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_NETWORK_TIMEOUT, max_val=MAX_NETWORK_TIMEOUT, data_type=int
-                )
-                return True
-
-            elif key == "connection_retry_attempts":
-                # Network settings should be strict about type (only accept actual integers)
-                if not isinstance(value, int):
-                    raise ValidationError("Connection retry attempts must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_RETRY_ATTEMPTS, max_val=MAX_RETRY_ATTEMPTS, data_type=int
-                )
-                return True
-
-            elif key == "retry_delay":
-                # Network settings should be strict about type (only accept actual integers)
-                if not isinstance(value, int):
-                    raise ValidationError("Retry delay must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_RETRY_DELAY, max_val=MAX_RETRY_DELAY, data_type=int
-                )
-                return True
-
-            # Favorites settings validation
-            elif key == "favorites_auto_refresh":
-                if not isinstance(value, bool):
-                    raise ValidationError("Favorites auto-refresh setting must be a boolean")
-                return True
-
-            elif key == "favorites_refresh_interval":
-                if not isinstance(value, int):
-                    raise ValidationError("Favorites refresh interval must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_REFRESH_INTERVAL, max_val=MAX_REFRESH_INTERVAL, data_type=int
-                )
-                return True
-
-            elif key == "favorites_check_timeout":
-                if not isinstance(value, int):
-                    raise ValidationError("Favorites check timeout must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_CHECK_TIMEOUT, max_val=MAX_CHECK_TIMEOUT, data_type=int
-                )
-                return True
-
-            elif key == "favorite_live_notifications_enabled":
-                if not isinstance(value, bool):
-                    raise ValidationError("Favorite live notifications setting must be a boolean")
-                return True
-
-            elif key == "favorite_live_highlight_test_mode":
-                if not isinstance(value, bool):
-                    raise ValidationError(
-                        "Favorite live highlight test mode setting must be a boolean"
-                    )
-                return True
-
-            elif key == "favorite_live_notification_sound_enabled":
-                if not isinstance(value, bool):
-                    raise ValidationError(
-                        "Favorite live notification sound setting must be a boolean"
-                    )
-                return True
-
-            elif key == "button_hover_sound_enabled":
-                if not isinstance(value, bool):
-                    raise ValidationError("Button hover sound setting must be a boolean")
-                return True
-
-            elif key == "show_stream_preview":
-                if not isinstance(value, bool):
-                    raise ValidationError("Show stream preview setting must be a boolean")
-                return True
-
-            # Window settings validation
-            elif key == "window_width":
-                if not isinstance(value, int):
-                    raise ValidationError("Window width must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_WINDOW_WIDTH, max_val=MAX_WINDOW_WIDTH, data_type=int
-                )
-                return True
-
-            elif key == "window_height":
-                if not isinstance(value, int):
-                    raise ValidationError("Window height must be an integer")
-                validate_numeric_range(
-                    value, min_val=MIN_WINDOW_HEIGHT, max_val=MAX_WINDOW_HEIGHT, data_type=int
-                )
-                return True
-
-            elif key == "window_maximized":
-                if not isinstance(value, bool):
-                    raise ValidationError("Window maximized setting must be a boolean")
-                return True
-
-            elif key == "enable_network_diagnostics":
-                if not isinstance(value, bool):
-                    raise ValidationError("Enable network diagnostics must be a boolean")
-                return True
-
-            elif key == "enable_status_monitoring":
-                if not isinstance(value, bool):
-                    raise ValidationError("Enable status monitoring must be a boolean")
-                return True
-
-            elif key == "status_check_interval":
-                if not isinstance(value, int):
-                    raise ValidationError("Status check interval must be an integer")
-                validate_numeric_range(value, min_val=10, max_val=86400, data_type=int)
-                return True
-
-            elif key == "status_cache_duration":
-                if not isinstance(value, int):
-                    raise ValidationError("Status cache duration must be an integer")
-                validate_numeric_range(value, min_val=1, max_val=3600, data_type=int)
-                return True
-
-            elif key == "current_theme":
-                if not isinstance(value, str) or value not in ("light", "dark"):
-                    raise ValidationError("Theme must be 'light' or 'dark'")
-                return True
+            validator(value)
+            return True
 
         except ValidationError as e:
             logger.warning(f"Validation failed for {key}={value}: {e}")
