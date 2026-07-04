@@ -188,7 +188,6 @@ class StreamGUI:
         self.chat_panel.set_channel(channel)
         self.chat_panel.set_streaming(True)
         self.preview_controller.clear()
-        self.chat_panel.clear_preview()
         process = self.stream_controller.get_current_process()
         self.window.set_stream_process(process)
 
