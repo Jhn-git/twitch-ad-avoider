@@ -449,6 +449,11 @@ class ConfigManager:
                     raise ValidationError("Button hover sound setting must be a boolean")
                 return True
 
+            elif key == "show_stream_preview":
+                if not isinstance(value, bool):
+                    raise ValidationError("Show stream preview setting must be a boolean")
+                return True
+
             # Window settings validation
             elif key == "window_width":
                 if not isinstance(value, int):
