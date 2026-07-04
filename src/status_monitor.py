@@ -24,9 +24,8 @@ _CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 class StatusMonitor:
     """Check Twitch channel live status via the Twitch GQL API."""
 
-    def __init__(self, check_timeout: int = 10, max_workers: int = 3):
+    def __init__(self, check_timeout: int = 10):
         self.check_timeout = check_timeout
-        self.max_workers = max_workers
         logger.debug(f"StatusMonitor initialized (timeout={check_timeout}s)")
 
     def check_channels(self, channels: List[str]) -> Dict[str, bool]:
@@ -93,6 +92,3 @@ class StatusMonitor:
     def update_timeout(self, timeout: int) -> None:
         self.check_timeout = timeout
         logger.debug(f"Updated check timeout to {timeout}s")
-
-    def update_max_workers(self, workers: int) -> None:
-        self.max_workers = workers

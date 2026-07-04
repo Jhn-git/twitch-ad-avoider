@@ -6,6 +6,8 @@ stream_controller.py: work happens on a background QObject moved to a
 QThread, and results are delivered back via signals.
 """
 
+import time
+from dataclasses import dataclass
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
@@ -16,6 +18,17 @@ from src.stream_preview import StreamPreviewInfo, fetch_image_bytes, fetch_strea
 logger = get_logger(__name__)
 
 _DEBOUNCE_MS = 250
+_CACHE_TTL_SECONDS = 60
+
+
+@dataclass
+class _PreviewCacheEntry:
+    """In-memory preview cache entry for the current app session."""
+
+    info: StreamPreviewInfo
+    cached_at: float
+    image_fetch_attempted: bool = False
+    image_bytes: Optional[bytes] = None
 
 
 class PreviewWorker(QObject):
@@ -26,18 +39,26 @@ class PreviewWorker(QObject):
     image_failed = Signal()
     done = Signal()
 
-    def __init__(self, channel: str):
+    def __init__(self, channel: str, timeout_seconds: int):
         super().__init__()
         self.channel = channel
+        self.timeout_seconds = timeout_seconds
+        self.info = StreamPreviewInfo(channel=channel, is_live=False)
+        self.image_bytes: Optional[bytes] = None
+        self.image_fetch_attempted = False
 
     def run(self) -> None:
-        info = fetch_stream_preview_info(self.channel)
-        self.finished.emit(info)
+        self.info = fetch_stream_preview_info(self.channel, timeout=self.timeout_seconds)
+        self.finished.emit(self.info)
 
-        if info.is_live and info.preview_image_url:
-            image_bytes = fetch_image_bytes(info.preview_image_url)
-            if image_bytes:
-                self.image_ready.emit(image_bytes)
+        if self.info.is_live and self.info.preview_image_url:
+            self.image_fetch_attempted = True
+            self.image_bytes = fetch_image_bytes(
+                self.info.preview_image_url,
+                timeout=self.timeout_seconds,
+            )
+            if self.image_bytes:
+                self.image_ready.emit(self.image_bytes)
             else:
                 self.image_failed.emit()
 
@@ -64,16 +85,24 @@ class StreamPreviewController(QObject):
         self._worker: Optional[PreviewWorker] = None
         self._generation = 0
         self._pending_channel: Optional[str] = None
+        self._pending_timeout_seconds = 30
+        self._cache: dict[str, _PreviewCacheEntry] = {}
 
         self._debounce_timer = QTimer(self)
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.setInterval(_DEBOUNCE_MS)
         self._debounce_timer.timeout.connect(self._start_fetch)
 
-    def request_preview(self, channel: str) -> None:
+    def request_preview(self, channel: str, timeout_seconds: int) -> None:
         """Schedule a debounced preview fetch, superseding any prior request."""
         self._generation += 1
         self._pending_channel = channel
+        self._pending_timeout_seconds = timeout_seconds
+        cached = self._get_cached_entry(channel)
+        if cached is not None:
+            self._debounce_timer.stop()
+            self._emit_cached_preview(channel, cached, self._generation)
+            return
         self._debounce_timer.start()
 
     def clear(self) -> None:
@@ -89,7 +118,7 @@ class StreamPreviewController(QObject):
 
         generation = self._generation
 
-        worker = PreviewWorker(channel)
+        worker = PreviewWorker(channel, self._pending_timeout_seconds)
         thread = QThread()
         self._worker = worker
         self._thread = thread
@@ -125,9 +154,50 @@ class StreamPreviewController(QObject):
         self.image_failed.emit(channel)
 
     def _cleanup_thread(self, thread: QThread, worker: PreviewWorker) -> None:
+        self._cache[worker.channel] = _PreviewCacheEntry(
+            info=worker.info,
+            cached_at=time.monotonic(),
+            image_fetch_attempted=worker.image_fetch_attempted,
+            image_bytes=worker.image_bytes,
+        )
         thread.deleteLater()
         worker.deleteLater()
         if self._thread is thread:
             self._thread = None
         if self._worker is worker:
             self._worker = None
+
+    def _get_cached_entry(self, channel: str) -> Optional[_PreviewCacheEntry]:
+        entry = self._cache.get(channel)
+        if entry is None:
+            return None
+
+        if time.monotonic() - entry.cached_at > _CACHE_TTL_SECONDS:
+            self._cache.pop(channel, None)
+            return None
+
+        return entry
+
+    def _emit_cached_preview(
+        self,
+        channel: str,
+        entry: _PreviewCacheEntry,
+        generation: int,
+    ) -> None:
+        """Replay a fresh cached preview on the next event-loop turn."""
+
+        def emit() -> None:
+            if generation != self._generation:
+                return
+
+            self.preview_ready.emit(channel, entry.info)
+
+            if not entry.info.is_live or not entry.info.preview_image_url:
+                return
+
+            if entry.image_bytes:
+                self.image_ready.emit(channel, entry.image_bytes)
+            elif entry.image_fetch_attempted:
+                self.image_failed.emit(channel)
+
+        QTimer.singleShot(0, emit)

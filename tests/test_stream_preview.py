@@ -29,16 +29,24 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
             }
         }
     }
+    call_kwargs = {}
+
+    def fake_post(*args, **kwargs):
+        call_kwargs.update(kwargs)
+        return _FakeResponse(payload)
+
     monkeypatch.setattr(
-        "src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload)
+        "src.stream_preview.requests.post",
+        fake_post,
     )
 
-    info = fetch_stream_preview_info("ninja")
+    info = fetch_stream_preview_info("ninja", timeout=17)
 
     assert info.channel == "ninja"
     assert info.is_live is True
     assert info.title == "Chill stream"
     assert info.preview_image_url == "https://example.com/preview.jpg"
+    assert call_kwargs["timeout"] == 17
 
 
 def test_fetch_stream_preview_info_offline_channel(monkeypatch):
@@ -82,14 +90,21 @@ def test_fetch_stream_preview_info_degrades_on_request_error(monkeypatch):
 
 
 def test_fetch_image_bytes_returns_content(monkeypatch):
+    call_kwargs = {}
+
+    def fake_get(*args, **kwargs):
+        call_kwargs.update(kwargs)
+        return _FakeResponse(content=b"binary-image-data")
+
     monkeypatch.setattr(
         "src.stream_preview.requests.get",
-        lambda *a, **k: _FakeResponse(content=b"binary-image-data"),
+        fake_get,
     )
 
-    result = fetch_image_bytes("https://example.com/preview.jpg")
+    result = fetch_image_bytes("https://example.com/preview.jpg", timeout=19)
 
     assert result == b"binary-image-data"
+    assert call_kwargs["timeout"] == 19
 
 
 def test_fetch_image_bytes_returns_none_on_failure(monkeypatch):
