@@ -267,6 +267,11 @@ class SettingsTab(QWidget):
         self.button_hover_sound_check = QCheckBox("Play button hover sounds")
         layout.addRow(self.button_hover_sound_check)
 
+        self.show_stream_preview_check = QCheckBox(
+            "Show stream preview when selecting a favorite"
+        )
+        layout.addRow(self.show_stream_preview_check)
+
         group.setLayout(layout)
         return group
 
@@ -347,6 +352,7 @@ class SettingsTab(QWidget):
         self.button_hover_sound_check.setChecked(
             self.config.get("button_hover_sound_enabled", True)
         )
+        self.show_stream_preview_check.setChecked(self.config.get("show_stream_preview", True))
 
         # Appearance
         dark_mode = self.config.get("dark_mode", True)
@@ -424,6 +430,7 @@ class SettingsTab(QWidget):
                     self.favorite_live_notification_sound_check.isChecked()
                 ),
                 "button_hover_sound_enabled": self.button_hover_sound_check.isChecked(),
+                "show_stream_preview": self.show_stream_preview_check.isChecked(),
                 "dark_mode": self.dark_mode_check.isChecked(),
                 "debug": self.debug_check.isChecked(),
                 "log_to_file": self.log_to_file_check.isChecked(),

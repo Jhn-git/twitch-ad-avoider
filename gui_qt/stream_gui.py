@@ -16,6 +16,7 @@ from gui_qt.components.live_notification_toast import LiveNotificationToast
 from gui_qt.components.sound_manager import GuiSoundManager
 
 from gui_qt.controllers.stream_controller import StreamController
+from gui_qt.controllers.preview_controller import StreamPreviewController
 
 from src.favorites_manager import FavoritesManager
 from src.config_manager import ConfigManager
@@ -66,6 +67,7 @@ class StreamGUI:
     def _create_controllers(self) -> None:
         """Create all controllers."""
         self.stream_controller = StreamController(self.config)
+        self.preview_controller = StreamPreviewController()
 
     def _setup_layout(self) -> None:
         """Setup component layout in main window."""
@@ -105,6 +107,10 @@ class StreamGUI:
 
         self.chat_panel.open_chat_requested.connect(self._on_open_chat)
         self.chat_panel.open_channel_requested.connect(self._on_open_channel)
+
+        self.preview_controller.preview_ready.connect(self._on_preview_ready)
+        self.preview_controller.image_ready.connect(self._on_preview_image_ready)
+        self.preview_controller.image_failed.connect(self._on_preview_image_failed)
 
         self.settings_tab.settings_changed.connect(self._on_settings_changed)
         self.settings_tab.dark_mode_changed.connect(self._on_dark_mode_changed)
@@ -181,6 +187,8 @@ class StreamGUI:
         self.stream_actions.set_streaming(True, channel, self.favorites_panel.get_quality())
         self.chat_panel.set_channel(channel)
         self.chat_panel.set_streaming(True)
+        self.preview_controller.clear()
+        self.chat_panel.clear_preview()
         process = self.stream_controller.get_current_process()
         self.window.set_stream_process(process)
 
@@ -189,7 +197,9 @@ class StreamGUI:
         self.status_display.add_info(f"Stream finished: {channel}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        self.chat_panel.set_channel(self.favorites_panel.get_selected_favorite() or "")
+        selected_channel = self.favorites_panel.get_selected_favorite() or ""
+        self.chat_panel.set_channel(selected_channel)
+        self._request_preview_for_selection(selected_channel)
         self.chat_panel.set_streaming(False)
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
@@ -214,7 +224,9 @@ class StreamGUI:
         self.status_display.add_error(f"Stream error: {error}", "STREAM")
         self.status_display.set_streaming(False)
         self.stream_actions.set_streaming(False, quality=self.favorites_panel.get_quality())
-        self.chat_panel.set_channel(self.favorites_panel.get_selected_favorite() or "")
+        selected_channel = self.favorites_panel.get_selected_favorite() or ""
+        self.chat_panel.set_channel(selected_channel)
+        self._request_preview_for_selection(selected_channel)
         self.chat_panel.set_streaming(False)
         self.stream_controller.twitch_viewer.cleanup_recording()
         self.window.set_stream_process(None)
@@ -235,6 +247,39 @@ class StreamGUI:
     def _on_favorite_selected(self, channel: str) -> None:
         if not self.stream_controller.is_streaming():
             self.chat_panel.set_channel(channel)
+            self._request_preview_for_selection(channel)
+        else:
+            self.preview_controller.clear()
+
+    def _request_preview_for_selection(self, channel: str) -> None:
+        """Fetch and display a live preview for the selected favorite, if enabled."""
+        if not channel:
+            self.preview_controller.clear()
+            return
+        if not self.config.get("show_stream_preview", True):
+            return
+        self.chat_panel.show_preview_loading()
+        self.preview_controller.request_preview(channel)
+
+    def _on_preview_ready(self, channel: str, info) -> None:
+        if channel != self.favorites_panel.get_selected_favorite():
+            return
+        if info.is_live:
+            self.chat_panel.set_preview_title(info.title or "")
+            if not info.preview_image_url:
+                self.chat_panel.set_preview_image_unavailable()
+        else:
+            self.chat_panel.set_preview_offline()
+
+    def _on_preview_image_ready(self, channel: str, data: bytes) -> None:
+        if channel != self.favorites_panel.get_selected_favorite():
+            return
+        self.chat_panel.set_preview_image(data)
+
+    def _on_preview_image_failed(self, channel: str) -> None:
+        if channel != self.favorites_panel.get_selected_favorite():
+            return
+        self.chat_panel.set_preview_image_unavailable()
 
     def _on_favorite_double_clicked(self, channel: str) -> None:
         quality = self.favorites_panel.get_quality()
@@ -422,6 +467,8 @@ class StreamGUI:
 
         if hasattr(self, "refresh_timer") and self.refresh_timer.isActive():
             self.refresh_timer.stop()
+
+        self.preview_controller.clear()
 
         if self.stream_controller.is_streaming():
             self.stream_controller.stop_stream()
