@@ -243,6 +243,21 @@ QLabel#activitySummary {
     padding: 4px;
 }
 
+QLabel#streamPreviewImage {
+    background-color: #1E1E1E;
+    border: 1px solid #3C3C3C;
+    border-radius: 4px;
+    color: #888888;
+}
+
+QLabel#streamPreviewTitle {
+    color: #FFFFFF;
+    background-color: rgba(0, 0, 0, 150);
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 4px 8px;
+}
+
 /* Scroll Bars */
 QScrollBar:vertical {
     background-color: #2E2E2E;
