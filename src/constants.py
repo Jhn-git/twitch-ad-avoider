@@ -42,6 +42,7 @@ DEFAULT_SETTINGS = {
     "favorite_live_highlight_test_mode": False,  # Re-trigger recent-live highlight each refresh
     "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
     "button_hover_sound_enabled": True,  # Play subtle UI hover sounds
+    "show_stream_preview": True,  # Show live thumbnail + title when selecting a favorite
 }
 
 # Stream quality options
