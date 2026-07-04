@@ -262,6 +262,22 @@ class TestConfigManagerValidation(unittest.TestCase):
                 result = self.config.set("current_theme", theme)
                 self.assertFalse(result, f"Theme '{theme}' should be invalid")
 
+    def test_every_default_setting_has_a_validator_branch(self):
+        """Every DEFAULT_SETTINGS key must validate successfully with its default value.
+
+        A key present in DEFAULT_SETTINGS but missing a corresponding branch in
+        ConfigManager._validate_setting() silently fails validation, which causes
+        the *entire* settings.json to be rejected and reset to defaults on load.
+        """
+        from src.constants import DEFAULT_SETTINGS
+
+        for key, value in DEFAULT_SETTINGS.items():
+            with self.subTest(key=key):
+                self.assertTrue(
+                    self.config._validate_setting(key, value),
+                    f"Default value for '{key}' failed validation: {value!r}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
