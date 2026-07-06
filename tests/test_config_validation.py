@@ -144,6 +144,13 @@ class TestConfigManagerValidation(unittest.TestCase):
         self.assertFalse(self.config.set("favorites_check_timeout", 2))
         self.assertFalse(self.config.set("favorites_check_timeout", 11))
 
+        # HLS live edge validation (1-10)
+        self.assertTrue(self.config.set("hls_live_edge", 2))
+        self.assertTrue(self.config.set("hls_live_edge", 1))
+        self.assertTrue(self.config.set("hls_live_edge", 10))
+        self.assertFalse(self.config.set("hls_live_edge", 0))
+        self.assertFalse(self.config.set("hls_live_edge", 11))
+
     def test_boolean_validation(self):
         """Test boolean setting validation"""
         boolean_settings = [
@@ -156,6 +163,7 @@ class TestConfigManagerValidation(unittest.TestCase):
             "favorite_live_notification_sound_enabled",
             "button_hover_sound_enabled",
             "show_stream_preview",
+            "twitch_low_latency",
         ]
 
         for setting in boolean_settings:

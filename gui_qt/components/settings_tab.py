@@ -166,6 +166,19 @@ class SettingsTab(QWidget):
         self.cache_spin.setSuffix(" seconds")
         layout.addRow("Cache Duration:", self.cache_spin)
 
+        # Twitch low-latency mode
+        self.twitch_low_latency_check = QCheckBox("Use Twitch Low-Latency Mode (LL-HLS)")
+        layout.addRow(self.twitch_low_latency_check)
+
+        # HLS live edge
+        self.hls_live_edge_spin = QSpinBox()
+        self.hls_live_edge_spin.setRange(1, 10)
+        self.hls_live_edge_spin.setToolTip(
+            "Segments buffered behind live. Lower = less latency but more prone to "
+            "stutter on network jitter. 2 is a reasonable low-latency default."
+        )
+        layout.addRow("HLS Live Edge:", self.hls_live_edge_spin)
+
         # Player path
         player_path_layout = QHBoxLayout()
         self.player_path_edit = QLineEdit()
@@ -318,6 +331,8 @@ class SettingsTab(QWidget):
         self.player_combo.setCurrentText(self.config.get("player", "vlc"))
         self.quality_combo.setCurrentText(self.config.get("preferred_quality", "best"))
         self.cache_spin.setValue(self.config.get("cache_duration", 30))
+        self.twitch_low_latency_check.setChecked(self.config.get("twitch_low_latency", True))
+        self.hls_live_edge_spin.setValue(self.config.get("hls_live_edge", 2))
 
         player_path = self.config.get("player_path")
         if player_path:
@@ -412,6 +427,8 @@ class SettingsTab(QWidget):
                 "player": self.player_combo.currentText(),
                 "preferred_quality": self.quality_combo.currentText(),
                 "cache_duration": self.cache_spin.value(),
+                "twitch_low_latency": self.twitch_low_latency_check.isChecked(),
+                "hls_live_edge": self.hls_live_edge_spin.value(),
                 "player_path": player_path if player_path else None,
                 "player_args": player_args if player_args else None,
                 "network_timeout": self.timeout_spin.value(),

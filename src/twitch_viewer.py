@@ -162,10 +162,13 @@ class TwitchViewer:
         self.session.set_option("stream-segment-attempts", 5)
         self.session.set_option("stream-segment-timeout", 15.0)
         self.session.set_option("hls-playlist-reload-attempts", 5)
+        self.session.set_option("hls-live-edge", self.config.get("hls_live_edge", 2))
         try:
             set_plugin_option = getattr(self.session, "set_plugin_option", None)
             if callable(set_plugin_option):
                 set_plugin_option("twitch", "disable-ads", True)
+                if self.config.get("twitch_low_latency", True):
+                    set_plugin_option("twitch", "low-latency", True)
         except Exception:
             pass
         logger.debug(f"TwitchViewer session configured with {timeout}s timeout")

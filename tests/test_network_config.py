@@ -155,6 +155,46 @@ class TestTwitchViewerNetworkConfig(unittest.TestCase):
         # Verify session timeout was set (among other set_option calls)
         mock_session.set_option.assert_any_call("http-timeout", 45)
 
+    @patch("src.twitch_viewer.streamlink.Streamlink")
+    def test_twitch_viewer_low_latency_configuration(self, mock_streamlink):
+        """Test that TwitchViewer enables Twitch low-latency mode and hls-live-edge tuning"""
+        mock_session = Mock()
+        mock_streamlink.return_value = mock_session
+
+        self.config.get.side_effect = lambda key, default=None: {
+            "network_timeout": 45,
+            "debug": False,
+            "player": "vlc",
+            "preferred_quality": "best",
+            "twitch_low_latency": True,
+            "hls_live_edge": 4,
+        }.get(key, default)
+
+        TwitchViewer(self.config)
+
+        mock_session.set_option.assert_any_call("hls-live-edge", 4)
+        mock_session.set_plugin_option.assert_any_call("twitch", "low-latency", True)
+
+    @patch("src.twitch_viewer.streamlink.Streamlink")
+    def test_twitch_viewer_low_latency_disabled(self, mock_streamlink):
+        """Test that TwitchViewer does not enable LL-HLS when twitch_low_latency is False"""
+        mock_session = Mock()
+        mock_streamlink.return_value = mock_session
+
+        self.config.get.side_effect = lambda key, default=None: {
+            "network_timeout": 45,
+            "debug": False,
+            "player": "vlc",
+            "preferred_quality": "best",
+            "twitch_low_latency": False,
+            "hls_live_edge": 2,
+        }.get(key, default)
+
+        TwitchViewer(self.config)
+
+        for call in mock_session.set_plugin_option.call_args_list:
+            self.assertNotEqual(call.args, ("twitch", "low-latency", True))
+
 
 if __name__ == "__main__":
     unittest.main()

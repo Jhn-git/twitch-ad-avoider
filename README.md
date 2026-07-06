@@ -90,7 +90,9 @@ Settings are stored in `config/settings.json` and created with defaults on first
 | `player` | `"vlc"` | Player: vlc, mpv, mpc-hc, auto |
 | `player_path` | `null` | Absolute path to player executable (overrides auto-detect) |
 | `player_args` | `""` | Extra arguments passed to the player |
-| `cache_duration` | `30` | Stream buffer in seconds (0–3600) |
+| `cache_duration` | `6` | Stream buffer in seconds (0–3600) — VLC only today |
+| `twitch_low_latency` | `true` | Use Twitch's low-latency HLS mode (shorter segments, faster reload) |
+| `hls_live_edge` | `3` | HLS segments buffered behind live (1–10). Lower = less latency, more stutter/corruption risk on jitter |
 | `network_timeout` | `30` | HTTP timeout in seconds (10–120) |
 | `connection_retry_attempts` | `3` | Retry count on stream failure (1–10) |
 | `retry_delay` | `5` | Seconds between retries (1–30) |
@@ -182,6 +184,15 @@ While a stream is active, use the **Clip** button in the GUI to save the last ~3
 ### Stream stutters / buffers constantly
 - Increase cache: Settings → Stream Settings → Cache Duration: 60
 - Check bandwidth: 480p needs ~3 Mbps, 720p ~5 Mbps, 1080p ~10 Mbps
+- If you've tuned `cache_duration` / `hls_live_edge` down for lower latency (see below), that trades away stutter resilience — raise `cache_duration` back up a few seconds and/or raise `hls_live_edge` before touching network timeout/quality
+
+### Reduce latency (catch up to live)
+- Enable Twitch low-latency mode: Settings → Stream Settings → Use Twitch Low-Latency Mode (LL-HLS) — default on
+- Lower live-edge buffer: Settings → Stream Settings → HLS Live Edge: 2–4 (lower = less latency, more stutter/corruption risk)
+- Lower cache duration: Settings → Stream Settings → Cache Duration: 4–8 seconds
+- This app cannot beat Twitch's own broadcast/CDN encode delay. Even fully tuned, expect low single digits of seconds behind broadcast at best (typically more like several seconds), not zero latency
+- **Blocky/pixelated frames (not diagonal tearing)**: this means a frame was decoded from incomplete data — the live-edge buffer or cache is too tight for your network's jitter. Raise `hls_live_edge` by 1 and/or `cache_duration` by a couple seconds until it clears; this trades a little latency back for stability
+- mpv/mpc-hc users: `cache_duration` only manages VLC's cache flags today — pass your own cache flags manually via Player Arguments (e.g. mpv: `--cache=yes --cache-secs=2`)
 
 ### GUI won't launch (from source)
 ```bash

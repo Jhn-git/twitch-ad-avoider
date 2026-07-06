@@ -80,6 +80,8 @@ class TestTwitchViewer(unittest.TestCase):
         self.assertIn("preferred_quality", settings)
         self.assertIn("player", settings)
         self.assertIn("cache_duration", settings)
+        self.assertIn("twitch_low_latency", settings)
+        self.assertIn("hls_live_edge", settings)
 
     def test_validate_channel_valid(self):
         valid_channels = ["ninja", "shroud", "test_channel", "test123"]
