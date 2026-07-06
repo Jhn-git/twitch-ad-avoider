@@ -106,6 +106,8 @@ Write-Host ""
 
 # ─── BUILD ───────────────────────────────────────────────────────────────────
 
+Update-Streamlink
+
 Write-Info "Building executable..."
 python scripts/build_executable.py
 

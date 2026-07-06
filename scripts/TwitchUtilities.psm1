@@ -100,5 +100,26 @@ function Test-StreamlinkInstallation {
     }
 }
 
+# Upgrade streamlink to the latest available version
+function Update-Streamlink {
+    Write-Info "Upgrading streamlink..."
+    try {
+        pip install --upgrade streamlink 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            $version = python -c "import streamlink; print(streamlink.__version__)" 2>&1
+            Write-Success "streamlink upgraded to $version"
+            return $true
+        }
+        else {
+            Write-Warning "streamlink upgrade exited with code $LASTEXITCODE — continuing with installed version"
+            return $false
+        }
+    }
+    catch {
+        Write-Warning "streamlink upgrade failed: $_ — continuing with installed version"
+        return $false
+    }
+}
+
 # Export functions
-Export-ModuleMember -Function Write-ColorOutput, Write-Success, Write-Error, Write-Warning, Write-Info, Test-ChannelName, Test-PythonInstallation, Test-StreamlinkInstallation
+Export-ModuleMember -Function Write-ColorOutput, Write-Success, Write-Error, Write-Warning, Write-Info, Test-ChannelName, Test-PythonInstallation, Test-StreamlinkInstallation, Update-Streamlink

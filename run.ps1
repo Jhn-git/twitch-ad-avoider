@@ -126,7 +126,9 @@ try {
         Read-Host "Press Enter to exit"
         exit 1
     }
-    
+
+    Update-Streamlink
+
     # Launch GUI
     if (-not (Start-GUI)) {
         Write-Error "Failed to launch GUI"

@@ -36,6 +36,8 @@ try {
         throw "Desktop app folder not found: $TargetDir"
     }
 
+    Update-Streamlink
+
     Write-Info "Building fresh executable..."
     python scripts/build_executable.py --skip-deps
     if ($LASTEXITCODE -ne 0) {
