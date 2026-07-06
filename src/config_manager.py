@@ -43,6 +43,8 @@ from .constants import (
     MAX_REFRESH_INTERVAL,
     MIN_CHECK_TIMEOUT,
     MAX_CHECK_TIMEOUT,
+    MIN_HLS_LIVE_EDGE,
+    MAX_HLS_LIVE_EDGE,
 )
 from .logging_config import get_logger
 from .validators import (
@@ -353,6 +355,16 @@ class ConfigManager:
                 "Cache duration",
                 0,
                 3600,
+            ),
+            "twitch_low_latency": lambda value: self._validate_bool_setting(
+                value,
+                "Twitch low-latency setting",
+            ),
+            "hls_live_edge": lambda value: self._validate_int_range_setting(
+                value,
+                "HLS live edge",
+                MIN_HLS_LIVE_EDGE,
+                MAX_HLS_LIVE_EDGE,
             ),
             "debug": lambda value: self._validate_bool_setting(value, "Debug setting"),
             "log_to_file": lambda value: self._validate_bool_setting(

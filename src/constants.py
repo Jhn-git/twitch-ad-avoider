@@ -13,7 +13,9 @@ APP_DESCRIPTION = "A Python implementation for watching Twitch streams while avo
 DEFAULT_SETTINGS = {
     "preferred_quality": "best",
     "player": "vlc",
-    "cache_duration": 30,
+    "cache_duration": 6,
+    "twitch_low_latency": True,  # Use Twitch's LL-HLS mode (shorter segments, lower latency)
+    "hls_live_edge": 3,  # HLS segments buffered behind live (lower = less latency, more stutter risk)
     "debug": False,
     "log_to_file": True,
     "log_level": "INFO",
@@ -97,6 +99,8 @@ MIN_RETRY_ATTEMPTS = 1
 MAX_RETRY_ATTEMPTS = 10
 MIN_RETRY_DELAY = 1
 MAX_RETRY_DELAY = 30
+MIN_HLS_LIVE_EDGE = 1
+MAX_HLS_LIVE_EDGE = 10
 # Startup optimization constants
 MIN_STARTUP_DELAY = 0
 MAX_STARTUP_DELAY = 30
