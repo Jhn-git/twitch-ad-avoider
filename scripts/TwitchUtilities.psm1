@@ -12,22 +12,22 @@ function Write-ColorOutput {
 
 function Write-Success {
     param([string]$Message)
-    Write-ColorOutput "✓ $Message" "Green"
+    Write-ColorOutput "[OK] $Message" "Green"
 }
 
 function Write-Error {
     param([string]$Message)
-    Write-ColorOutput "✗ $Message" "Red"
+    Write-ColorOutput "[ERROR] $Message" "Red"
 }
 
 function Write-Warning {
     param([string]$Message)
-    Write-ColorOutput "⚠ $Message" "Yellow"
+    Write-ColorOutput "[WARN] $Message" "Yellow"
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-ColorOutput "ℹ $Message" "Cyan"
+    Write-ColorOutput "[INFO] $Message" "Cyan"
 }
 
 # Validate channel name
@@ -67,14 +67,14 @@ function Test-PythonInstallation {
             }
             catch {
                 Write-Error "Python is not installed or not in PATH"
-                Write-Info "Please install Python 3.6+ from https://python.org"
+                Write-Info "Please install Python 3.10, 3.11, 3.12, or 3.13 from https://python.org"
                 return $false
             }
         }
     }
     catch {
         Write-Error "Python is not installed or not in PATH"
-        Write-Info "Please install Python 3.6+ from https://python.org"
+        Write-Info "Please install Python 3.10, 3.11, 3.12, or 3.13 from https://python.org"
         return $false
     }
     return $false
@@ -111,12 +111,12 @@ function Update-Streamlink {
             return $true
         }
         else {
-            Write-Warning "streamlink upgrade exited with code $LASTEXITCODE — continuing with installed version"
+            Write-Warning "streamlink upgrade exited with code $LASTEXITCODE - continuing with installed version"
             return $false
         }
     }
     catch {
-        Write-Warning "streamlink upgrade failed: $_ — continuing with installed version"
+        Write-Warning "streamlink upgrade failed: $_ - continuing with installed version"
         return $false
     }
 }

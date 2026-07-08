@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.config_manager import ConfigManager
 from src.favorites_manager import FavoritesManager
-from webapi import TwitchViewerAPI
+from src.config_manager import ConfigManager
+from src.webapi import TwitchViewerAPI
 
 
 class FakeStreamService:
@@ -68,8 +68,8 @@ class TestTwitchViewerAPI(unittest.TestCase):
     def make_api(self, **kwargs):
         manager = FavoritesManager(self.favorites_path)
         patches = [
-            patch("webapi.FavoritesManager", return_value=manager),
-            patch("webapi.WebStreamService", FakeStreamService),
+            patch("src.webapi.FavoritesManager", return_value=manager),
+            patch("src.webapi.WebStreamService", FakeStreamService),
         ]
         self.preview_fetch = Mock(
             return_value=Mock(
@@ -80,7 +80,7 @@ class TestTwitchViewerAPI(unittest.TestCase):
                 profile_image_url="https://example.com/profile.jpg",
             )
         )
-        patches.append(patch("webapi.fetch_stream_preview_info", self.preview_fetch))
+        patches.append(patch("src.webapi.fetch_stream_preview_info", self.preview_fetch))
         for patcher in patches:
             patcher.start()
             self.addCleanup(patcher.stop)

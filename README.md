@@ -78,7 +78,7 @@ flowchart LR
 
 | Component | Responsibility | File |
 |-----------|----------------|------|
-| `TwitchViewerAPI` | JS-callable bridge | `webapi.py` |
+| `TwitchViewerAPI` | JS-callable bridge | `src/webapi.py` |
 | `WebStreamService` | Streamlink resolution, proxy, recording, clips | `src/web_stream_service.py` |
 | `ConfigManager` | Settings validation and migration | `src/config_manager.py` |
 | `FavoritesManager` | Channel persistence and live status | `src/favorites_manager.py` |

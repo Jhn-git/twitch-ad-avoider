@@ -34,8 +34,8 @@ def main():
     try:
         import webview
 
-        from runtime_check import verify_compatible
-        from webapi import TwitchViewerAPI
+        from src.runtime_check import verify_compatible
+        from src.webapi import TwitchViewerAPI
 
         config = ConfigManager()
 

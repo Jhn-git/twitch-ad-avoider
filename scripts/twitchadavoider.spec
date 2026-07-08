@@ -26,20 +26,19 @@ def collect_tree(source, destination):
 datas = []
 datas.extend(collect_tree(os.path.join(ROOT, "gui_web"), "gui_web"))
 datas.extend(collect_tree(os.path.join(ROOT, "assets"), "assets"))
-datas.extend(collect_tree(os.path.join(ROOT, "config"), "config"))
 
 hiddenimports = [
     "main",
-    "runtime_check",
-    "webapi",
     "src.config_manager",
     "src.constants",
     "src.exceptions",
     "src.favorites_manager",
     "src.logging_config",
+    "src.runtime_check",
     "src.status_monitor",
     "src.stream_preview",
     "src.validators",
+    "src.webapi",
     "src.web_stream_service",
     "requests",
     "webview",
@@ -73,9 +72,6 @@ a = Analysis(
         "PIL",
         "Pillow",
         "pygame",
-        "PyQt5",
-        "PyQt6",
-        "PySide2",
         "tkinter",
         "wxPython",
     ],

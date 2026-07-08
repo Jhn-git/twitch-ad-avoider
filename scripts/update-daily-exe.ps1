@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
 Import-Module "$ProjectRoot\scripts\TwitchUtilities.psm1" -Force

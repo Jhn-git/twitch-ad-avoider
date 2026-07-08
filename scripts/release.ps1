@@ -14,10 +14,9 @@ Import-Module "$PSScriptRoot\TwitchUtilities.psm1" -Force
 
 $PyprojectPath = "pyproject.toml"
 $ConstantsPath = "src\constants.py"
-$SpecPath      = "scripts\twitchadavoider.spec"
 $ExePath       = "dist\TwitchAdAvoider.exe"
 
-# ─── PREFLIGHT ───────────────────────────────────────────────────────────────
+# PREFLIGHT
 
 Write-Info "TwitchAdAvoider Release Script"
 Write-Info "=============================="
@@ -30,7 +29,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# ─── READ CURRENT VERSION ────────────────────────────────────────────────────
+# READ CURRENT VERSION
 
 $pyprojectContent = Get-Content $PyprojectPath -Raw
 
@@ -45,7 +44,7 @@ if ($pyprojectContent -match 'version\s*=\s*"([0-9]+)\.([0-9]+)\.([0-9]+)"') {
 
 $currentVersion = "$verMajor.$verMinor.$verPatch"
 
-# ─── CALCULATE NEW VERSION ───────────────────────────────────────────────────
+# CALCULATE NEW VERSION
 
 switch ($Bump) {
     "major" { $verMajor++; $verMinor = 0; $verPatch = 0 }
@@ -55,11 +54,11 @@ switch ($Bump) {
 
 $newVersion = "$verMajor.$verMinor.$verPatch"
 
-# ─── CAPTURE LAST COMMIT MESSAGE ─────────────────────────────────────────────
+# CAPTURE LAST COMMIT MESSAGE
 
 $lastCommitMessage = git log -1 --format="%s"
 
-# ─── SHOW PLAN ───────────────────────────────────────────────────────────────
+# SHOW PLAN
 
 Write-Info "Bump type    : $Bump"
 Write-Info "Version      : $currentVersion  ->  $newVersion"
@@ -67,12 +66,11 @@ Write-Info "Release notes: $lastCommitMessage"
 Write-Host ""
 
 if ($DryRun) {
-    Write-Warning "DRY RUN — no changes will be made."
+    Write-Warning "DRY RUN - no changes will be made."
     Write-Host ""
     Write-Host "Would update version in:"
     Write-Host "  $PyprojectPath"
     Write-Host "  $ConstantsPath"
-    Write-Host "  $SpecPath"
     Write-Host ""
     Write-Host "Would run: python scripts/build_executable.py"
     Write-Host "Would run: git commit -am 'bump: v$newVersion'"
@@ -83,7 +81,7 @@ if ($DryRun) {
     exit 0
 }
 
-# ─── UPDATE VERSION FILES ────────────────────────────────────────────────────
+# UPDATE VERSION FILES
 
 Write-Info "Updating version files..."
 
@@ -97,14 +95,9 @@ $content = $content -replace '(APP_VERSION\s*=\s*")[^"]+(")' , "`${1}$newVersion
 Set-Content $ConstantsPath -Value $content -NoNewline
 Write-Success "Updated $ConstantsPath"
 
-$content = Get-Content $SpecPath -Raw
-$content = $content -replace "(?<=VERSION\s*=\s*')[^']+", $newVersion
-Set-Content $SpecPath -Value $content -NoNewline
-Write-Success "Updated $SpecPath"
-
 Write-Host ""
 
-# ─── BUILD ───────────────────────────────────────────────────────────────────
+# BUILD
 
 Update-Streamlink
 
@@ -124,7 +117,7 @@ if (-not (Test-Path $ExePath)) {
 Write-Success "Build complete: $ExePath"
 Write-Host ""
 
-# ─── CONFIRM BEFORE PUSH ─────────────────────────────────────────────────────
+# CONFIRM BEFORE PUSH
 
 Write-Warning "About to push and create GitHub release v$newVersion."
 $confirm = Read-Host "Continue? [Y/n]"
@@ -140,7 +133,7 @@ if ($confirm -ne "" -and $confirm -notmatch '^[Yy]') {
     exit 0
 }
 
-# ─── GIT OPERATIONS ──────────────────────────────────────────────────────────
+# GIT OPERATIONS
 
 Write-Info "Committing version bump..."
 git commit -am "bump: v$newVersion"
@@ -156,7 +149,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "git push failed"; exit 1 }
 git push --tags
 if ($LASTEXITCODE -ne 0) { Write-Error "git push --tags failed"; exit 1 }
 
-# ─── GITHUB RELEASE ──────────────────────────────────────────────────────────
+# GITHUB RELEASE
 
 Write-Info "Creating GitHub release..."
 gh release create "v$newVersion" "$ExePath" `

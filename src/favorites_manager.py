@@ -19,7 +19,7 @@ Features:
     - Integration with status monitoring system
 
 See Also:
-    :class:`~webapi.TwitchViewerAPI`: WebView API integration
+    :class:`~src.webapi.TwitchViewerAPI`: WebView API integration
     :class:`~src.status_monitor.StatusMonitor`: Status checking integration
     :class:`FavoriteChannelInfo`: Channel information data structure
 """

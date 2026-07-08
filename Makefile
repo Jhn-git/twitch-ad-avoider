@@ -18,9 +18,10 @@ help:
 	@echo "  make run          - Run the application (GUI mode)"
 	@echo "  make test         - Run all tests"
 	@echo "  make format       - Format code with black"
+	@echo "  make format-check - Check Black formatting without rewriting files"
 	@echo "  make lint         - Lint code with flake8"
 	@echo "  make typecheck    - Type check with mypy"
-	@echo "  make check        - Run format, lint, and typecheck"
+	@echo "  make check        - Run non-mutating format, lint, and type checks"
 	@echo "  make all          - Run check + test (pre-commit workflow)"
 	@echo ""
 	@echo "Maintenance:"
@@ -50,6 +51,10 @@ test-coverage:
 format:
 	$(PYTHON) -m black .
 
+# Check formatting without rewriting files
+format-check:
+	$(PYTHON) -m black --check .
+
 # Lint with flake8
 lint:
 	$(PYTHON) -m flake8 .
@@ -59,19 +64,19 @@ typecheck:
 	$(PYTHON) -m mypy src/
 
 # Run all code quality checks
-check: format lint typecheck
-	@echo "✓ All checks passed"
+check: format-check lint typecheck
+	@echo "[OK] All checks passed"
 
 # Pre-commit workflow (checks + tests)
 all: check test
-	@echo "✓ All checks and tests passed"
+	@echo "[OK] All checks and tests passed"
 
 # Clean build artifacts and caches
 clean:
 	@echo "Cleaning build artifacts..."
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf build/ dist/ *.egg-info .coverage build_cache/ .pytest_cache/ 2>/dev/null || true
-	@echo "✓ Cleanup complete"
+	@echo "[OK] Cleanup complete"
 
 # Install package (production)
 install:
@@ -85,13 +90,13 @@ dev-install:
 build: clean
 	@echo "Building executable..."
 	$(PYTHON) scripts/build_executable.py
-	@echo "✓ Build complete"
+	@echo "[OK] Build complete"
 
 # Build with full quality checks and tests
-build-full: clean format lint test
+build-full: clean check test
 	@echo "Building executable..."
 	$(PYTHON) scripts/build_executable.py
-	@echo "✓ Build complete"
+	@echo "[OK] Build complete"
 
 # Bump version, build exe, and publish GitHub release (Windows)
 # Usage: make release        (patch bump)
