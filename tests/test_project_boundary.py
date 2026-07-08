@@ -31,6 +31,33 @@ def test_make_check_is_non_mutating():
     assert "check: format lint typecheck" not in makefile
 
 
+def test_root_guide_files_are_local_only():
+    root = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        ["git", "check-ignore", "AGENTS.md", "CLAUDE.md", "TODO.md"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(result.stdout.splitlines()) == {"AGENTS.md", "CLAUDE.md", "TODO.md"}
+
+
+def test_project_scripts_do_not_run_git_clean():
+    root = Path(__file__).resolve().parents[1]
+    checked_paths = [
+        root / "Makefile",
+        *sorted((root / "scripts").glob("*.ps1")),
+        *sorted((root / "scripts").glob("*.py")),
+    ]
+
+    for path in checked_paths:
+        source = path.read_text()
+        assert "git clean" not in source.lower(), f"{path} should not clean ignored files"
+
+
 def test_pyinstaller_spec_does_not_bundle_local_config():
     root = Path(__file__).resolve().parents[1]
     spec = (root / "scripts" / "twitchadavoider.spec").read_text()
