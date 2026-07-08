@@ -6,7 +6,7 @@ ifeq ($(OS),Windows_NT)
     RUN_CMD := $(PYTHON) main.py
 else
     PYTHON := python3
-    RUN_CMD := QT_QPA_PLATFORM=xcb $(PYTHON) main.py
+    RUN_CMD := $(PYTHON) main.py
 endif
 
 # Default target - show available commands

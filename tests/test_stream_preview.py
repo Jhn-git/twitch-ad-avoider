@@ -22,10 +22,11 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
     payload = {
         "data": {
             "user": {
+                "profileImageURL": "https://example.com/profile.jpg",
                 "stream": {
                     "title": "Chill stream",
                     "previewImageURL": "https://example.com/preview.jpg",
-                }
+                },
             }
         }
     }
@@ -46,21 +47,23 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
     assert info.is_live is True
     assert info.title == "Chill stream"
     assert info.preview_image_url == "https://example.com/preview.jpg"
+    assert info.profile_image_url == "https://example.com/profile.jpg"
     assert call_kwargs["timeout"] == 17
 
 
 def test_fetch_stream_preview_info_offline_channel(monkeypatch):
     """A null stream node means the channel is offline."""
-    payload = {"data": {"user": {"stream": None}}}
-    monkeypatch.setattr(
-        "src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload)
-    )
+    payload = {
+        "data": {"user": {"profileImageURL": "https://example.com/profile.jpg", "stream": None}}
+    }
+    monkeypatch.setattr("src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload))
 
     info = fetch_stream_preview_info("ninja")
 
     assert info.is_live is False
     assert info.title is None
     assert info.preview_image_url is None
+    assert info.profile_image_url == "https://example.com/profile.jpg"
 
 
 def test_fetch_stream_preview_info_invalid_channel_skips_request(monkeypatch):

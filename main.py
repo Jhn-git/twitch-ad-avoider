@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-TwitchAdAvoider - Main Application Entry Point
-A Python implementation for watching Twitch streams while avoiding ads.
-"""
+"""TwitchAdAvoider desktop entry point."""
 
 import sys
 import argparse
@@ -24,21 +21,24 @@ def get_resource_path(relative_path: str) -> Path:
 
 
 def main():
-    """Main application entry point"""
+    """Launch the pywebview Stream Manager."""
     parser = argparse.ArgumentParser(
         description="TwitchAdAvoider - Watch Twitch streams while avoiding ads"
     )
-    parser.add_argument("--channel", "-c", help="Channel to watch (launches directly to stream)")
+    parser.add_argument("--channel", "-c", help="Preselect a channel in the Stream Manager")
     parser.add_argument("--quality", "-q", default="best", help="Stream quality (default: best)")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()
 
     try:
-        # Load configuration
+        import webview
+
+        from runtime_check import verify_compatible
+        from webapi import TwitchViewerAPI
+
         config = ConfigManager()
 
-        # Setup logging
         if args.debug:
             config.set("debug", True)
             log_level = "DEBUG"
@@ -54,64 +54,33 @@ def main():
         logger = get_logger(__name__)
         logger.info("TwitchAdAvoider application starting")
 
-        # If channel provided, start stream directly (CLI mode)
-        if args.channel:
-            from src.twitch_viewer import TwitchViewer
+        verify_compatible()
+        logger.info("Starting TwitchAdAvoider web GUI")
 
-            viewer = TwitchViewer(config)
-            config.set("preferred_quality", args.quality)
-            viewer.watch_stream(args.channel)
-            return 0
-
-        # Otherwise launch Qt GUI
-        import os
-        from PySide6.QtWidgets import QApplication
-        from PySide6.QtGui import QIcon
-        from gui_qt.stream_gui import StreamGUI
-
-        logger.info("Starting TwitchAdAvoider Qt GUI")
-
-        # Fix for WSL2 Wayland issues - force XCB (X11) platform
-        # Qt auto-detects Wayland on WSL2 but Wayland support is broken
-        if "QT_QPA_PLATFORM" not in os.environ:
-            # Check for WSL2 via environment variable
-            if "WSL_DISTRO_NAME" in os.environ:
-                logger.info("WSL2 detected - forcing Qt platform to XCB (X11)")
-                os.environ["QT_QPA_PLATFORM"] = "xcb"
-            # Fallback: check /proc/version for "microsoft"
-            elif os.path.exists("/proc/version"):
-                try:
-                    with open("/proc/version", "r") as f:
-                        if "microsoft" in f.read().lower():
-                            logger.info(
-                                "WSL2 detected via /proc/version - forcing Qt platform to XCB"
-                            )
-                            os.environ["QT_QPA_PLATFORM"] = "xcb"
-                except Exception:
-                    pass  # Ignore errors, continue without forcing platform
-
-        # Create Qt application
-        app = QApplication(sys.argv)
-        app.setApplicationName("TwitchAdAvoider")
-        app.setOrganizationName("TwitchAdAvoider")
-        app.setApplicationDisplayName("TwitchAdAvoider - Stream Manager")
-        icon_path = get_resource_path("assets/twitch-cartoon-logo.ico")
-        if icon_path.exists():
-            app.setWindowIcon(QIcon(str(icon_path)))
-        else:
-            logger.warning(f"Application icon not found: {icon_path}")
-
-        # Use Fusion style for consistent cross-platform appearance
-        app.setStyle("Fusion")
-
-        # Create and show GUI
-        gui = StreamGUI(config)
-        gui.show()
+        api = TwitchViewerAPI(
+            config,
+            launch_channel=args.channel,
+            launch_quality=args.quality,
+        )
+        gui_path = get_resource_path("gui_web/index.html")
+        window = webview.create_window(
+            title="TwitchAdAvoider - Stream Manager",
+            url=str(gui_path),
+            js_api=api,
+            width=int(config.get("window_width", 1440)),
+            height=int(config.get("window_height", 850)),
+            min_size=(1000, 650),
+            text_select=False,
+        )
+        api.set_window(window)
+        try:
+            window.events.closing += api.shutdown
+        except Exception:
+            logger.debug("pywebview closing hook not available", exc_info=True)
 
         logger.info("Application ready - entering event loop")
-
-        # Run application
-        return app.exec()
+        webview.start(debug=args.debug)
+        return 0
 
     except ImportError as e:
         print(f"Import Error: {e}")

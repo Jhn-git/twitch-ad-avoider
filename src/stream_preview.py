@@ -33,6 +33,7 @@ class StreamPreviewInfo:
     is_live: bool
     title: Optional[str] = None
     preview_image_url: Optional[str] = None
+    profile_image_url: Optional[str] = None
 
 
 def fetch_stream_preview_info(
@@ -62,8 +63,8 @@ def fetch_stream_preview_info(
     # Requested at a larger-than-default size (still 16:9) so the preview stays
     # sharp when the GUI scales it up to fill a wide panel.
     query = (
-        "{ user(login: \"%s\") { stream { title previewImageURL(width: 640, height: 360) } } }"
-        % validated_channel
+        '{ user(login: "%s") { profileImageURL(width: 96) '
+        "stream { title previewImageURL(width: 640, height: 360) } } }" % validated_channel
     )
 
     try:
@@ -78,15 +79,21 @@ def fetch_stream_preview_info(
         data = response.json().get("data") or {}
         user_node = data.get("user") or {}
         stream_node = user_node.get("stream")
+        profile_image_url = user_node.get("profileImageURL")
 
         if not stream_node:
-            return StreamPreviewInfo(channel=validated_channel, is_live=False)
+            return StreamPreviewInfo(
+                channel=validated_channel,
+                is_live=False,
+                profile_image_url=profile_image_url,
+            )
 
         return StreamPreviewInfo(
             channel=validated_channel,
             is_live=True,
             title=stream_node.get("title"),
             preview_image_url=stream_node.get("previewImageURL"),
+            profile_image_url=profile_image_url,
         )
     except Exception as e:
         logger.warning(f"Failed to fetch stream preview for {validated_channel}: {e}")

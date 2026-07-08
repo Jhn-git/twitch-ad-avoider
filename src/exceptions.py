@@ -28,12 +28,6 @@ class TwitchStreamError(TwitchAdAvoiderError):
     pass
 
 
-class PlayerError(TwitchAdAvoiderError):
-    """Exception raised for video player-related errors."""
-
-    pass
-
-
 class ValidationError(TwitchAdAvoiderError):
     """Exception raised for input validation errors."""
 

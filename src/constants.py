@@ -12,15 +12,13 @@ APP_DESCRIPTION = "A Python implementation for watching Twitch streams while avo
 # Default configuration values
 DEFAULT_SETTINGS = {
     "preferred_quality": "best",
-    "player": "vlc",
-    "cache_duration": 6,
-    "twitch_low_latency": True,  # Use Twitch's LL-HLS mode (shorter segments, lower latency)
-    "hls_live_edge": 3,  # HLS segments buffered behind live (lower = less latency, more stutter risk)
+    # Use Twitch's LL-HLS mode (shorter segments, lower latency)
+    "twitch_low_latency": True,
+    # HLS segments buffered behind live; lower means less latency and more stutter risk.
+    "hls_live_edge": 3,
     "debug": False,
     "log_to_file": True,
     "log_level": "INFO",
-    "player_path": None,
-    "player_args": None,
     # Clip settings
     "clip_enabled": True,  # Record stream for clipping (near-zero CPU/network overhead)
     "clip_directory": "clips",  # Where to save clips
@@ -28,8 +26,8 @@ DEFAULT_SETTINGS = {
     # GUI theme settings
     "dark_mode": True,  # Enable dark theme
     # Window settings
-    "window_width": 940,  # Main window width in pixels
-    "window_height": 680,  # Main window height in pixels
+    "window_width": 1440,  # Main window width in pixels
+    "window_height": 850,  # Main window height in pixels
     "window_maximized": False,  # Whether window is maximized
     # Network settings
     "network_timeout": 30,  # Network timeout in seconds (increased from 20s default)
@@ -45,36 +43,15 @@ DEFAULT_SETTINGS = {
     "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
     "button_hover_sound_enabled": True,  # Play subtle UI hover sounds
     "show_stream_preview": True,  # Show live thumbnail + title when selecting a favorite
+    # Stream Manager screen settings
+    "stream_manager_left_sidebar_open": True,  # Favorites rail expanded/collapsed
+    "stream_manager_right_sidebar_open": True,  # Options rail expanded/collapsed
+    "stream_manager_activity_drawer_open": False,  # Activity drawer expanded/collapsed
+    "stream_manager_clip_duration_seconds": 30,  # Last-selected clip duration
 }
 
 # Stream quality options
 QUALITY_OPTIONS = ["best", "worst", "720p", "480p", "360p", "160p"]
-
-# Supported players and their executable names
-SUPPORTED_PLAYERS = {
-    "vlc": ["vlc", "vlc.exe"],
-    "mpv": ["mpv", "mpv.exe", "mpv.com"],
-    "mpc-hc": ["mpc-hc", "mpc-hc.exe", "mpc-hc64.exe"],
-}
-
-# Common player installation paths
-COMMON_PLAYER_PATHS = {
-    "vlc": [
-        r"C:\Program Files\VideoLAN\VLC\vlc.exe",
-        r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
-        "/usr/bin/vlc",
-        "/usr/local/bin/vlc",
-    ],
-    "mpv": [
-        r"C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe",
-        "/usr/bin/mpv",
-        "/usr/local/bin/mpv",
-    ],
-    "mpc-hc": [
-        r"C:\Program Files\MPC-HC\mpc-hc64.exe",
-        r"C:\Program Files (x86)\MPC-HC\mpc-hc.exe",
-    ],
-}
 
 # File paths
 CONFIG_DIR = Path("config")
@@ -87,10 +64,6 @@ TEMP_DIR = Path("temp")
 
 # Twitch username validation regex
 TWITCH_USERNAME_PATTERN = r"^[a-zA-Z0-9_]{4,25}$"
-
-# Environment variable names for PowerShell integration
-ENV_PLAYER_PATH = "TWITCH_PLAYER_PATH"
-ENV_PLAYER_NAME = "TWITCH_PLAYER_NAME"
 
 # Default network timeout values
 MIN_NETWORK_TIMEOUT = 10

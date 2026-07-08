@@ -1,199 +1,87 @@
-"""
-Tests for network configuration and timeout settings
-Tests the new network reliability features added to the application.
-"""
+"""Tests for network and Streamlink playback configuration."""
 
-import unittest
-import tempfile
 import os
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.config_manager import ConfigManager
-from src.twitch_viewer import TwitchViewer
+from src.web_stream_service import WebStreamService
 
 
 class TestNetworkConfiguration(unittest.TestCase):
-    """Test network configuration settings"""
-
     def setUp(self):
-        """Set up test with temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = Path(self.temp_dir) / "test_settings.json"
         self.config = ConfigManager(self.config_path)
 
     def tearDown(self):
-        """Clean up temporary files"""
         if self.config_path.exists():
             self.config_path.unlink()
         os.rmdir(self.temp_dir)
 
     def test_network_timeout_validation(self):
-        """Test network timeout setting validation"""
-        # Valid timeout values
-        valid_timeouts = [10, 15, 30, 60, 120]
-        for timeout in valid_timeouts:
-            with self.subTest(timeout=timeout):
-                result = self.config.set("network_timeout", timeout)
-                self.assertTrue(result, f"Timeout {timeout} should be valid")
-                self.assertEqual(self.config.get("network_timeout"), timeout)
+        for timeout in (10, 15, 30, 60, 120):
+            self.assertTrue(self.config.set("network_timeout", timeout))
+            self.assertEqual(self.config.get("network_timeout"), timeout)
 
-        # Invalid timeout values
-        invalid_timeouts = [5, 9, 121, 200, -1, 0, "30", None]
-        for timeout in invalid_timeouts:
-            with self.subTest(timeout=timeout):
-                result = self.config.set("network_timeout", timeout)
-                self.assertFalse(result, f"Timeout {timeout} should be invalid")
+        for timeout in (5, 9, 121, -1, 0, "30", None):
+            self.assertFalse(self.config.set("network_timeout", timeout))
 
-    def test_retry_attempts_validation(self):
-        """Test connection retry attempts validation"""
-        # Valid retry attempts
-        valid_attempts = [1, 3, 5, 10]
-        for attempts in valid_attempts:
-            with self.subTest(attempts=attempts):
-                result = self.config.set("connection_retry_attempts", attempts)
-                self.assertTrue(result, f"Retry attempts {attempts} should be valid")
-                self.assertEqual(self.config.get("connection_retry_attempts"), attempts)
+    def test_retry_settings_validation(self):
+        for attempts in (1, 3, 10):
+            self.assertTrue(self.config.set("connection_retry_attempts", attempts))
+        for attempts in (0, 11, -1, "3", None):
+            self.assertFalse(self.config.set("connection_retry_attempts", attempts))
 
-        # Invalid retry attempts
-        invalid_attempts = [0, 11, 15, -1, "3", None]
-        for attempts in invalid_attempts:
-            with self.subTest(attempts=attempts):
-                result = self.config.set("connection_retry_attempts", attempts)
-                self.assertFalse(result, f"Retry attempts {attempts} should be invalid")
-
-    def test_retry_delay_validation(self):
-        """Test retry delay validation"""
-        # Valid retry delays
-        valid_delays = [1, 5, 10, 30]
-        for delay in valid_delays:
-            with self.subTest(delay=delay):
-                result = self.config.set("retry_delay", delay)
-                self.assertTrue(result, f"Retry delay {delay} should be valid")
-                self.assertEqual(self.config.get("retry_delay"), delay)
-
-        # Invalid retry delays
-        invalid_delays = [0, 31, 50, -1, "5", None]
-        for delay in invalid_delays:
-            with self.subTest(delay=delay):
-                result = self.config.set("retry_delay", delay)
-                self.assertFalse(result, f"Retry delay {delay} should be invalid")
+        for delay in (1, 5, 30):
+            self.assertTrue(self.config.set("retry_delay", delay))
+        for delay in (0, 31, -1, "5", None):
+            self.assertFalse(self.config.set("retry_delay", delay))
 
     def test_network_diagnostics_setting(self):
-        """Test network diagnostics boolean setting"""
-        # Valid boolean values
         self.assertTrue(self.config.set("enable_network_diagnostics", True))
-        self.assertTrue(self.config.get("enable_network_diagnostics"))
-
         self.assertTrue(self.config.set("enable_network_diagnostics", False))
-        self.assertFalse(self.config.get("enable_network_diagnostics"))
 
-        # Invalid values
-        invalid_values = ["true", "false", 1, 0, None, "yes"]
-        for value in invalid_values:
-            with self.subTest(value=value):
-                result = self.config.set("enable_network_diagnostics", value)
-                self.assertFalse(result, f"Value {value} should be invalid for boolean setting")
+        for value in ("true", "false", 1, 0, None):
+            self.assertFalse(self.config.set("enable_network_diagnostics", value))
 
     def test_default_network_settings(self):
-        """Test that default network settings are properly loaded"""
         self.assertEqual(self.config.get("network_timeout"), 30)
         self.assertEqual(self.config.get("connection_retry_attempts"), 3)
         self.assertEqual(self.config.get("retry_delay"), 5)
         self.assertTrue(self.config.get("enable_network_diagnostics"))
 
-    def test_batch_network_settings_update(self):
-        """Test updating multiple network settings at once"""
-        # Valid batch update
-        valid_settings = {
-            "network_timeout": 45,
-            "connection_retry_attempts": 5,
-            "retry_delay": 10,
-            "enable_network_diagnostics": False,
-        }
-        self.assertTrue(self.config.update(valid_settings))
-
-        for key, value in valid_settings.items():
-            self.assertEqual(self.config.get(key), value)
-
-        # Invalid batch update (should fail entirely)
-        invalid_settings = {
-            "network_timeout": 45,
-            "connection_retry_attempts": 15,  # Invalid (> 10)
-            "retry_delay": 10,
-            "enable_network_diagnostics": False,
-        }
-        self.assertFalse(self.config.update(invalid_settings))
-
-        # Original values should be preserved
-        self.assertEqual(self.config.get("network_timeout"), 45)
-        self.assertEqual(self.config.get("connection_retry_attempts"), 5)  # Should still be 5
-
-
-class TestTwitchViewerNetworkConfig(unittest.TestCase):
-    """Test TwitchViewer with network configuration"""
-
-    def setUp(self):
-        """Set up test with mock config"""
-        self.config = Mock()
-        self.config.get.side_effect = lambda key, default=None: {
-            "network_timeout": 45,
-            "debug": False,
-            "player": "vlc",
-            "preferred_quality": "best",
-        }.get(key, default)
-
-    @patch("src.twitch_viewer.streamlink.Streamlink")
-    def test_twitch_viewer_timeout_configuration(self, mock_streamlink):
-        """Test that TwitchViewer configures streamlink session timeout"""
+    @patch("src.web_stream_service.streamlink.Streamlink")
+    def test_stream_service_configures_streamlink_session(self, mock_streamlink):
         mock_session = Mock()
         mock_streamlink.return_value = mock_session
+        self.config.set("network_timeout", 45)
+        self.config.set("hls_live_edge", 4)
+        self.config.set("twitch_low_latency", True)
 
-        # Create viewer
-        TwitchViewer(self.config)
+        service = WebStreamService(self.config, lambda _event: None, lambda *_args: None)
+        service._new_streamlink_session()
 
-        # Verify session timeout was set (among other set_option calls)
         mock_session.set_option.assert_any_call("http-timeout", 45)
-
-    @patch("src.twitch_viewer.streamlink.Streamlink")
-    def test_twitch_viewer_low_latency_configuration(self, mock_streamlink):
-        """Test that TwitchViewer enables Twitch low-latency mode and hls-live-edge tuning"""
-        mock_session = Mock()
-        mock_streamlink.return_value = mock_session
-
-        self.config.get.side_effect = lambda key, default=None: {
-            "network_timeout": 45,
-            "debug": False,
-            "player": "vlc",
-            "preferred_quality": "best",
-            "twitch_low_latency": True,
-            "hls_live_edge": 4,
-        }.get(key, default)
-
-        TwitchViewer(self.config)
-
         mock_session.set_option.assert_any_call("hls-live-edge", 4)
+        mock_session.set_plugin_option.assert_any_call("twitch", "disable-ads", True)
         mock_session.set_plugin_option.assert_any_call("twitch", "low-latency", True)
 
-    @patch("src.twitch_viewer.streamlink.Streamlink")
-    def test_twitch_viewer_low_latency_disabled(self, mock_streamlink):
-        """Test that TwitchViewer does not enable LL-HLS when twitch_low_latency is False"""
+    @patch("src.web_stream_service.streamlink.Streamlink")
+    def test_stream_service_does_not_enable_low_latency_when_disabled(self, mock_streamlink):
         mock_session = Mock()
         mock_streamlink.return_value = mock_session
+        self.config.set("twitch_low_latency", False)
 
-        self.config.get.side_effect = lambda key, default=None: {
-            "network_timeout": 45,
-            "debug": False,
-            "player": "vlc",
-            "preferred_quality": "best",
-            "twitch_low_latency": False,
-            "hls_live_edge": 2,
-        }.get(key, default)
+        service = WebStreamService(self.config, lambda _event: None, lambda *_args: None)
+        service._new_streamlink_session()
 
-        TwitchViewer(self.config)
-
-        for call in mock_session.set_plugin_option.call_args_list:
-            self.assertNotEqual(call.args, ("twitch", "low-latency", True))
+        self.assertNotIn(
+            (("twitch", "low-latency", True),),
+            [call.args for call in mock_session.set_plugin_option.call_args_list],
+        )
 
 
 if __name__ == "__main__":

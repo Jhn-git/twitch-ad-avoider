@@ -57,7 +57,7 @@ def check_dependencies():
         "pyinstaller": ("PyInstaller", True),  # Special case: check command tool
         "streamlink": ("streamlink", False),
         "requests": ("requests", False),
-        "cryptography": ("cryptography", False),
+        "pywebview": ("webview", False),
     }
 
     missing_packages = []
@@ -165,32 +165,6 @@ pause
         return False
 
 
-def generate_pycparser_tables():
-    """Generate pycparser tables before building."""
-    print("[BUILD] Generating pycparser parser tables...")
-
-    try:
-        import subprocess
-
-        result = subprocess.run(
-            [sys.executable, "scripts/generate_pycparser_tables.py"],
-            capture_output=True,
-            text=True,
-            cwd=".",
-        )
-
-        if result.returncode == 0:
-            print("[OK] pycparser tables generated successfully")
-            return True
-        else:
-            print("[ERROR] Failed to generate pycparser tables:")
-            print(result.stderr)
-            return False
-    except Exception as e:
-        print(f"[ERROR] Error running table generation script: {e}")
-        return False
-
-
 def main():
     parser = argparse.ArgumentParser(description="Build TwitchAdAvoider executable")
     parser.add_argument("--no-clean", action="store_true", help="Skip cleaning previous builds")
@@ -206,10 +180,6 @@ def main():
     if not args.skip_deps and not check_dependencies():
         sys.exit(1)
 
-    # Generate pycparser tables to fix cryptography runtime issues
-    if not generate_pycparser_tables():
-        print("[WARN] Warning: pycparser table generation failed, build may have runtime issues")
-
     # Clean previous builds
     if not args.no_clean:
         clean_build()
@@ -223,9 +193,8 @@ def main():
         print("\n[OK] Build completed successfully!")
         print("\nNext steps:")
         print("  1. Test the Windows executable in dist/")
-        print("  2. Check that GUI launches properly on Windows")
-        print("  3. Verify streaming functionality")
-        print("  4. Test with different Windows video players")
+        print("  2. Check that the WebView Stream Manager launches properly")
+        print("  3. Verify embedded playback and clip creation")
     else:
         print("\n[ERROR] Build failed!")
         sys.exit(1)

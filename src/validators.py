@@ -7,24 +7,21 @@ functions before being processed by the application.
 
 The validation layer implements defense-in-depth security patterns to protect against:
     - Path traversal attacks
-    - Command injection vulnerabilities
-    - Shell metacharacter exploitation
     - Control character injection
     - Platform-specific attack vectors
 
 See Also:
     :mod:`src.exceptions`: Custom exception classes for validation errors
     :mod:`src.config_manager`: Configuration validation integration
-    :class:`~src.twitch_viewer.TwitchViewer`: Main class using these validators
+    :class:`~src.web_stream_service.WebStreamService`: Stream service using these validators
 """
 
 import os
 import re
-import shlex
 from pathlib import Path
 from typing import Optional, Union, Any
 from .exceptions import ValidationError
-from .constants import TWITCH_USERNAME_PATTERN, QUALITY_OPTIONS, SUPPORTED_PLAYERS
+from .constants import TWITCH_USERNAME_PATTERN, QUALITY_OPTIONS
 
 
 def validate_channel_name(channel_name: str) -> str:
@@ -92,83 +89,6 @@ def validate_channel_name(channel_name: str) -> str:
             raise ValidationError("Channel name contains forbidden characters or patterns")
 
     return channel_name
-
-
-def sanitize_player_args(player_args: Optional[str]) -> Optional[str]:
-    """
-    Sanitize player arguments to prevent command injection attacks.
-
-    Implements comprehensive security validation to prevent shell injection, command
-    substitution, and other argument-based attacks while preserving legitimate player options.
-
-    Args:
-        player_args (Optional[str]): Raw player arguments string from user input
-
-    Returns:
-        Optional[str]: Sanitized player arguments or None if input was empty/invalid
-
-    Raises:
-        ValidationError: If arguments contain potentially dangerous content or patterns
-
-    Example:
-        >>> sanitize_player_args("--fullscreen --volume=50")
-        '--fullscreen --volume=50'
-        >>> sanitize_player_args("--volume=100; rm -rf /")  # Raises ValidationError
-
-    Warning:
-        This function blocks shell metacharacters, command substitution patterns,
-        and redirection operators. Use only for trusted player argument strings.
-
-    See Also:
-        :func:`validate_file_path`: For validating player executable paths
-        :class:`~src.config_manager.ConfigManager`: Configuration handling with validation
-        :func:`validate_channel_name`: Related input validation function
-    """
-    if not player_args:
-        return None
-
-    player_args = player_args.strip()
-    if not player_args:
-        return None
-
-    # Multi-layer command injection prevention
-    # Each pattern targets a specific attack vector used in command injection
-    dangerous_patterns = [
-        r"[;&|`$]",  # Command separators (;), background (&), pipes (|), substitution ($, `)
-        r"[<>]",  # I/O redirection operators that could redirect sensitive data
-        r"\$\(",  # POSIX command substitution $(command) syntax
-        r"`",  # Backtick command substitution (legacy shell syntax)
-        r"\\x[0-9a-fA-F]{2}",  # Hex escape sequences that could encode dangerous chars
-        r"[\x00-\x1f\x7f-\x9f]",  # Control characters including null bytes and DEL
-    ]
-
-    # Apply comprehensive pattern matching to detect injection attempts
-    # This catches both obvious and obfuscated command injection patterns
-    for pattern in dangerous_patterns:
-        if re.search(pattern, player_args):
-            raise ValidationError(
-                "Player arguments contain forbidden characters. "
-                "Only basic flags and values are allowed."
-            )
-
-    # Shell parsing validation - catch malformed command structures
-    # This secondary validation uses Python's shlex module to parse arguments
-    # exactly as a shell would, catching syntax errors that could indicate:
-    # - Unbalanced quotes that might break out of intended argument structure
-    # - Complex shell constructs that our pattern matching might miss
-    # - Malformed escape sequences or quote combinations
-    try:
-        # shlex.split() parses exactly like POSIX shell argument parsing
-        # If this raises ValueError, the arguments are malformed or suspicious
-        shlex.split(player_args)
-    except ValueError as e:
-        raise ValidationError(f"Invalid player arguments format: {e}")
-
-    # Additional length check to prevent excessively long arguments
-    if len(player_args) > 500:
-        raise ValidationError("Player arguments are too long (max 500 characters)")
-
-    return player_args
 
 
 def validate_file_path(file_path: Optional[str], must_exist: bool = False) -> Optional[str]:
@@ -333,33 +253,6 @@ def validate_quality_option(quality: str) -> str:
         )
 
     return quality
-
-
-def validate_player_choice(player: str) -> str:
-    """
-    Validate player choice.
-
-    Args:
-        player: Player name to validate
-
-    Returns:
-        Validated player name
-
-    Raises:
-        ValidationError: If player is not supported
-    """
-    if not player or not isinstance(player, str):
-        raise ValidationError("Player choice cannot be empty")
-
-    player = player.strip().lower()
-
-    valid_players = list(SUPPORTED_PLAYERS.keys()) + ["auto"]
-    if player not in valid_players:
-        raise ValidationError(
-            f"Invalid player choice: {player}. " f"Supported players: {', '.join(valid_players)}"
-        )
-
-    return player
 
 
 def validate_log_level(log_level: str) -> str:

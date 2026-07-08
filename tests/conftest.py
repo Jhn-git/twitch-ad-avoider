@@ -6,17 +6,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
-from PySide6.QtCore import Qt
 
 # Mock streamlink globally for all tests
 sys.modules["streamlink"] = MagicMock()
-
-
-def assert_popup_surface(window) -> None:
-    """Assert a popup host window has the rounded-corner shaping treatment applied."""
-    assert window.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-    assert window.windowFlags() & Qt.WindowType.NoDropShadowWindowHint
-    assert not window.mask().isEmpty()
 
 
 @pytest.fixture
@@ -85,12 +77,6 @@ def invalid_qualities():
 
 
 @pytest.fixture
-def valid_players():
-    """List of valid player choices."""
-    return ["vlc", "mpv", "mpc-hc", "auto"]
-
-
-@pytest.fixture
 def malicious_paths():
     """List of malicious file paths for security testing."""
     return [
@@ -103,21 +89,6 @@ def malicious_paths():
         "test$(whoami)",  # Command substitution
         "test|cat /etc/passwd",  # Pipe
         "test\x00",  # Null byte
-    ]
-
-
-@pytest.fixture
-def malicious_args():
-    """List of malicious command-line arguments for security testing."""
-    return [
-        "; whoami",  # Command separator
-        "| cat /etc/passwd",  # Pipe
-        "&& whoami",  # Command chaining
-        "|| whoami",  # OR chaining
-        "$(whoami)",  # Command substitution
-        "`id`",  # Backtick substitution
-        "\x00",  # Null byte
-        "\n/bin/sh",  # Newline injection
     ]
 
 
@@ -156,9 +127,7 @@ def create_mock_config_file(path: Path, config: dict = None):
     if config is None:
         config = {
             "preferred_quality": "best",
-            "player": "auto",
-            "cache_duration": 300,
-            "retry_attempts": 3,
+            "connection_retry_attempts": 3,
             "retry_delay": 5,
             "log_level": "INFO",
             "debug": False,

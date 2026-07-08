@@ -17,8 +17,7 @@ schemas to ensure security and data integrity.
 See Also:
     :mod:`src.validators`: Validation functions used by ConfigManager
     :mod:`src.constants`: Default settings and validation constants
-    :class:`~src.twitch_viewer.TwitchViewer`: Primary consumer of configuration
-    :mod:`gui_qt.stream_gui`: Qt GUI configuration interface
+    :class:`~src.web_stream_service.WebStreamService`: Primary stream consumer
 """
 
 import json
@@ -49,36 +48,26 @@ from .constants import (
 from .logging_config import get_logger
 from .validators import (
     validate_quality_option,
-    validate_player_choice,
     validate_log_level,
     validate_file_path,
-    sanitize_player_args,
     validate_numeric_range,
 )
 from .exceptions import ValidationError
-from .player_args import (
-    serialize_player_args,
-    split_player_args,
-    strip_all_managed_cache_args,
-)
 
 logger = get_logger(__name__)
 
 
 _LEGACY_LOAD_ONLY_SETTINGS = {
+    "cache_duration",
     "current_theme",
     "enable_status_monitoring",
+    "player",
+    "player_args",
+    "player_path",
     "status_check_interval",
     "status_cache_duration",
 }
 _KNOWN_SETTINGS = set(DEFAULT_SETTINGS)
-
-
-def _strip_managed_cache_player_args(player_args: Optional[str]) -> Optional[str]:
-    """Remove cache flags that are now controlled by cache_duration."""
-    normalized_args = split_player_args(player_args)
-    stripped_args = strip_all_managed_cache_args(normalized_args)
-    return serialize_player_args(stripped_args)
 
 
 class ConfigManager:
@@ -295,15 +284,6 @@ class ConfigManager:
                 logger.info("Migrated legacy 'current_theme' setting to 'dark_mode'")
             migrated.pop("current_theme", None)
 
-        if "player_args" in migrated:
-            migrated_player_args = _strip_managed_cache_player_args(migrated.get("player_args"))
-            if migrated_player_args != migrated.get("player_args"):
-                migrated["player_args"] = migrated_player_args
-                logger.info(
-                    "Migrated VLC cache flags out of 'player_args'; "
-                    "cache_duration now controls player buffering"
-                )
-
         for legacy_key in _LEGACY_LOAD_ONLY_SETTINGS - {"current_theme"}:
             if legacy_key in migrated:
                 migrated.pop(legacy_key, None)
@@ -328,6 +308,19 @@ class ConfigManager:
             raise ValidationError(f"{label} must be an integer")
         validate_numeric_range(value, min_val=min_val, max_val=max_val, data_type=int)
 
+    def _validate_int_choice_setting(
+        self,
+        value: Any,
+        label: str,
+        choices: tuple,
+    ) -> None:
+        """Require an actual int that is one of a fixed set of allowed values."""
+        if type(value) is not int:
+            raise ValidationError(f"{label} must be an integer")
+        if value not in choices:
+            allowed = ", ".join(str(choice) for choice in choices)
+            raise ValidationError(f"{label} must be one of: {allowed}")
+
     def _validate_optional_file_path_setting(self, value: Any) -> None:
         """Validate an optional file path string."""
         validate_file_path(value, must_exist=False)
@@ -349,13 +342,6 @@ class ConfigManager:
         """Return the runtime-supported validator map for settings."""
         return {
             "preferred_quality": validate_quality_option,
-            "player": validate_player_choice,
-            "cache_duration": lambda value: self._validate_int_range_setting(
-                value,
-                "Cache duration",
-                0,
-                3600,
-            ),
             "twitch_low_latency": lambda value: self._validate_bool_setting(
                 value,
                 "Twitch low-latency setting",
@@ -372,7 +358,6 @@ class ConfigManager:
                 "Log to file setting",
             ),
             "log_level": validate_log_level,
-            "player_path": self._validate_optional_file_path_setting,
             "clip_enabled": lambda value: self._validate_bool_setting(
                 value,
                 "Clip enabled setting",
@@ -382,7 +367,6 @@ class ConfigManager:
                 "Clip directory",
             ),
             "ffmpeg_path": self._validate_ffmpeg_path_setting,
-            "player_args": sanitize_player_args,
             "dark_mode": lambda value: self._validate_bool_setting(
                 value,
                 "Dark mode setting",
@@ -462,6 +446,23 @@ class ConfigManager:
             "enable_network_diagnostics": lambda value: self._validate_bool_setting(
                 value,
                 "Enable network diagnostics",
+            ),
+            "stream_manager_left_sidebar_open": lambda value: self._validate_bool_setting(
+                value,
+                "Stream manager left sidebar setting",
+            ),
+            "stream_manager_right_sidebar_open": lambda value: self._validate_bool_setting(
+                value,
+                "Stream manager right sidebar setting",
+            ),
+            "stream_manager_activity_drawer_open": lambda value: self._validate_bool_setting(
+                value,
+                "Stream manager activity drawer setting",
+            ),
+            "stream_manager_clip_duration_seconds": lambda value: self._validate_int_choice_setting(
+                value,
+                "Stream manager clip duration",
+                (30, 60, 120, 300),
             ),
         }
 

@@ -9,7 +9,7 @@ The :class:`FavoritesManager` provides:
     - Persistent channel favorites storage
     - Real-time status tracking integration
     - JSON format migration and backward compatibility
-    - Thread-safe operations for GUI integration
+    - Thread-safe operations for desktop integration
     - Automatic data validation and error recovery
 
 Features:
@@ -19,7 +19,7 @@ Features:
     - Integration with status monitoring system
 
 See Also:
-    :class:`~gui_qt.stream_gui.StreamGUI`: Qt GUI integration
+    :class:`~webapi.TwitchViewerAPI`: WebView API integration
     :class:`~src.status_monitor.StatusMonitor`: Status checking integration
     :class:`FavoriteChannelInfo`: Channel information data structure
 """
