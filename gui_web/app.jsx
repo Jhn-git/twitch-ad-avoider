@@ -13,6 +13,22 @@ function App() {
     }, 3600);
   }, []);
 
+  const refreshFavoritesOnStartup = React.useCallback((bridge, initial) => {
+    if (initial.settings?.favorites_auto_refresh === false) return;
+    if (!initial.favorites?.length || !bridge.refresh_favorites) return;
+    bridge.refresh_favorites().then((result) => {
+      if (!result.ok) {
+        pushToast({ kind: "error", message: result.error || "Favorites refresh failed" });
+        return;
+      }
+      setState((current) => (
+        current ? { ...current, favorites: result.favorites || current.favorites } : current
+      ));
+    }).catch((error) => {
+      pushToast({ kind: "error", message: String(error) });
+    });
+  }, [pushToast]);
+
   React.useEffect(() => {
     window.__onStreamEvent = (event) => {
       if (event && event.state) {
@@ -55,6 +71,7 @@ function App() {
         window.AppHelpers.applyTheme(initial.settings?.dark_mode !== false);
         setState(initial);
         setReady(true);
+        refreshFavoritesOnStartup(bridge, initial);
       }).catch((error) => {
         pushToast({ kind: "error", message: String(error) });
       });
@@ -66,7 +83,7 @@ function App() {
     }
     window.addEventListener("pywebviewready", init, { once: true });
     return () => window.removeEventListener("pywebviewready", init);
-  }, [pushToast]);
+  }, [pushToast, refreshFavoritesOnStartup]);
 
   if (!ready || !state || !api) {
     return <div className="loading">Loading Stream Manager...</div>;
