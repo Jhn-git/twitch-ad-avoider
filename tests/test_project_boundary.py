@@ -1,5 +1,7 @@
 """Repository boundary checks."""
 
+import base64
+import json
 import subprocess
 import shutil
 from pathlib import Path
@@ -67,9 +69,13 @@ def test_powershell_scripts_parse_when_powershell_is_available():
         root / "scripts" / "TwitchUtilities.psm1",
     ]
 
-    parser_script = """
+    paths_json = json.dumps([str(path) for path in script_paths])
+    parser_script = f"""
     $ErrorActionPreference = 'Stop'
-    foreach ($path in $args) {
+    $paths = ConvertFrom-Json @'
+{paths_json}
+'@
+    foreach ($path in $paths) {{
         $tokens = $null
         $errors = $null
         [System.Management.Automation.Language.Parser]::ParseFile(
@@ -77,19 +83,20 @@ def test_powershell_scripts_parse_when_powershell_is_available():
             [ref]$tokens,
             [ref]$errors
         ) | Out-Null
-        if ($errors.Count -gt 0) {
-            $messages = ($errors | ForEach-Object { $_.Message }) -join '; '
+        if ($errors.Count -gt 0) {{
+            $messages = ($errors | ForEach-Object {{ $_.Message }}) -join '; '
             throw "$path parse failed: $messages"
-        }
-    }
+        }}
+    }}
     """
+    encoded_script = base64.b64encode(parser_script.encode("utf-16le")).decode("ascii")
 
     result = subprocess.run(
-        [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", parser_script]
-        + [str(path) for path in script_paths],
+        [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded_script],
         cwd=root,
         text=True,
         capture_output=True,
+        timeout=20,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr

@@ -14,10 +14,16 @@ window.Components.VideoStage = function VideoStage({
   const videoRef = React.useRef(null);
   const hlsRef = React.useRef(null);
   const playbackUrl = stream?.playback_url;
+  const previewImageUrl = preview?.preview_image_url;
+  const [previewImageFailed, setPreviewImageFailed] = React.useState(false);
   const clipOptions = [30, 60, 120, 300].map((seconds) => ({
     value: seconds,
     label: window.AppHelpers.durationLabel(seconds),
   }));
+
+  React.useEffect(() => {
+    setPreviewImageFailed(false);
+  }, [previewImageUrl]);
 
   React.useEffect(() => {
     const video = videoRef.current;
@@ -65,6 +71,9 @@ window.Components.VideoStage = function VideoStage({
 
   const hasPlayback = Boolean(playbackUrl);
   const live = stream?.active || preview?.is_live;
+  const showPreviewImage = Boolean(
+    !hasPlayback && selectedChannel && preview?.is_live && previewImageUrl && !previewImageFailed
+  );
   const title = window.AppHelpers.titleForPreview(preview);
 
   return (
@@ -82,6 +91,13 @@ window.Components.VideoStage = function VideoStage({
         )}
         {hasPlayback ? (
           <video ref={videoRef} controls playsInline />
+        ) : showPreviewImage ? (
+          <img
+            className="stream-preview-image"
+            src={previewImageUrl}
+            alt=""
+            onError={() => setPreviewImageFailed(true)}
+          />
         ) : (
           <div className="placeholder">video player</div>
         )}

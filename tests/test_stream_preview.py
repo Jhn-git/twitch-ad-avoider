@@ -49,6 +49,7 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
     assert info.preview_image_url == "https://example.com/preview.jpg"
     assert info.profile_image_url == "https://example.com/profile.jpg"
     assert call_kwargs["timeout"] == 17
+    assert "previewImageURL(width: 1280, height: 720)" in call_kwargs["json"]["query"]
 
 
 def test_fetch_stream_preview_info_offline_channel(monkeypatch):

@@ -60,11 +60,11 @@ def fetch_stream_preview_info(
         logger.warning(f"Skipping preview fetch for invalid channel {channel!r}: {e}")
         return StreamPreviewInfo(channel=channel, is_live=False)
 
-    # Requested at a larger-than-default size (still 16:9) so the preview stays
-    # sharp when the GUI scales it up to fill a wide panel.
+    # Requested at a player-sized 16:9 resolution so the preview stays sharp
+    # when the stage expands on wide displays.
     query = (
         '{ user(login: "%s") { profileImageURL(width: 96) '
-        "stream { title previewImageURL(width: 640, height: 360) } } }" % validated_channel
+        "stream { title previewImageURL(width: 1280, height: 720) } } }" % validated_channel
     )
 
     try:
