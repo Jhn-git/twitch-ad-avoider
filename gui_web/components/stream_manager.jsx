@@ -14,6 +14,37 @@ window.Components.StreamManager = function StreamManager({
   const rightRailOpen = state.ui_state.stream_manager_right_sidebar_open !== false;
   const previewRequestRef = React.useRef(0);
   const avatarRequestsRef = React.useRef(new Set());
+  const onUiStateRef = React.useRef(onUiState);
+  React.useEffect(() => {
+    onUiStateRef.current = onUiState;
+  }, [onUiState]);
+
+  const autoCollapseEnabled = state.settings.auto_collapse_panels_enabled !== false;
+  const isWatching = Boolean(state.stream?.active);
+
+  React.useEffect(() => {
+    if (!autoCollapseEnabled || !isWatching) return undefined;
+
+    let timer = null;
+    const collapseAll = () => {
+      onUiStateRef.current("stream_manager_left_sidebar_open", false);
+      onUiStateRef.current("stream_manager_right_sidebar_open", false);
+      onUiStateRef.current("stream_manager_activity_drawer_open", false);
+    };
+    const resetTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(collapseAll, 10000);
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "wheel", "touchstart"];
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, resetTimer));
+    resetTimer();
+
+    return () => {
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [autoCollapseEnabled, isWatching]);
   const [quality, setQuality] = React.useState(
     state.stream?.quality || state.settings.preferred_quality || state.launch_quality || "best"
   );
@@ -151,7 +182,11 @@ window.Components.StreamManager = function StreamManager({
 
   const refreshFavorites = () => {
     api.refresh_favorites().then((result) => {
-      if (result.ok) onState({ favorites: result.favorites });
+      if (result.ok) {
+        onState({ favorites: result.favorites });
+      } else {
+        onToast({ kind: "error", message: result.error || "Favorites refresh failed" });
+      }
     });
   };
 

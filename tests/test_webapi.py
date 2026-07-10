@@ -162,6 +162,51 @@ class TestTwitchViewerAPI(unittest.TestCase):
         self.assertFalse(api.save_settings({"player_args": "--fullscreen"})["ok"])
         self.assertTrue(api.save_settings({"preferred_quality": "480p"})["ok"])
 
+    def test_shutdown_suppresses_js_push_to_avoid_ui_thread_deadlock(self):
+        # shutdown() runs synchronously on the closing event's UI thread; any JS
+        # push during/after it would call evaluate_js and deadlock waiting on a
+        # continuation only that same (blocked) thread could deliver.
+        api = self.make_api()
+        window = Mock()
+        api.set_window(window)
+
+        api.shutdown()
+        window.evaluate_js.reset_mock()
+        api._add_activity("info", "late push", "TEST")
+        api._on_stream_event({"type": "stopped", "state": {}})
+
+        window.evaluate_js.assert_not_called()
+
+    def test_refresh_favorites_updates_status_and_pushes_update(self):
+        api = self.make_api()
+        api.add_favorite("TestUser")
+        window = Mock()
+        api.set_window(window)
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            result = api.refresh_favorites()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["favorites"][0]["is_live"])
+        self.assertTrue(
+            any("__onFavoritesUpdated" in call.args[0] for call in window.evaluate_js.call_args_list)
+        )
+
+    def test_refresh_favorites_preserves_status_on_check_failure(self):
+        api = self.make_api()
+        api.add_favorite("TestUser")
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            api.refresh_favorites()
+        window = Mock()
+        api.set_window(window)
+
+        with patch.object(api._status_monitor, "check_channels", return_value={}):
+            result = api.refresh_favorites()
+
+        self.assertFalse(result["ok"])
+        favorites = api.get_favorites()
+        self.assertTrue(favorites[0]["is_live"])
+        window.evaluate_js.assert_not_called()
+
     def test_window_push_uses_json_payload(self):
         api = self.make_api()
         window = Mock()

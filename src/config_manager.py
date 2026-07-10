@@ -464,6 +464,10 @@ class ConfigManager:
                 "Stream manager clip duration",
                 (30, 60, 120, 300),
             ),
+            "auto_collapse_panels_enabled": lambda value: self._validate_bool_setting(
+                value,
+                "Auto-collapse panels setting",
+            ),
         }
 
     def _validate_setting(self, key: str, value: Any) -> bool:

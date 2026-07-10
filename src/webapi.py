@@ -33,6 +33,7 @@ class TwitchViewerAPI:
     ):
         self._config = config
         self._window = None
+        self._shutting_down = False
         self._favorites = FavoritesManager()
         self._status_monitor = StatusMonitor(
             check_timeout=self._int_setting("favorites_check_timeout", 5)
@@ -55,10 +56,15 @@ class TwitchViewerAPI:
         self._window = window
 
     def shutdown(self) -> None:
+        # Runs synchronously on the UI thread via window.events.closing. Must be set
+        # before stopping the stream service, since stop()/_add_activity() still push
+        # JS events; evaluate_js() blocks on a continuation that can only be delivered
+        # by this same (currently blocked) UI thread, deadlocking the close.
+        self._shutting_down = True
         self._stream_service.shutdown()
 
     def _push(self, js_global: str, data: Any) -> None:
-        if not self._window:
+        if not self._window or self._shutting_down:
             return
         try:
             payload = json.dumps(data)
@@ -162,6 +168,8 @@ class TwitchViewerAPI:
             return {"ok": True, "favorites": []}
         self._status_monitor.update_timeout(self._int_setting("favorites_check_timeout", 5))
         status_results = self._status_monitor.check_channels(favorites)
+        if not status_results:
+            return {"ok": False, "error": "Status check failed, showing last known status"}
         newly_live: list[str] = []
         for channel, is_live in status_results.items():
             previous = self._favorites.get_channel_info(channel)

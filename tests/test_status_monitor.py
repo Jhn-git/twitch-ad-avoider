@@ -32,3 +32,17 @@ def test_check_channels_all_invalid_skips_batch_query(monkeypatch):
     result = monitor.check_channels(["bad;channel"])
 
     assert result == {"bad;channel": False}
+
+
+def test_check_channels_returns_empty_on_batch_failure(monkeypatch):
+    """A failed batch request reports 'unknown', not 'everyone offline'."""
+    monitor = StatusMonitor()
+
+    def raising_batch_check(channels):
+        raise ConnectionError("network unreachable")
+
+    monkeypatch.setattr(monitor, "_batch_check", raising_batch_check)
+
+    result = monitor.check_channels(["ninja", "shroud"])
+
+    assert result == {}

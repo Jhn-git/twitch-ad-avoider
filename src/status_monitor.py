@@ -36,7 +36,10 @@ class StatusMonitor:
             channels: List of channel names to check
 
         Returns:
-            Dictionary mapping channel names to live status (True/False)
+            Dictionary mapping channel names to live status (True/False).
+            Empty dict means the check itself failed (e.g. network error) —
+            callers should treat this as "unknown", not "all offline", and
+            leave any previously known status untouched.
         """
         if not channels:
             return {}
@@ -60,7 +63,7 @@ class StatusMonitor:
             return results
         except Exception as e:
             logger.error(f"Status check failed: {e}")
-            return {ch: False for ch in valid_channels}
+            return {}
 
     def _batch_check(self, channels: List[str]) -> Dict[str, bool]:
         """Single GQL request that checks all channels at once."""

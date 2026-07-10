@@ -139,6 +139,7 @@ class TestConfigManagerValidation(unittest.TestCase):
             "stream_manager_left_sidebar_open",
             "stream_manager_right_sidebar_open",
             "stream_manager_activity_drawer_open",
+            "auto_collapse_panels_enabled",
         ]
 
         for setting in boolean_settings:

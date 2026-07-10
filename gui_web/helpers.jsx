@@ -63,6 +63,7 @@ window.AppHelpers = {
       stream_manager_right_sidebar_open: true,
       stream_manager_activity_drawer_open: false,
       stream_manager_clip_duration_seconds: 120,
+      auto_collapse_panels_enabled: true,
     };
     let selected = "theonlymonto";
     let stream = {

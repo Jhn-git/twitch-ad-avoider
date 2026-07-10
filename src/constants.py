@@ -37,7 +37,7 @@ DEFAULT_SETTINGS = {
     # Favorites settings
     "favorites_auto_refresh": True,  # Automatically refresh favorite channels status
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
-    "favorites_check_timeout": 5,  # Timeout per channel check in seconds
+    "favorites_check_timeout": 5,  # Timeout for the batched status check (all channels), in seconds
     "favorite_live_notifications_enabled": True,  # Show in-app live notifications
     "favorite_live_highlight_test_mode": False,  # Re-trigger recent-live highlight each refresh
     "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
@@ -48,6 +48,7 @@ DEFAULT_SETTINGS = {
     "stream_manager_right_sidebar_open": True,  # Options rail expanded/collapsed
     "stream_manager_activity_drawer_open": False,  # Activity drawer expanded/collapsed
     "stream_manager_clip_duration_seconds": 30,  # Last-selected clip duration
+    "auto_collapse_panels_enabled": True,  # Auto-collapse rails/activity drawer after 10s idle
 }
 
 # Stream quality options

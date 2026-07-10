@@ -160,8 +160,14 @@ class WebStreamService:
         return self.get_state()
 
     def shutdown(self) -> None:
-        """Stop all streaming/proxy resources."""
-        self.stop(join_timeout=2.0)
+        """Stop all streaming/proxy resources.
+
+        Runs on the window-closing UI thread, so it must not block: the
+        recording thread is a daemon and the process is exiting anyway, so
+        there is nothing to gain from waiting on session.thread.join() here
+        (unlike stop(), which callers may rely on to observe a clean stop).
+        """
+        self.stop(join_timeout=0)
         proxy = self._proxy
         self._proxy = None
         if proxy:

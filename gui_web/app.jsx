@@ -13,9 +13,11 @@ function App() {
     }, 3600);
   }, []);
 
-  const refreshFavoritesOnStartup = React.useCallback((bridge, initial) => {
-    if (initial.settings?.favorites_auto_refresh === false) return;
-    if (!initial.favorites?.length || !bridge.refresh_favorites) return;
+  const refreshInFlightRef = React.useRef(false);
+
+  const refreshFavorites = React.useCallback((bridge) => {
+    if (!bridge?.refresh_favorites || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     bridge.refresh_favorites().then((result) => {
       if (!result.ok) {
         pushToast({ kind: "error", message: result.error || "Favorites refresh failed" });
@@ -26,8 +28,16 @@ function App() {
       ));
     }).catch((error) => {
       pushToast({ kind: "error", message: String(error) });
+    }).finally(() => {
+      refreshInFlightRef.current = false;
     });
   }, [pushToast]);
+
+  const refreshFavoritesOnStartup = React.useCallback((bridge, initial) => {
+    if (initial.settings?.favorites_auto_refresh === false) return;
+    if (!initial.favorites?.length) return;
+    refreshFavorites(bridge);
+  }, [refreshFavorites]);
 
   React.useEffect(() => {
     window.__onStreamEvent = (event) => {
@@ -84,6 +94,19 @@ function App() {
     window.addEventListener("pywebviewready", init, { once: true });
     return () => window.removeEventListener("pywebviewready", init);
   }, [pushToast, refreshFavoritesOnStartup]);
+
+  const autoRefreshEnabled = state?.settings?.favorites_auto_refresh !== false;
+  const refreshIntervalSeconds = state?.settings?.favorites_refresh_interval;
+
+  React.useEffect(() => {
+    if (!api || !autoRefreshEnabled || !refreshIntervalSeconds || refreshIntervalSeconds <= 0) {
+      return undefined;
+    }
+    const id = window.setInterval(() => {
+      refreshFavorites(api);
+    }, refreshIntervalSeconds * 1000);
+    return () => window.clearInterval(id);
+  }, [api, autoRefreshEnabled, refreshIntervalSeconds, refreshFavorites]);
 
   if (!ready || !state || !api) {
     return <div className="loading">Loading Stream Manager...</div>;
