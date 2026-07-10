@@ -8,10 +8,10 @@ Set-Location $ProjectRoot
 
 Import-Module "$ProjectRoot\scripts\TwitchUtilities.psm1" -Force
 
-$BuiltExe = Join-Path $ProjectRoot "dist\TwitchAdAvoider.exe"
-$TargetExe = "C:\Users\redacted\Desktop\Jhn Apps\jhn-twitch-viewer\twitchadavoider.exe"
-$BackupExe = "C:\Users\redacted\Desktop\Jhn Apps\jhn-twitch-viewer\twitchadavoider.previous.exe"
-$TargetDir = Split-Path -Parent $TargetExe
+$BuiltAppDir = Join-Path $ProjectRoot "dist\twitchadavoider"
+$TargetDir = "C:\Users\redacted\Desktop\Jhn Apps\jhn-twitch-viewer"
+$TargetExe = Join-Path $TargetDir "twitchadavoider.exe"
+$TargetParentDir = Split-Path -Parent $TargetDir
 
 function Get-DesktopExeProcesses {
     Get-Process | Where-Object {
@@ -32,8 +32,8 @@ try {
         throw "Python is required to build TwitchAdAvoider."
     }
 
-    if (-not (Test-Path $TargetDir)) {
-        throw "Desktop app folder not found: $TargetDir"
+    if (-not (Test-Path $TargetParentDir)) {
+        throw "Desktop app parent folder not found: $TargetParentDir"
     }
 
     Update-Streamlink
@@ -44,8 +44,8 @@ try {
         throw "Build failed with exit code $LASTEXITCODE."
     }
 
-    if (-not (Test-Path $BuiltExe)) {
-        throw "Build completed but EXE was not found at $BuiltExe."
+    if (-not (Test-Path $BuiltAppDir)) {
+        throw "Build completed but app folder was not found at $BuiltAppDir."
     }
 
     $runningProcesses = @(Get-DesktopExeProcesses)
@@ -70,22 +70,34 @@ try {
         Write-Info "Desktop app is not running."
     }
 
-    if (Test-Path $TargetExe) {
-        Copy-Item -LiteralPath $TargetExe -Destination $BackupExe -Force
-        Write-Success "Backed up current EXE to $BackupExe"
-    }
-    else {
-        Write-Warning "Current desktop EXE not found. A new copy will be placed there."
+    if (-not (Test-Path $TargetDir)) {
+        New-Item -ItemType Directory -Path $TargetDir | Out-Null
     }
 
-    Copy-Item -LiteralPath $BuiltExe -Destination $TargetExe -Force
-    Write-Success "Replaced desktop EXE at $TargetExe"
+    # Only replace build output (exe, _internal, launch.bat). User data such as
+    # config/, clips/, logs/, and temp/ lives alongside the build output in the
+    # same folder and must never be touched by an update. Each replaced item is
+    # backed up as "<name>.previous" for rollback.
+    Get-ChildItem -LiteralPath $BuiltAppDir | ForEach-Object {
+        $destPath = Join-Path $TargetDir $_.Name
+        $backupPath = Join-Path $TargetDir "$($_.Name).previous"
+
+        if (Test-Path $destPath) {
+            if (Test-Path $backupPath) {
+                Remove-Item -LiteralPath $backupPath -Recurse -Force
+            }
+            Move-Item -LiteralPath $destPath -Destination $backupPath
+        }
+
+        Copy-Item -LiteralPath $_.FullName -Destination $destPath -Recurse -Force
+    }
+    Write-Success "Replaced build output in $TargetDir (previous build backed up as *.previous)"
 
     Start-Process -FilePath $TargetExe -WorkingDirectory $TargetDir
     Write-Success "Relaunched TwitchAdAvoider"
 }
 catch {
     Write-Error "Daily EXE update failed: $($_.Exception.Message)"
-    Write-Warning "The desktop copy was not changed unless the build and backup steps already succeeded."
+    Write-Warning "The desktop copy was not changed unless the build output replace step already succeeded."
     exit 1
 }

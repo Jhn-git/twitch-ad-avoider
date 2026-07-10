@@ -105,22 +105,21 @@ function App() {
 
   return (
     <React.Fragment>
-      {view === "settings" ? (
+      <window.Components.StreamManager
+        api={api}
+        state={state}
+        onState={updateState}
+        onUiState={setUiState}
+        onToast={pushToast}
+        onOpenSettings={() => setView("settings")}
+      />
+      {view === "settings" && (
         <window.Components.SettingsView
           api={api}
           state={state}
           onBack={() => setView("stream")}
           onState={updateState}
           onToast={pushToast}
-        />
-      ) : (
-        <window.Components.StreamManager
-          api={api}
-          state={state}
-          onState={updateState}
-          onUiState={setUiState}
-          onToast={pushToast}
-          onOpenSettings={() => setView("settings")}
         />
       )}
       <window.Components.ToastStack toasts={toasts} />

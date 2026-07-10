@@ -20,7 +20,7 @@ Watch Twitch streams through Streamlink in a clean desktop WebView app with embe
 
 ### Windows EXE
 
-Download `TwitchAdAvoider.exe` from the Releases page and run it. WebView2 is required on Windows and is already present on most Windows 10/11 installs.
+Download the `twitchadavoider-vX.Y.Z.zip` from the Releases page, extract it, and run `twitchadavoider.exe` from inside the extracted folder (it needs its bundled support files alongside it). WebView2 is required on Windows and is already present on most Windows 10/11 installs.
 
 ### From Source
 

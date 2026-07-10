@@ -14,7 +14,7 @@ Import-Module "$PSScriptRoot\TwitchUtilities.psm1" -Force
 
 $PyprojectPath = "pyproject.toml"
 $ConstantsPath = "src\constants.py"
-$ExePath       = "dist\TwitchAdAvoider.exe"
+$AppDir        = "dist\twitchadavoider"
 
 # PREFLIGHT
 
@@ -53,6 +53,7 @@ switch ($Bump) {
 }
 
 $newVersion = "$verMajor.$verMinor.$verPatch"
+$ZipPath = "dist\twitchadavoider-v$newVersion.zip"
 
 # CAPTURE LAST COMMIT MESSAGE
 
@@ -73,11 +74,12 @@ if ($DryRun) {
     Write-Host "  $ConstantsPath"
     Write-Host ""
     Write-Host "Would run: python scripts/build_executable.py"
+    Write-Host "Would zip: $AppDir -> $ZipPath"
     Write-Host "Would run: git commit -am 'bump: v$newVersion'"
     Write-Host "Would run: git tag v$newVersion"
     Write-Host "Would run: git push"
     Write-Host "Would run: git push --tags"
-    Write-Host "Would run: gh release create v$newVersion $ExePath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
+    Write-Host "Would run: gh release create v$newVersion $ZipPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
     exit 0
 }
 
@@ -109,12 +111,19 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-if (-not (Test-Path $ExePath)) {
-    Write-Error "Build finished but $ExePath not found. Release aborted."
+if (-not (Test-Path $AppDir)) {
+    Write-Error "Build finished but $AppDir not found. Release aborted."
     exit 1
 }
 
-Write-Success "Build complete: $ExePath"
+Write-Success "Build complete: $AppDir"
+
+Write-Info "Packaging release zip..."
+if (Test-Path $ZipPath) {
+    Remove-Item -LiteralPath $ZipPath -Force
+}
+Compress-Archive -Path "$AppDir\*" -DestinationPath $ZipPath
+Write-Success "Created $ZipPath"
 Write-Host ""
 
 # CONFIRM BEFORE PUSH
@@ -129,7 +138,7 @@ if ($confirm -ne "" -and $confirm -notmatch '^[Yy]') {
     Write-Host "  git commit -am 'bump: v$newVersion'"
     Write-Host "  git tag v$newVersion"
     Write-Host "  git push; git push --tags"
-    Write-Host "  gh release create v$newVersion $ExePath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
+    Write-Host "  gh release create v$newVersion $ZipPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
     exit 0
 }
 
@@ -152,7 +161,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "git push --tags failed"; exit 1 }
 # GITHUB RELEASE
 
 Write-Info "Creating GitHub release..."
-gh release create "v$newVersion" "$ExePath" `
+gh release create "v$newVersion" "$ZipPath" `
     --title "TwitchAdAvoider v$newVersion" `
     --notes "$lastCommitMessage"
 

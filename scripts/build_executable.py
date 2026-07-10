@@ -11,6 +11,8 @@ import subprocess
 import shutil
 import platform
 
+APP_NAME = "twitchadavoider"
+
 
 def run_command(cmd, description):
     """Run a command and handle errors."""
@@ -52,31 +54,25 @@ def check_dependencies():
     """Verify all required dependencies are installed."""
     print("[CHECK] Checking dependencies...")
 
-    # Package mapping: name -> (import_name, is_command_tool)
+    # Package mapping: name -> import_name
     required_packages = {
-        "pyinstaller": ("PyInstaller", True),  # Special case: check command tool
-        "streamlink": ("streamlink", False),
-        "requests": ("requests", False),
-        "pywebview": ("webview", False),
+        "pyinstaller": "PyInstaller",
+        "streamlink": "streamlink",
+        "requests": "requests",
+        "pywebview": "webview",
     }
 
     missing_packages = []
-    for package, (import_name, is_command_tool) in required_packages.items():
-        if is_command_tool:
-            # Check for command-line tool availability
-            if shutil.which(package):
-                print(f"  [OK] {package}")
-            else:
-                print(f"  [FAIL] {package} - MISSING")
-                missing_packages.append(package)
-        else:
-            # Check for Python module
-            try:
-                __import__(import_name)
-                print(f"  [OK] {package}")
-            except ImportError:
-                print(f"  [FAIL] {package} - MISSING")
-                missing_packages.append(package)
+    for package, import_name in required_packages.items():
+        # Check for the module in the current interpreter (the same one
+        # build_executable() uses to invoke PyInstaller), not just anything
+        # on PATH, which can point at an unrelated Python install.
+        try:
+            __import__(import_name)
+            print(f"  [OK] {package}")
+        except ImportError:
+            print(f"  [FAIL] {package} - MISSING")
+            missing_packages.append(package)
 
     if missing_packages:
         print(f"\n[ERROR] Missing packages: {', '.join(missing_packages)}")
@@ -144,18 +140,19 @@ def get_file_size_from_bytes(size_bytes):
 
 
 def create_launcher_script():
-    """Create Windows launcher script."""
+    """Create Windows launcher script inside the built app folder."""
     print("[LAUNCHER] Creating Windows launcher script...")
 
     # Windows batch file
     windows_launcher = """@echo off
 echo Starting TwitchAdAvoider...
-TwitchAdAvoider.exe
+twitchadavoider.exe
 pause
 """
 
     try:
-        with open("dist/launch.bat", "w") as f:
+        app_dir = os.path.join("dist", APP_NAME)
+        with open(os.path.join(app_dir, "launch.bat"), "w") as f:
             f.write(windows_launcher)
 
         print("  [OK] Created Windows launcher script")
@@ -192,7 +189,7 @@ def main():
         show_results()
         print("\n[OK] Build completed successfully!")
         print("\nNext steps:")
-        print("  1. Test the Windows executable in dist/")
+        print(f"  1. Test the Windows executable in dist/{APP_NAME}/{APP_NAME}.exe")
         print("  2. Check that the WebView Stream Manager launches properly")
         print("  3. Verify embedded playback and clip creation")
     else:

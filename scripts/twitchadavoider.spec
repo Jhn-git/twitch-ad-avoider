@@ -5,7 +5,7 @@ import os
 
 from PyInstaller.utils.hooks import collect_submodules
 
-APP_NAME = "TwitchAdAvoider"
+APP_NAME = "twitchadavoider"
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 ICON_PATH = os.path.join(ROOT, "assets", "twitch-cartoon-logo.ico")
 
@@ -83,21 +83,27 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    strip=False,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=ICON_PATH,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name=APP_NAME,
 )

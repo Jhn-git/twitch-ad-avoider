@@ -83,7 +83,7 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
   };
 
   return (
-    <div className="app-shell" style={{ gridTemplateColumns: "1fr" }}>
+    <div className="app-shell settings-overlay" style={{ gridTemplateColumns: "1fr" }}>
       <main className="stage" style={{ overflowY: "auto", alignItems: "stretch" }}>
         <div className="settings-view">
           <div className="settings-head">
