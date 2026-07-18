@@ -47,6 +47,7 @@ class TwitchViewerAPI:
             push_event=self._on_stream_event,
             add_activity=self._add_activity,
         )
+        self._stream_service.purge_expired_recordings()
 
     # ------------------------------------------------------------------
     # Window and pushes
@@ -186,6 +187,8 @@ class TwitchViewerAPI:
         )
         if newly_live and self._config.get("favorite_live_notifications_enabled", True):
             self._push("__onToast", {"kind": "success", "message": ", ".join(newly_live) + " live"})
+        if newly_live and self._config.get("favorite_live_notification_sound_enabled", True):
+            self._push("__onFavoriteLiveSound", {"channels": newly_live})
         return {"ok": True, "favorites": payload}
 
     def select_channel(self, channel: str) -> dict:
@@ -282,11 +285,23 @@ class TwitchViewerAPI:
     def get_stream_state(self) -> dict:
         return self._stream_service.get_state()
 
-    def create_clip(self, duration_seconds: Optional[int] = None) -> dict:
+    def get_recording_segments(self, channel: Optional[str] = None) -> dict:
+        target_channel = channel or self._selected_channel
+        if not target_channel:
+            return {"ok": False, "error": "No channel selected"}
+        try:
+            segments = self._stream_service.get_recording_segments(target_channel)
+        except ValidationError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "segments": segments}
+
+    def create_clip(
+        self, duration_seconds: Optional[int] = None, behind_live_seconds: float = 0.0
+    ) -> dict:
         seconds = duration_seconds or self._int_setting("stream_manager_clip_duration_seconds", 30)
         if not self._config.set("stream_manager_clip_duration_seconds", seconds):
             return {"ok": False, "error": "Invalid clip duration"}
-        result = self._stream_service.create_clip(seconds)
+        result = self._stream_service.create_clip(seconds, behind_live_seconds)
         if not result.get("ok"):
             self._add_activity("error", result.get("error", "Clip failed"), "CLIP")
         return result

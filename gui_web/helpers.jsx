@@ -1,4 +1,16 @@
 window.AppHelpers = {
+  _soundCache: {},
+
+  playSound(relativePath) {
+    let audio = this._soundCache[relativePath];
+    if (!audio) {
+      audio = new Audio(relativePath);
+      this._soundCache[relativePath] = audio;
+    }
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  },
+
   applyTheme(isDark) {
     document.body.dataset.theme = isDark ? "dark" : "light";
   },
@@ -22,6 +34,56 @@ window.AppHelpers = {
   durationLabel(seconds) {
     if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
     return `${seconds}s`;
+  },
+
+  // Full-day recording timeline math (day-scoped scrub history). segmentsIndex
+  // is the payload from api.get_recording_segments(): { stream_created_at,
+  // segments: [{id, start, end}], now } - all timestamps ISO strings, `end`
+  // null means still recording.
+
+  computeTimelineBounds(segmentsIndex) {
+    const now = segmentsIndex?.now ? new Date(segmentsIndex.now) : new Date();
+    let start = segmentsIndex?.stream_created_at ? new Date(segmentsIndex.stream_created_at) : null;
+    if (!start && segmentsIndex?.segments?.length) {
+      start = segmentsIndex.segments.reduce((earliest, segment) => {
+        const segStart = new Date(segment.start);
+        return !earliest || segStart < earliest ? segStart : earliest;
+      }, null);
+    }
+    if (!start || Number.isNaN(start.getTime())) start = now;
+    return { start, end: now };
+  },
+
+  timestampToRatio(date, bounds) {
+    const span = bounds.end.getTime() - bounds.start.getTime();
+    if (span <= 0) return 1;
+    return Math.min(1, Math.max(0, (date.getTime() - bounds.start.getTime()) / span));
+  },
+
+  ratioToTimestamp(ratio, bounds) {
+    const span = bounds.end.getTime() - bounds.start.getTime();
+    const clamped = Math.min(1, Math.max(0, ratio));
+    return new Date(bounds.start.getTime() + clamped * span);
+  },
+
+  // The segment a timestamp falls inside (open segments extend to `now`), or
+  // null if it lands in a gap.
+  findSegmentAt(segmentsIndex, date) {
+    if (!segmentsIndex?.segments?.length) return null;
+    const now = segmentsIndex.now ? new Date(segmentsIndex.now) : new Date();
+    for (const segment of segmentsIndex.segments) {
+      const start = new Date(segment.start);
+      const end = segment.end ? new Date(segment.end) : now;
+      if (date >= start && date <= end) return segment;
+    }
+    return null;
+  },
+
+  // The most recently started segment - the one still being recorded (if any).
+  currentSegment(segmentsIndex) {
+    const segments = segmentsIndex?.segments;
+    if (!segments?.length) return null;
+    return segments[segments.length - 1];
   },
 
   demoApi() {
@@ -127,6 +189,10 @@ window.AppHelpers = {
       reset_settings_to_defaults: () => Promise.resolve({ ok: true, settings }),
       validate_setting: () => Promise.resolve({ ok: true }),
       set_ui_state: () => Promise.resolve({ ok: true }),
+      get_recording_segments: () => Promise.resolve({
+        ok: true,
+        segments: { stream_created_at: null, segments: [], now: new Date().toISOString() },
+      }),
     };
   },
 };

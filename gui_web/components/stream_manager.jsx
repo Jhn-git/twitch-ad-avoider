@@ -49,6 +49,28 @@ window.Components.StreamManager = function StreamManager({
     state.stream?.quality || state.settings.preferred_quality || state.launch_quality || "best"
   );
 
+  const [segmentsIndex, setSegmentsIndex] = React.useState(null);
+  const streamActive = Boolean(state.stream?.active);
+
+  React.useEffect(() => {
+    if (!selectedChannel || !streamActive) {
+      setSegmentsIndex(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const fetchSegments = () => {
+      api.get_recording_segments(selectedChannel).then((result) => {
+        if (!cancelled && result.ok) setSegmentsIndex(result.segments);
+      });
+    };
+    fetchSegments();
+    const interval = window.setInterval(fetchSegments, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [api, selectedChannel, streamActive]);
+
   const mergeFavoriteProfile = (favorites, channel, profileImageUrl) => {
     if (!profileImageUrl) return favorites;
     let changed = false;
@@ -233,8 +255,8 @@ window.Components.StreamManager = function StreamManager({
     onUiState("stream_manager_clip_duration_seconds", seconds);
   };
 
-  const createClip = () => {
-    api.create_clip(clipDuration).then((result) => {
+  const createClip = (behindLiveSeconds = 0) => {
+    api.create_clip(clipDuration, behindLiveSeconds).then((result) => {
       onToast({
         kind: result.ok ? "success" : "error",
         message: result.ok ? "Clip saved" : result.error || "Clip failed",
@@ -264,6 +286,8 @@ window.Components.StreamManager = function StreamManager({
           onClipDuration={changeClipDuration}
           onClip={createClip}
           onOpenClips={() => api.open_clips_folder()}
+          segmentsIndex={segmentsIndex}
+          onToast={onToast}
         />
         <window.Components.ActivityDrawer
           activity={state.activity || []}

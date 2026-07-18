@@ -13,6 +13,27 @@ function App() {
     }, 3600);
   }, []);
 
+  const hoverSoundEnabledRef = React.useRef(true);
+  React.useEffect(() => {
+    hoverSoundEnabledRef.current = state?.settings?.button_hover_sound_enabled !== false;
+  }, [state?.settings?.button_hover_sound_enabled]);
+
+  React.useEffect(() => {
+    let lastPlayed = 0;
+    const onButtonHover = (event) => {
+      if (!hoverSoundEnabledRef.current) return;
+      const button = event.target.closest("button");
+      if (!button || button.disabled) return;
+      if (button.contains(event.relatedTarget)) return;
+      const now = Date.now();
+      if (now - lastPlayed < 120) return;
+      lastPlayed = now;
+      window.AppHelpers.playSound("assets/minimalist-button-hover-sound-effect-399749.mp3");
+    };
+    document.addEventListener("mouseover", onButtonHover);
+    return () => document.removeEventListener("mouseover", onButtonHover);
+  }, []);
+
   const refreshInFlightRef = React.useRef(false);
 
   const refreshFavorites = React.useCallback((bridge) => {
@@ -69,6 +90,9 @@ function App() {
       }));
     };
     window.__onToast = pushToast;
+    window.__onFavoriteLiveSound = () => {
+      window.AppHelpers.playSound("assets/live-notification-sound-effect-52434.mp3");
+    };
   }, [pushToast]);
 
   React.useEffect(() => {

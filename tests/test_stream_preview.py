@@ -50,6 +50,38 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
     assert info.profile_image_url == "https://example.com/profile.jpg"
     assert call_kwargs["timeout"] == 17
     assert "previewImageURL(width: 1280, height: 720)" in call_kwargs["json"]["query"]
+    assert "createdAt" in call_kwargs["json"]["query"]
+
+
+def test_fetch_stream_preview_info_parses_stream_created_at(monkeypatch):
+    payload = {
+        "data": {
+            "user": {
+                "profileImageURL": "https://example.com/profile.jpg",
+                "stream": {
+                    "title": "Chill stream",
+                    "previewImageURL": "https://example.com/preview.jpg",
+                    "createdAt": "2026-07-17T09:58:35Z",
+                },
+            }
+        }
+    }
+    monkeypatch.setattr("src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload))
+
+    info = fetch_stream_preview_info("ninja")
+
+    assert info.stream_created_at == "2026-07-17T09:58:35Z"
+
+
+def test_fetch_stream_preview_info_offline_channel_has_no_created_at(monkeypatch):
+    payload = {
+        "data": {"user": {"profileImageURL": "https://example.com/profile.jpg", "stream": None}}
+    }
+    monkeypatch.setattr("src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload))
+
+    info = fetch_stream_preview_info("ninja")
+
+    assert info.stream_created_at is None
 
 
 def test_fetch_stream_preview_info_offline_channel(monkeypatch):

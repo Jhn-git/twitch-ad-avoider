@@ -26,6 +26,7 @@ window.Components.Icon = function Icon({ name }) {
     refresh: <React.Fragment><path d="M21 12a9 9 0 0 1-15 6.7" /><path d="M3 12a9 9 0 0 1 15-6.7" /><path d="M18 2v4h-4" /><path d="M6 22v-4h4" /></React.Fragment>,
     save: <React.Fragment><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" /><path d="M17 21v-8H7v8" /><path d="M7 3v5h8" /></React.Fragment>,
     scissors: <React.Fragment><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9" /><path d="M8.1 8.1 20 20" /></React.Fragment>,
+    skipToLive: <React.Fragment><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></React.Fragment>,
     stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
     trash: <React.Fragment><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></React.Fragment>,
   };

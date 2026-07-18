@@ -34,6 +34,10 @@ class StreamPreviewInfo:
     title: Optional[str] = None
     preview_image_url: Optional[str] = None
     profile_image_url: Optional[str] = None
+    # The true moment the broadcast started on Twitch (ISO8601 UTC, e.g.
+    # "2026-07-17T09:58:35Z"), independent of whenever our own recording
+    # actually started - the app may open partway into an already-live stream.
+    stream_created_at: Optional[str] = None
 
 
 def fetch_stream_preview_info(
@@ -64,7 +68,8 @@ def fetch_stream_preview_info(
     # when the stage expands on wide displays.
     query = (
         '{ user(login: "%s") { profileImageURL(width: 96) '
-        "stream { title previewImageURL(width: 1280, height: 720) } } }" % validated_channel
+        "stream { title previewImageURL(width: 1280, height: 720) createdAt } } }"
+        % validated_channel
     )
 
     try:
@@ -94,6 +99,7 @@ def fetch_stream_preview_info(
             title=stream_node.get("title"),
             preview_image_url=stream_node.get("previewImageURL"),
             profile_image_url=profile_image_url,
+            stream_created_at=stream_node.get("createdAt"),
         )
     except Exception as e:
         logger.warning(f"Failed to fetch stream preview for {validated_channel}: {e}")

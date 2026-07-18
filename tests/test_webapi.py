@@ -46,11 +46,24 @@ class FakeStreamService:
         self.state.update({"active": False, "channel": None, "status": "idle", "recording": False})
         return self.get_state()
 
-    def create_clip(self, duration_seconds):
+    def create_clip(self, duration_seconds, behind_live_seconds=0.0):
+        self.last_clip_args = (duration_seconds, behind_live_seconds)
         return {"ok": True, "path": f"clips/test-{duration_seconds}.mp4"}
 
     def shutdown(self):
         self.shutdown_called = True
+
+    def purge_expired_recordings(self):
+        pass
+
+    def get_recording_segments(self, channel):
+        self.last_segments_channel = channel
+        return {
+            "channel": channel,
+            "stream_created_at": None,
+            "segments": [],
+            "now": "2026-07-18T00:00:00",
+        }
 
 
 class TestTwitchViewerAPI(unittest.TestCase):
@@ -155,6 +168,30 @@ class TestTwitchViewerAPI(unittest.TestCase):
         self.assertEqual(clipped["path"], "clips/test-60.mp4")
         self.assertFalse(stopped["stream"]["active"])
 
+    def test_create_clip_forwards_behind_live_seconds(self):
+        api = self.make_api(launch_channel="testuser")
+
+        clipped = api.create_clip(60, 12.5)
+
+        self.assertTrue(clipped["ok"])
+        self.assertEqual(api._stream_service.last_clip_args, (60, 12.5))
+
+    def test_get_recording_segments_forwards_selected_channel(self):
+        api = self.make_api(launch_channel="testuser")
+
+        result = api.get_recording_segments()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(api._stream_service.last_segments_channel, "testuser")
+        self.assertEqual(result["segments"]["channel"], "testuser")
+
+    def test_get_recording_segments_requires_a_channel(self):
+        api = self.make_api()
+
+        result = api.get_recording_segments()
+
+        self.assertFalse(result["ok"])
+
     def test_settings_validation_rejects_unknown_or_retired_keys(self):
         api = self.make_api()
 
@@ -188,7 +225,9 @@ class TestTwitchViewerAPI(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(result["favorites"][0]["is_live"])
         self.assertTrue(
-            any("__onFavoritesUpdated" in call.args[0] for call in window.evaluate_js.call_args_list)
+            any(
+                "__onFavoritesUpdated" in call.args[0] for call in window.evaluate_js.call_args_list
+            )
         )
 
     def test_refresh_favorites_preserves_status_on_check_failure(self):

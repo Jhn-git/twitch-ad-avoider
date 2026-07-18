@@ -19,16 +19,21 @@ from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
 import requests
 import streamlink
 
+from src import recording_index
 from src.config_manager import ConfigManager
 from src.constants import CLIPS_DIR, TEMP_DIR
 from src.exceptions import TwitchStreamError, ValidationError
 from src.logging_config import get_logger
+from src.stream_preview import fetch_stream_preview_info
 from src.validators import validate_channel_name
 
 logger = get_logger(__name__)
 
 StreamEventCallback = Callable[[dict], None]
 ActivityCallback = Callable[[str, str, Optional[str]], None]
+
+# How many days of a channel's recorded history to keep before it's auto-deleted.
+RECORDING_RETENTION_DAYS = 3
 
 
 @dataclass
@@ -48,6 +53,18 @@ class WebStreamSession:
     end_reason: Optional[str] = None
     last_error: Optional[str] = None
     thread: Optional[threading.Thread] = None
+    day_dir: Optional[Path] = None
+    segment_id: Optional[str] = None
+
+
+@dataclass
+class _RecordingPrep:
+    """What `_prepare_recording` resolved for a new recording session."""
+
+    raw_path: Optional[str]
+    start_time: Optional[datetime]
+    day_dir: Optional[Path]
+    segment_id: Optional[str]
 
 
 class _PlaybackProxyHandler(BaseHTTPRequestHandler):
@@ -111,7 +128,7 @@ class WebStreamService:
         )
         session_id = uuid.uuid4().hex
         playback_url = self._playlist_url(session_id)
-        recording_path, recording_start = self._prepare_recording(channel)
+        prep = self._prepare_recording(channel)
 
         session = WebStreamSession(
             session_id=session_id,
@@ -120,14 +137,16 @@ class WebStreamService:
             stream_url=stream_url,
             stream_args=stream_args,
             playback_url=playback_url,
-            recording_path=recording_path,
-            recording_start_time=recording_start,
+            recording_path=prep.raw_path,
+            recording_start_time=prep.start_time,
+            day_dir=prep.day_dir,
+            segment_id=prep.segment_id,
         )
 
         with self._lock:
             self._session = session
 
-        if recording_path:
+        if prep.raw_path:
             session.thread = threading.Thread(
                 target=self._recording_loop,
                 args=(session, stream_obj),
@@ -154,6 +173,7 @@ class WebStreamService:
             session.stop_event.set()
             if session.thread and session.thread.is_alive():
                 session.thread.join(timeout=join_timeout)
+            self._close_current_segment(session, datetime.now())
             self._add_activity("info", f"Stopped stream: {session.channel}", "STREAM")
             self._push_event({"type": "stopped", "state": self.get_state()})
 
@@ -198,8 +218,44 @@ class WebStreamService:
                 "last_error": session.last_error,
             }
 
-    def create_clip(self, duration_seconds: int) -> dict:
-        """Create a clip from the rolling local recording."""
+    def get_recording_segments(self, channel: str) -> dict:
+        """Today's recorded-segment index for `channel`, for the gap-aware seek bar.
+
+        `stream_created_at` falls back to the earliest known segment's start
+        time when the true Twitch broadcast start couldn't be resolved (offline
+        channel, network failure, etc.) - computed here at read time rather
+        than stored, so a later successful fetch can still improve it.
+        """
+        channel = validate_channel_name(channel)
+        now = datetime.now()
+        day_dir = TEMP_DIR / channel / recording_index.day_dir_name(now.date())
+        index = recording_index.load_index(day_dir)
+
+        stream_created_at = index.stream_created_at
+        if stream_created_at is None and index.segments:
+            stream_created_at = min(segment.start for segment in index.segments)
+
+        return {
+            "channel": channel,
+            "stream_created_at": stream_created_at.isoformat() if stream_created_at else None,
+            "segments": [
+                {
+                    "id": segment.id,
+                    "start": segment.start.isoformat(),
+                    "end": segment.end.isoformat() if segment.end else None,
+                }
+                for segment in index.segments
+            ],
+            "now": now.isoformat(),
+        }
+
+    def create_clip(self, duration_seconds: int, behind_live_seconds: float = 0.0) -> dict:
+        """Create a clip from the rolling local recording.
+
+        ``behind_live_seconds`` is how far the caller's playhead is from the
+        live edge (e.g. the browser is paused or scrubbed back), so the clip
+        ends at the caller's position instead of always ending at "now".
+        """
         with self._lock:
             session = self._session
 
@@ -207,7 +263,10 @@ class WebStreamService:
             return {"ok": False, "error": "No active recording to clip"}
 
         source_path = Path(session.recording_path)
-        if not source_path.exists() or source_path.stat().st_size <= 0:
+        if not source_path.exists():
+            return {"ok": False, "error": "Recording is not ready yet"}
+        file_stat = source_path.stat()
+        if file_stat.st_size <= 0:
             return {"ok": False, "error": "Recording is not ready yet"}
 
         ffmpeg_exe = self._get_ffmpeg_executable()
@@ -221,8 +280,17 @@ class WebStreamService:
         clip_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = clip_dir / f"{session.channel}_{timestamp}.mp4"
-        elapsed = (datetime.now() - session.recording_start_time).total_seconds()
-        start_offset = max(0.0, elapsed - duration_seconds)
+        # Use the recording file's own last-write time rather than wall-clock
+        # "now" - once the stream ends, the file stops growing but "now" keeps
+        # advancing for however long the user browses before clicking Clip,
+        # which would otherwise inflate "elapsed" well past the file's real
+        # content length and skew the clip toward the end of the recording.
+        last_write_time = datetime.fromtimestamp(file_stat.st_mtime)
+        elapsed = (last_write_time - session.recording_start_time).total_seconds()
+        behind = behind_live_seconds if isinstance(behind_live_seconds, (int, float)) else 0.0
+        behind = max(0.0, behind)
+        target_end = max(0.0, elapsed - behind)
+        start_offset = max(0.0, target_end - duration_seconds)
 
         cmd = [
             ffmpeg_exe,
@@ -305,17 +373,78 @@ class WebStreamService:
             return translated if isinstance(translated, str) else None
         return None
 
-    def _prepare_recording(self, channel: str) -> tuple[Optional[str], Optional[datetime]]:
+    def _prepare_recording(self, channel: str) -> _RecordingPrep:
+        """Start a new day-scoped recording segment for `channel`.
+
+        Every call gets its own uniquely-named raw file under
+        temp/<channel>/<date>/ - never reused or appended-to across sessions,
+        which is what makes this safe even if a previous segment's file is
+        still locked/in-use for some reason (unlike the old single rolling
+        `recording_<channel>.ts`, which would silently append onto stale
+        content when its unlink failed).
+        """
         if not self.config.get("clip_enabled", True):
-            return None, None
-        TEMP_DIR.mkdir(parents=True, exist_ok=True)
-        rec_path = TEMP_DIR / f"recording_{channel}.ts"
+            return _RecordingPrep(None, None, None, None)
+
+        now = datetime.now()
+        channel_dir = TEMP_DIR / channel
+        recording_index.purge_old_days(channel_dir, RECORDING_RETENTION_DAYS, now)
+
+        day_dir = channel_dir / recording_index.day_dir_name(now.date())
+        index = recording_index.load_index(day_dir)
+        recording_index.close_dangling_segments(index, day_dir, now)
+
+        stream_created_at = self._resolve_true_stream_start(channel)
+        if stream_created_at is not None:
+            index.stream_created_at = stream_created_at
+
+        segment = recording_index.start_segment(index, now)
+        recording_index.save_index(day_dir, index)
+
+        raw_path = day_dir / segment.raw_filename
+        return _RecordingPrep(str(raw_path), segment.start, day_dir, segment.id)
+
+    def _resolve_true_stream_start(self, channel: str) -> Optional[datetime]:
+        """The real moment the broadcast went live on Twitch, independent of
+        whenever our own recording happened to start. Best-effort: returns
+        None on any failure (offline channel, network error, missing field)
+        rather than raising - `_prepare_recording` already has its own
+        fallback (the earliest recorded segment's own start time) for when
+        this can't be resolved."""
+        info = fetch_stream_preview_info(channel, timeout=self._network_timeout())
+        if not info.stream_created_at:
+            return None
         try:
-            if rec_path.exists():
-                rec_path.unlink()
-        except OSError as exc:
-            logger.warning("Could not remove stale recording: %s", exc)
-        return str(rec_path), datetime.now()
+            aware = datetime.fromisoformat(info.stream_created_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return datetime.fromtimestamp(aware.timestamp())
+
+    def _close_current_segment(self, session: WebStreamSession, end: datetime) -> None:
+        if not session.day_dir or not session.segment_id:
+            return
+        index = recording_index.load_index(session.day_dir)
+        recording_index.close_segment(index, session.segment_id, end)
+        recording_index.save_index(session.day_dir, index)
+
+    def purge_expired_recordings(self) -> None:
+        """Sweep every channel's recording history, not just the one being
+        (re)started - otherwise a channel the user never restarts would keep
+        its day-folders forever. Called explicitly once at real app startup
+        (see `TwitchViewerAPI.__init__`), not from this class's constructor -
+        a constructor shouldn't have filesystem side effects, and tests that
+        instantiate `WebStreamService` directly must not touch the real
+        on-disk `temp/` directory just by existing.
+        """
+        if not TEMP_DIR.exists():
+            return
+        now = datetime.now()
+        try:
+            channel_dirs = [entry for entry in TEMP_DIR.iterdir() if entry.is_dir()]
+        except OSError:
+            return
+        for channel_dir in channel_dirs:
+            recording_index.purge_old_days(channel_dir, RECORDING_RETENTION_DAYS, now)
 
     def _recording_loop(self, session: WebStreamSession, initial_stream: Any) -> None:
         attempts = self._retry_attempts()
@@ -335,6 +464,7 @@ class WebStreamService:
                 if current_attempt > attempts:
                     session.status = "ended"
                     session.last_error = "Stream ended after reconnect attempts were exhausted"
+                    self._close_current_segment(session, datetime.now())
                     self._add_activity("error", session.last_error, "STREAM")
                     self._push_event({"type": "ended", "state": self.get_state()})
                     break
@@ -365,6 +495,7 @@ class WebStreamService:
                 current_attempt += 1
                 if current_attempt > attempts:
                     session.status = "error"
+                    self._close_current_segment(session, datetime.now())
                     self._add_activity("error", f"Stream error: {exc}", "STREAM")
                     self._push_event(
                         {"type": "error", "error": str(exc), "state": self.get_state()}
