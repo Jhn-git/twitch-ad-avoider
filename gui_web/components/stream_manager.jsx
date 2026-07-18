@@ -257,10 +257,9 @@ window.Components.StreamManager = function StreamManager({
 
   const createClip = (behindLiveSeconds = 0) => {
     api.create_clip(clipDuration, behindLiveSeconds).then((result) => {
-      onToast({
-        kind: result.ok ? "success" : "error",
-        message: result.ok ? "Clip saved" : result.error || "Clip failed",
-      });
+      if (!result.ok) {
+        onToast({ kind: "error", message: result.error || "Clip failed" });
+      }
     });
   };
 

@@ -181,7 +181,10 @@ window.AppHelpers = {
       }),
       remove_favorite: () => Promise.resolve({ ok: true, favorites }),
       toggle_pin: () => Promise.resolve({ ok: true, favorites }),
-      create_clip: () => Promise.resolve({ ok: true, path: "clips/demo.mp4" }),
+      create_clip: () => {
+        window.__onStreamEvent?.({ type: "clip_created", path: "clips/demo.mp4" });
+        return Promise.resolve({ ok: true, path: "clips/demo.mp4" });
+      },
       open_channel: () => Promise.resolve({ ok: true }),
       open_chat: () => Promise.resolve({ ok: true }),
       open_clips_folder: () => Promise.resolve({ ok: true }),
