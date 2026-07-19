@@ -40,6 +40,16 @@ class TestWebStreamService(unittest.TestCase):
         self.service.shutdown()
         shutil.rmtree(self.temp_dir)
 
+    def _recording_file_with_elapsed(
+        self, name: str, elapsed_seconds: int
+    ) -> tuple[Path, datetime]:
+        recording = Path(self.temp_dir) / name
+        recording.write_bytes(b"x" * 2048)
+        start_time = datetime.now() - timedelta(seconds=elapsed_seconds)
+        mtime = start_time + timedelta(seconds=elapsed_seconds)
+        os.utime(recording, (mtime.timestamp(), mtime.timestamp()))
+        return recording, start_time
+
     @patch("src.web_stream_service.streamlink.Streamlink")
     def test_start_exposes_loopback_playback_url_without_recording(self, mock_streamlink):
         self.config.set("clip_enabled", False)
@@ -108,17 +118,117 @@ variant/playlist.m3u8
         self.assertIn("segment001.ts", rewritten)
         self.assertIn("variant%2Fplaylist.m3u8", rewritten)
 
+    def test_rewrite_playlist_turns_twitch_prefetch_into_playable_segment(self):
+        self.service._ensure_proxy()
+        playlist = """#EXTM3U
+#EXTINF:4.000,
+segment001.ts
+#EXTINF:6.000,
+segment002.ts
+#EXT-X-TWITCH-PREFETCH:prefetch001.ts
+"""
+
+        rewritten = self.service._rewrite_playlist(
+            playlist,
+            "https://example.test/live/master.m3u8",
+            "abc",
+        )
+
+        self.assertIn("#EXTINF:5.000,", rewritten)
+        self.assertIn("prefetch001.ts", rewritten)
+        self.assertIn("/resource/abc?url=", rewritten)
+        self.assertNotIn("EXT-X-TWITCH-PREFETCH", rewritten)
+
+    def test_rewrite_playlist_chains_duration_across_consecutive_prefetch_segments(self):
+        self.service._ensure_proxy()
+        playlist = """#EXTM3U
+#EXTINF:4.000,
+segment001.ts
+#EXTINF:6.000,
+segment002.ts
+#EXT-X-TWITCH-PREFETCH:prefetch001.ts
+#EXT-X-TWITCH-PREFETCH:prefetch002.ts
+"""
+
+        rewritten = self.service._rewrite_playlist(
+            playlist,
+            "https://example.test/live/master.m3u8",
+            "abc",
+        )
+
+        self.assertEqual(rewritten.count("#EXTINF:5.000,"), 2)
+
+    def test_rewrite_playlist_leaves_prefetch_tag_untouched_when_low_latency_disabled(self):
+        self.service._ensure_proxy()
+        self.config.set("twitch_low_latency", False)
+        playlist = """#EXTM3U
+#EXTINF:4.000,
+segment001.ts
+#EXT-X-TWITCH-PREFETCH:prefetch001.ts
+"""
+
+        rewritten = self.service._rewrite_playlist(
+            playlist,
+            "https://example.test/live/master.m3u8",
+            "abc",
+        )
+
+        self.assertIn("#EXT-X-TWITCH-PREFETCH:prefetch001.ts", rewritten)
+
     def test_create_clip_requires_active_recording(self):
         result = self.service.create_clip(30)
 
         self.assertFalse(result["ok"])
         self.assertIn("No active recording", result["error"])
 
+    def test_state_reports_clip_not_ready_until_selected_duration_recorded(self):
+        self.config.set("stream_manager_clip_duration_seconds", 30)
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 10)
+        self.service._session = WebStreamSession(
+            session_id="abc",
+            channel="testuser",
+            quality="best",
+            stream_url="https://example.test/live.m3u8",
+            stream_args={},
+            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+            recording_path=str(recording),
+            recording_start_time=start_time,
+            last_recorded_at=start_time + timedelta(seconds=10),
+            status="live",
+        )
+
+        state = self.service.get_state()
+
+        self.assertFalse(state["clip_ready"])
+        self.assertAlmostEqual(state["clip_ready_seconds"], 10.0, delta=1.0)
+        self.assertIn("warming up", state["clip_warmup_reason"])
+
+    def test_state_reports_clip_ready_after_selected_duration_recorded(self):
+        self.config.set("stream_manager_clip_duration_seconds", 30)
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 45)
+        self.service._session = WebStreamSession(
+            session_id="abc",
+            channel="testuser",
+            quality="best",
+            stream_url="https://example.test/live.m3u8",
+            stream_args={},
+            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+            recording_path=str(recording),
+            recording_start_time=start_time,
+            last_recorded_at=start_time + timedelta(seconds=45),
+            status="live",
+        )
+
+        state = self.service.get_state()
+
+        self.assertTrue(state["clip_ready"])
+        self.assertAlmostEqual(state["clip_ready_seconds"], 45.0, delta=1.0)
+        self.assertIsNone(state["clip_warmup_reason"])
+
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
     def test_create_clip_invokes_ffmpeg(self, _mock_which, mock_run):
-        recording = Path(self.temp_dir) / "recording.ts"
-        recording.write_bytes(b"x" * 2048)
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 60)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
         self.service._session = WebStreamSession(
@@ -129,7 +239,7 @@ variant/playlist.m3u8
             stream_args={},
             playback_url="http://127.0.0.1/playlist/abc.m3u8",
             recording_path=str(recording),
-            recording_start_time=datetime.now(),
+            recording_start_time=start_time,
             status="live",
         )
 
@@ -148,8 +258,7 @@ variant/playlist.m3u8
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
     def test_create_clip_offsets_start_time_by_behind_live_seconds(self, _mock_which, mock_run):
-        recording = Path(self.temp_dir) / "recording.ts"
-        recording.write_bytes(b"x" * 2048)
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 100)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
         self.service._session = WebStreamSession(
@@ -160,7 +269,7 @@ variant/playlist.m3u8
             stream_args={},
             playback_url="http://127.0.0.1/playlist/abc.m3u8",
             recording_path=str(recording),
-            recording_start_time=datetime.now() - timedelta(seconds=100),
+            recording_start_time=start_time,
             status="live",
         )
 
@@ -181,8 +290,7 @@ variant/playlist.m3u8
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
     def test_create_clip_clamps_behind_live_seconds_to_elapsed(self, _mock_which, mock_run):
-        recording = Path(self.temp_dir) / "recording.ts"
-        recording.write_bytes(b"x" * 2048)
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 60)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
         self.service._session = WebStreamSession(
@@ -193,7 +301,7 @@ variant/playlist.m3u8
             stream_args={},
             playback_url="http://127.0.0.1/playlist/abc.m3u8",
             recording_path=str(recording),
-            recording_start_time=datetime.now(),
+            recording_start_time=start_time,
             status="live",
         )
 
@@ -209,6 +317,33 @@ variant/playlist.m3u8
         cmd = mock_run.call_args.args[0]
         start_offset = float(cmd[cmd.index("-ss") + 1])
         self.assertEqual(start_offset, 0.0)
+
+    @patch("src.web_stream_service.subprocess.run")
+    @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
+    def test_create_clip_fails_when_active_recorder_lags_requested_endpoint(
+        self, _mock_which, mock_run
+    ):
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 80)
+        recorded_until = datetime.now() - timedelta(seconds=20)
+        os.utime(recording, (recorded_until.timestamp(), recorded_until.timestamp()))
+        self.service._session = WebStreamSession(
+            session_id="abc",
+            channel="testuser",
+            quality="best",
+            stream_url="https://example.test/live.m3u8",
+            stream_args={},
+            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+            recording_path=str(recording),
+            recording_start_time=start_time,
+            last_recorded_at=recorded_until,
+            status="live",
+        )
+
+        result = self.service.create_clip(30, behind_live_seconds=0)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("catching up", result["error"])
+        mock_run.assert_not_called()
 
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")

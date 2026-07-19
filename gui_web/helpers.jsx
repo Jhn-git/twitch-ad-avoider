@@ -135,6 +135,9 @@ window.AppHelpers = {
       playback_url: null,
       status: "idle",
       recording: false,
+      clip_ready: false,
+      clip_ready_seconds: 0,
+      clip_warmup_reason: null,
       last_error: null,
     };
     const preview = (channel) => ({
@@ -164,11 +167,30 @@ window.AppHelpers = {
       },
       get_preview: (channel) => Promise.resolve({ ok: true, preview: preview(channel) }),
       start_stream: (channel, quality) => {
-        stream = { ...stream, active: true, channel, quality, status: "live", recording: true };
+        stream = {
+          ...stream,
+          active: true,
+          channel,
+          quality,
+          status: "live",
+          recording: true,
+          clip_ready: true,
+          clip_ready_seconds: 300,
+          clip_warmup_reason: null,
+        };
         return Promise.resolve({ ok: true, stream });
       },
       stop_stream: () => {
-        stream = { ...stream, active: false, channel: null, status: "idle", recording: false };
+        stream = {
+          ...stream,
+          active: false,
+          channel: null,
+          status: "idle",
+          recording: false,
+          clip_ready: false,
+          clip_ready_seconds: 0,
+          clip_warmup_reason: null,
+        };
         return Promise.resolve({ ok: true, stream });
       },
       refresh_favorites: () => Promise.resolve({ ok: true, favorites }),

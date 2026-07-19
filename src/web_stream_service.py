@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -34,6 +34,16 @@ ActivityCallback = Callable[[str, str, Optional[str]], None]
 
 # How many days of a channel's recorded history to keep before it's auto-deleted.
 RECORDING_RETENTION_DAYS = 3
+RECORDING_STATE_PUSH_INTERVAL_SECONDS = 5.0
+CLIP_RECORDER_LAG_TOLERANCE_SECONDS = 8.0
+
+# Twitch's low-latency manifests advertise not-yet-final segments via this tag
+# instead of a normal #EXTINF entry - see streamlink's TwitchM3U8Parser
+# (parse_tag_ext_x_twitch_prefetch). hls.js doesn't recognize the tag, so
+# without rewriting it into a standard segment entry these are silently
+# dropped and the player never benefits from Twitch's actual low-latency feed.
+_TWITCH_PREFETCH_TAG_PREFIX = "#EXT-X-TWITCH-PREFETCH:"
+_EXTINF_RE = re.compile(r"^#EXTINF:\s*([0-9]*\.?[0-9]+)")
 
 
 @dataclass
@@ -55,6 +65,10 @@ class WebStreamSession:
     thread: Optional[threading.Thread] = None
     day_dir: Optional[Path] = None
     segment_id: Optional[str] = None
+    recorded_bytes: int = 0
+    last_recorded_at: Optional[datetime] = None
+    recording_ready_at: Optional[datetime] = None
+    last_recording_state_pushed_at: Optional[datetime] = None
 
 
 @dataclass
@@ -205,9 +219,13 @@ class WebStreamService:
                     "playback_url": None,
                     "status": "idle",
                     "recording": False,
+                    "clip_ready": False,
+                    "clip_ready_seconds": 0.0,
+                    "clip_warmup_reason": None,
                     "last_error": None,
                 }
 
+            clip_status = self._clip_status(session)
             return {
                 "active": session.status in {"starting", "live", "reconnecting"},
                 "channel": session.channel,
@@ -215,6 +233,9 @@ class WebStreamService:
                 "playback_url": session.playback_url,
                 "status": session.status,
                 "recording": bool(session.recording_path),
+                "clip_ready": clip_status["ready"],
+                "clip_ready_seconds": clip_status["ready_seconds"],
+                "clip_warmup_reason": clip_status["reason"],
                 "last_error": session.last_error,
             }
 
@@ -269,6 +290,44 @@ class WebStreamService:
         if file_stat.st_size <= 0:
             return {"ok": False, "error": "Recording is not ready yet"}
 
+        with self._lock:
+            last_recorded_at = session.last_recorded_at
+
+        # Use the recording file's own last-write time rather than wall-clock
+        # "now" - once the stream ends, the file stops growing but "now" keeps
+        # advancing for however long the user browses before clicking Clip,
+        # which would otherwise inflate "elapsed" well past the file's real
+        # content length and skew the clip toward the end of the recording.
+        last_write_time = datetime.fromtimestamp(file_stat.st_mtime)
+        elapsed = (last_write_time - session.recording_start_time).total_seconds()
+        elapsed = max(0.0, elapsed)
+        behind = behind_live_seconds if isinstance(behind_live_seconds, (int, float)) else 0.0
+        behind = max(0.0, behind)
+
+        if elapsed < duration_seconds:
+            return {
+                "ok": False,
+                "error": (
+                    "Recording is still warming up "
+                    f"({int(elapsed)}s captured for a {duration_seconds}s clip)."
+                ),
+            }
+
+        active_recording = session.status in {"starting", "live", "reconnecting"}
+        recorded_until = last_recorded_at or last_write_time
+        recorder_lag = None
+        if active_recording and recorded_until:
+            requested_wall_end = datetime.now() - timedelta(seconds=behind)
+            recorder_lag = (requested_wall_end - recorded_until).total_seconds()
+            if recorder_lag > CLIP_RECORDER_LAG_TOLERANCE_SECONDS:
+                return {
+                    "ok": False,
+                    "error": (
+                        "Recording is still catching up "
+                        f"({int(recorder_lag)}s behind the player). Try again in a moment."
+                    ),
+                }
+
         ffmpeg_exe = self._get_ffmpeg_executable()
         if not ffmpeg_exe:
             return {
@@ -280,15 +339,6 @@ class WebStreamService:
         clip_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = clip_dir / f"{session.channel}_{timestamp}.mp4"
-        # Use the recording file's own last-write time rather than wall-clock
-        # "now" - once the stream ends, the file stops growing but "now" keeps
-        # advancing for however long the user browses before clicking Clip,
-        # which would otherwise inflate "elapsed" well past the file's real
-        # content length and skew the clip toward the end of the recording.
-        last_write_time = datetime.fromtimestamp(file_stat.st_mtime)
-        elapsed = (last_write_time - session.recording_start_time).total_seconds()
-        behind = behind_live_seconds if isinstance(behind_live_seconds, (int, float)) else 0.0
-        behind = max(0.0, behind)
         target_end = max(0.0, elapsed - behind)
         start_offset = max(0.0, target_end - duration_seconds)
 
@@ -312,6 +362,18 @@ class WebStreamService:
             str(output_path),
         ]
 
+        logger.debug(
+            "Clip timing: duration=%s behind_live=%.3f elapsed=%.3f file_mtime=%s "
+            "file_size=%s recorder_lag=%s target_end=%.3f start_offset=%.3f",
+            duration_seconds,
+            behind,
+            elapsed,
+            last_write_time.isoformat(),
+            file_stat.st_size,
+            f"{recorder_lag:.3f}" if recorder_lag is not None else "n/a",
+            target_end,
+            start_offset,
+        )
         logger.debug("Creating clip: %s", " ".join(cmd))
         try:
             result = subprocess.run(cmd, capture_output=True, timeout=60)
@@ -526,6 +588,9 @@ class WebStreamService:
                 if not chunk:
                     return True
                 recording_file.write(chunk)
+                recording_file.flush()
+                if self._mark_recording_write(session, len(chunk)):
+                    self._push_event({"type": "recording_progress", "state": self.get_state()})
             return True
         except Exception as exc:
             logger.warning("Recording stream ended with error: %s", exc)
@@ -633,13 +698,39 @@ class WebStreamService:
                 handler.wfile.write(chunk)
 
     def _rewrite_playlist(self, text: str, base_url: str, session_id: str) -> str:
+        # Reusing the twitch_low_latency setting here is what actually makes it
+        # affect playback: previously it only reached the separate recording
+        # thread's streamlink reader, never the browser-facing proxy below.
+        low_latency = self.config.get("twitch_low_latency", True)
         lines = []
+        regular_durations: list[float] = []
+        last_prefetch_duration: Optional[float] = None
         for raw_line in text.splitlines():
             line = raw_line.strip()
             if not line:
                 lines.append(raw_line)
                 continue
+            if low_latency and line.startswith(_TWITCH_PREFETCH_TAG_PREFIX):
+                # Chain off the previous prefetch segment's duration if there is
+                # one (mirrors TwitchM3U8Parser), otherwise estimate from the
+                # average of this playlist's regular segments. With neither
+                # available there's nothing sane to synthesize, so drop it -
+                # same net effect as today's untouched pass-through.
+                duration = last_prefetch_duration
+                if duration is None and regular_durations:
+                    duration = sum(regular_durations) / len(regular_durations)
+                if duration is not None:
+                    last_prefetch_duration = duration
+                    uri = line[len(_TWITCH_PREFETCH_TAG_PREFIX) :]
+                    absolute = urljoin(base_url, uri)
+                    lines.append(f"#EXTINF:{duration:.3f},")
+                    lines.append(self._resource_url(session_id, absolute))
+                continue
             if line.startswith("#"):
+                match = _EXTINF_RE.match(line)
+                if match:
+                    regular_durations.append(float(match.group(1)))
+                    last_prefetch_duration = None
                 lines.append(self._rewrite_key_uri(raw_line, base_url, session_id))
                 continue
             absolute = urljoin(base_url, line)
@@ -700,6 +791,58 @@ class WebStreamService:
     def _network_timeout(self) -> int:
         timeout = self.config.get("network_timeout", 30)
         return timeout if isinstance(timeout, int) else 30
+
+    def _clip_duration_setting(self) -> int:
+        duration = self.config.get("stream_manager_clip_duration_seconds", 30)
+        return duration if isinstance(duration, int) else 30
+
+    def _recorded_ready_seconds(self, session: WebStreamSession) -> float:
+        if not session.recording_start_time:
+            return 0.0
+        recorded_at = session.last_recorded_at
+        if recorded_at is None and session.recording_path:
+            path = Path(session.recording_path)
+            if path.exists() and path.stat().st_size > 0:
+                recorded_at = datetime.fromtimestamp(path.stat().st_mtime)
+        if recorded_at is None:
+            return 0.0
+        return max(0.0, (recorded_at - session.recording_start_time).total_seconds())
+
+    def _clip_status(self, session: WebStreamSession) -> dict[str, Any]:
+        ready_seconds = self._recorded_ready_seconds(session)
+        duration = self._clip_duration_setting()
+        if not session.recording_path:
+            return {"ready": False, "ready_seconds": ready_seconds, "reason": None}
+        if ready_seconds < duration:
+            return {
+                "ready": False,
+                "ready_seconds": ready_seconds,
+                "reason": (
+                    "Recording is warming up "
+                    f"({int(ready_seconds)}s captured for a {duration}s clip)."
+                ),
+            }
+        return {"ready": True, "ready_seconds": ready_seconds, "reason": None}
+
+    def _mark_recording_write(self, session: WebStreamSession, byte_count: int) -> bool:
+        now = datetime.now()
+        with self._lock:
+            session.recorded_bytes += byte_count
+            session.last_recorded_at = now
+            ready_before = session.recording_ready_at is not None
+            ready_seconds = self._recorded_ready_seconds(session)
+            if not ready_before and ready_seconds >= self._clip_duration_setting():
+                session.recording_ready_at = now
+
+            last_push = session.last_recording_state_pushed_at
+            should_push = session.recording_ready_at is not None and not ready_before
+            if last_push is None:
+                should_push = True
+            elif (now - last_push).total_seconds() >= RECORDING_STATE_PUSH_INTERVAL_SECONDS:
+                should_push = True
+            if should_push:
+                session.last_recording_state_pushed_at = now
+            return should_push
 
     def _sleep_interruptibly(self, stop_event: threading.Event, seconds: int) -> bool:
         deadline = time.monotonic() + seconds

@@ -22,6 +22,9 @@ class FakeStreamService:
             "playback_url": None,
             "status": "idle",
             "recording": False,
+            "clip_ready": False,
+            "clip_ready_seconds": 0.0,
+            "clip_warmup_reason": None,
             "last_error": None,
         }
         self.shutdown_called = False
@@ -38,12 +41,25 @@ class FakeStreamService:
                 "playback_url": "http://127.0.0.1:1234/playlist/abc.m3u8",
                 "status": "live",
                 "recording": True,
+                "clip_ready": True,
+                "clip_ready_seconds": 60.0,
+                "clip_warmup_reason": None,
             }
         )
         return self.get_state()
 
     def stop(self):
-        self.state.update({"active": False, "channel": None, "status": "idle", "recording": False})
+        self.state.update(
+            {
+                "active": False,
+                "channel": None,
+                "status": "idle",
+                "recording": False,
+                "clip_ready": False,
+                "clip_ready_seconds": 0.0,
+                "clip_warmup_reason": None,
+            }
+        )
         return self.get_state()
 
     def create_clip(self, duration_seconds, behind_live_seconds=0.0):
@@ -165,6 +181,8 @@ class TestTwitchViewerAPI(unittest.TestCase):
 
         self.assertTrue(started["ok"])
         self.assertEqual(started["stream"]["channel"], "testuser")
+        self.assertTrue(started["stream"]["clip_ready"])
+        self.assertEqual(started["stream"]["clip_ready_seconds"], 60.0)
         self.assertEqual(clipped["path"], "clips/test-60.mp4")
         self.assertFalse(stopped["stream"]["active"])
 

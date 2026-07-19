@@ -65,3 +65,16 @@ def test_clip_saved_toast_is_event_driven_only():
     assert '"Clip saved"' not in manager_source
     assert 'if (!result.ok)' in manager_source
     assert 'result.error || "Clip failed"' in manager_source
+
+
+def test_clip_button_uses_backend_clip_readiness_not_just_recording_flag():
+    root = Path(__file__).resolve().parents[1]
+    stage_source = (root / "gui_web" / "components" / "video_stage.jsx").read_text()
+    helpers_source = (root / "gui_web" / "helpers.jsx").read_text()
+
+    assert "stream?.clip_ready" in stage_source
+    assert "clipReadySeconds >= clipDuration" in stage_source
+    assert "disabled={!clipReady}" in stage_source
+    assert "title={clipWarmupReason}" in stage_source
+    assert "clip_ready_seconds" in helpers_source
+    assert "clip_warmup_reason" in helpers_source

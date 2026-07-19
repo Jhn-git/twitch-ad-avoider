@@ -6,6 +6,12 @@ window.Components = window.Components || {};
 // thresholds) keeps a single segment arrival from flipping isLive back and forth.
 const LIVE_EDGE_ENTER_SECONDS = 4;
 const LIVE_EDGE_EXIT_SECONDS = 10;
+// Well above LIVE_EDGE_EXIT_SECONDS - only trips for a genuinely large gap
+// (stream startup, or a rare stall recovery), never for the everyday sawtooth.
+const EMERGENCY_GAP_SECONDS = 15;
+// Deliberately mild: closes a few seconds of drift within well under a
+// minute, but stays slow enough that speech never sounds sped up.
+const CATCHUP_PLAYBACK_RATE = 1.1;
 
 function clampRatio(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -32,6 +38,7 @@ window.Components.VideoStage = function VideoStage({
   const dayTimelineRef = React.useRef(null);
   const draggingRef = React.useRef(false);
   const isLiveRef = React.useRef(true);
+  const userSeekedRef = React.useRef(false);
   const [isLive, setIsLive] = React.useState(true);
   const playbackUrl = stream?.playback_url;
   const previewImageUrl = preview?.preview_image_url;
@@ -40,6 +47,15 @@ window.Components.VideoStage = function VideoStage({
     value: seconds,
     label: window.AppHelpers.durationLabel(seconds),
   }));
+  const clipReadySeconds = Number(stream?.clip_ready_seconds || 0);
+  const clipReady = Boolean(
+    stream?.recording && stream?.clip_ready && clipReadySeconds >= clipDuration
+  );
+  const defaultClipWarmupReason =
+    `Recording is warming up (${Math.floor(clipReadySeconds)}s captured for a ${clipDuration}s clip).`;
+  const clipWarmupReason = clipReady
+    ? "Create clip"
+    : (stream?.clip_warmup_reason || defaultClipWarmupReason);
 
   React.useEffect(() => {
     setPreviewImageFailed(false);
@@ -65,6 +81,50 @@ window.Components.VideoStage = function VideoStage({
     }
   }, []);
 
+  // Shared by the Go Live button and the automatic emergency catch-up below -
+  // an instant, clean seek to the true buffered edge. Re-arms auto catch-up
+  // (userSeekedRef = false) since landing on live is exactly what a deliberate
+  // rewind would otherwise be protecting the user from being pulled out of.
+  const syncToLiveEdge = React.useCallback(
+    (video) => {
+      if (!video.buffered || !video.buffered.length) return;
+      video.currentTime = Math.max(0, video.buffered.end(video.buffered.length - 1) - 0.5);
+      video.playbackRate = 1;
+      userSeekedRef.current = false;
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise?.catch) playPromise.catch(() => {});
+      }
+      updateSeekVisuals(video);
+    },
+    [updateSeekVisuals]
+  );
+
+  // Runs every timeupdate/progress tick, right after updateSeekVisuals (so
+  // isLiveRef already reflects the current gap). Never fights a deliberate
+  // rewind or a paused video. A large gap - stream startup, or a rare stall -
+  // gets one clean instant seek, the same jump Go Live already does. A
+  // smaller "not live" gap is closed quietly with a mild capped playback
+  // rate instead of a visible jump, and dropped back to 1x once caught up.
+  const maybeAutoCatchUp = React.useCallback(
+    (video) => {
+      if (!video.buffered || !video.buffered.length) return;
+      if (userSeekedRef.current || video.paused) {
+        if (video.playbackRate !== 1) video.playbackRate = 1;
+        return;
+      }
+      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+      const gap = bufferedEnd - video.currentTime;
+      if (gap > EMERGENCY_GAP_SECONDS) {
+        syncToLiveEdge(video);
+        return;
+      }
+      const targetRate = isLiveRef.current ? 1 : CATCHUP_PLAYBACK_RATE;
+      if (video.playbackRate !== targetRate) video.playbackRate = targetRate;
+    },
+    [syncToLiveEdge]
+  );
+
   React.useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
@@ -75,6 +135,8 @@ window.Components.VideoStage = function VideoStage({
     }
     video.removeAttribute("src");
     video.load();
+    video.playbackRate = 1;
+    userSeekedRef.current = false;
 
     if (!playbackUrl) return undefined;
 
@@ -109,7 +171,10 @@ window.Components.VideoStage = function VideoStage({
 
     isLiveRef.current = true;
     setIsLive(true);
-    const handleTimeUpdate = () => updateSeekVisuals(video);
+    const handleTimeUpdate = () => {
+      updateSeekVisuals(video);
+      maybeAutoCatchUp(video);
+    };
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("progress", handleTimeUpdate);
 
@@ -121,7 +186,7 @@ window.Components.VideoStage = function VideoStage({
         hlsRef.current = null;
       }
     };
-  }, [playbackUrl, updateSeekVisuals]);
+  }, [playbackUrl, updateSeekVisuals, maybeAutoCatchUp]);
 
   const seekFromEvent = (evt) => {
     const track = seekTrackRef.current;
@@ -133,6 +198,7 @@ window.Components.VideoStage = function VideoStage({
     const bufferedStart = video.buffered.start(0);
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     video.currentTime = bufferedStart + ratio * (bufferedEnd - bufferedStart);
+    userSeekedRef.current = true;
     updateSeekVisuals(video);
   };
 
@@ -160,14 +226,7 @@ window.Components.VideoStage = function VideoStage({
   const goLive = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.buffered && video.buffered.length) {
-      video.currentTime = Math.max(0, video.buffered.end(video.buffered.length - 1) - 0.5);
-    }
-    if (video.paused) {
-      const playPromise = video.play();
-      if (playPromise?.catch) playPromise.catch(() => {});
-    }
-    updateSeekVisuals(video);
+    syncToLiveEdge(video);
   };
 
   const handleClip = () => {
@@ -241,6 +300,7 @@ window.Components.VideoStage = function VideoStage({
       return;
     }
     video.currentTime = clampRatio(desiredTime, bufferedStart, bufferedEnd);
+    userSeekedRef.current = true;
     updateSeekVisuals(video);
   };
 
@@ -311,7 +371,12 @@ window.Components.VideoStage = function VideoStage({
 
       <div className="stage-actions">
         <span className="clip-split">
-          <button className="btn primary" disabled={!stream?.recording} onClick={handleClip}>
+          <button
+            className="btn primary"
+            disabled={!clipReady}
+            onClick={handleClip}
+            title={clipWarmupReason}
+          >
             <Icon name="scissors" />
             Clip ({window.AppHelpers.durationLabel(clipDuration)})
           </button>
