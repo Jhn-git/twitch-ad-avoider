@@ -66,6 +66,12 @@ TEMP_DIR = Path("temp")
 # Twitch username validation regex
 TWITCH_USERNAME_PATTERN = r"^[a-zA-Z0-9_]{4,25}$"
 
+# Twitch's public GraphQL endpoint, used for status checks and preview lookups
+TWITCH_GQL_URL = "https://gql.twitch.tv/gql"
+# Public client ID embedded in the Twitch website — used by streamlink and
+# other open-source Twitch clients for anonymous GQL queries.
+TWITCH_GQL_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+
 # Default network timeout values
 MIN_NETWORK_TIMEOUT = 10
 MAX_NETWORK_TIMEOUT = 120

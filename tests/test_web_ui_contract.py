@@ -2,10 +2,11 @@
 
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_app_refreshes_favorites_on_startup_when_enabled():
-    root = Path(__file__).resolve().parents[1]
-    app_source = (root / "gui_web" / "app.jsx").read_text()
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
 
     assert "refreshFavoritesOnStartup" in app_source
     assert "favorites_auto_refresh === false" in app_source
@@ -14,9 +15,8 @@ def test_app_refreshes_favorites_on_startup_when_enabled():
 
 
 def test_video_stage_shows_live_preview_image_without_playback():
-    root = Path(__file__).resolve().parents[1]
-    stage_source = (root / "gui_web" / "components" / "video_stage.jsx").read_text()
-    index_source = (root / "gui_web" / "index.html").read_text()
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
 
     assert "preview?.preview_image_url" in stage_source
     assert "!hasPlayback && selectedChannel && preview?.is_live" in stage_source
@@ -25,9 +25,8 @@ def test_video_stage_shows_live_preview_image_without_playback():
 
 
 def test_dropdown_has_viewport_aware_placement():
-    root = Path(__file__).resolve().parents[1]
-    dropdown_source = (root / "gui_web" / "components" / "dropdown.jsx").read_text()
-    index_source = (root / "gui_web" / "index.html").read_text()
+    dropdown_source = (ROOT / "gui_web" / "components" / "dropdown.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
 
     assert "useLayoutEffect" in dropdown_source
     assert "getBoundingClientRect()" in dropdown_source
@@ -40,9 +39,8 @@ def test_dropdown_has_viewport_aware_placement():
 
 
 def test_clip_duration_split_button_stays_connected():
-    root = Path(__file__).resolve().parents[1]
-    stage_source = (root / "gui_web" / "components" / "video_stage.jsx").read_text()
-    index_source = (root / "gui_web" / "index.html").read_text()
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
 
     assert 'className="clip-split"' in stage_source
     assert 'className="clip-duration-dropdown"' in stage_source
@@ -54,23 +52,22 @@ def test_clip_duration_split_button_stays_connected():
 
 
 def test_clip_saved_toast_is_event_driven_only():
-    root = Path(__file__).resolve().parents[1]
-    app_source = (root / "gui_web" / "app.jsx").read_text()
-    helpers_source = (root / "gui_web" / "helpers.jsx").read_text()
-    manager_source = (root / "gui_web" / "components" / "stream_manager.jsx").read_text()
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+    manager_source = (ROOT / "gui_web" / "components" / "stream_manager.jsx").read_text()
 
     assert 'event.type === "clip_created"' in app_source
     assert app_source.count('"Clip saved"') == 1
     assert 'window.__onStreamEvent?.({ type: "clip_created"' in helpers_source
     assert '"Clip saved"' not in manager_source
-    assert 'if (!result.ok)' in manager_source
-    assert 'result.error || "Clip failed"' in manager_source
+    assert "if (!result.ok)" in manager_source
+    assert 'result.error || errorMessage || "Action failed"' in manager_source
+    assert 'errorMessage: "Clip failed"' in manager_source
 
 
 def test_clip_button_uses_backend_clip_readiness_not_just_recording_flag():
-    root = Path(__file__).resolve().parents[1]
-    stage_source = (root / "gui_web" / "components" / "video_stage.jsx").read_text()
-    helpers_source = (root / "gui_web" / "helpers.jsx").read_text()
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
 
     assert "stream?.clip_ready" in stage_source
     assert "clipReadySeconds >= clipDuration" in stage_source

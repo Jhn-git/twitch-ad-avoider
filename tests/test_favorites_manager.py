@@ -11,28 +11,21 @@ Critical tests for:
 
 import unittest
 import json
-import tempfile
-import os
 from pathlib import Path
 from datetime import datetime, timezone
 
+from conftest import TempDirTestCase
 from src.favorites_manager import FavoritesManager, FavoriteChannelInfo
 
 
-class TestFavoritesManager(unittest.TestCase):
+class TestFavoritesManager(TempDirTestCase):
     """Test FavoritesManager functionality"""
 
     def setUp(self):
         """Set up test with temporary favorites file"""
-        self.temp_dir = tempfile.mkdtemp()
+        super().setUp()
         self.favorites_file = Path(self.temp_dir) / "test_favorites.json"
         self.manager = FavoritesManager(self.favorites_file)
-
-    def tearDown(self):
-        """Clean up temporary files"""
-        if self.favorites_file.exists():
-            self.favorites_file.unlink()
-        os.rmdir(self.temp_dir)
 
     def test_initialization_empty(self):
         """Test manager initializes with empty data when no file exists"""

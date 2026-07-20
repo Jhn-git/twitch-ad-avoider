@@ -4,14 +4,23 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
   const Icon = window.Components.Icon;
   const [form, setForm] = React.useState(state.settings);
   const [errors, setErrors] = React.useState({});
+  const validateTimersRef = React.useRef({});
 
   React.useEffect(() => setForm(state.settings), [state.settings]);
+  React.useEffect(() => () => {
+    Object.values(validateTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   const commit = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
-    api.validate_setting(key, value).then((result) => {
-      setErrors((current) => ({ ...current, [key]: result.ok ? null : "Invalid value" }));
-    });
+    if (validateTimersRef.current[key]) {
+      window.clearTimeout(validateTimersRef.current[key]);
+    }
+    validateTimersRef.current[key] = window.setTimeout(() => {
+      api.validate_setting(key, value).then((result) => {
+        setErrors((current) => ({ ...current, [key]: result.ok ? null : "Invalid value" }));
+      });
+    }, 250);
   };
 
   const save = () => {
@@ -32,15 +41,17 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
 
   const reset = () => {
     api.reset_settings_to_defaults().then((result) => {
-      if (result.ok) {
-        setForm(result.settings);
-        setErrors({});
-        onState({
-          settings: result.settings,
-          ui_state: window.AppHelpers.uiStateFromSettings(result.settings),
-        });
-        onToast({ kind: "success", message: "Settings reset" });
+      if (!result.ok) {
+        onToast({ kind: "error", message: result.error || "Settings reset failed" });
+        return;
       }
+      setForm(result.settings);
+      setErrors({});
+      onState({
+        settings: result.settings,
+        ui_state: window.AppHelpers.uiStateFromSettings(result.settings),
+      });
+      onToast({ kind: "success", message: "Settings reset" });
     });
   };
 

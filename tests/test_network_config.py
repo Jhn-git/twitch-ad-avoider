@@ -1,26 +1,13 @@
 """Tests for network and Streamlink playback configuration."""
 
-import os
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.config_manager import ConfigManager
+from conftest import ConfigManagerTestCase
 from src.web_stream_service import WebStreamService
 
 
-class TestNetworkConfiguration(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.config_path = Path(self.temp_dir) / "test_settings.json"
-        self.config = ConfigManager(self.config_path)
-
-    def tearDown(self):
-        if self.config_path.exists():
-            self.config_path.unlink()
-        os.rmdir(self.temp_dir)
-
+class TestNetworkConfiguration(ConfigManagerTestCase):
     def test_network_timeout_validation(self):
         for timeout in (10, 15, 30, 60, 120):
             self.assertTrue(self.config.set("network_timeout", timeout))

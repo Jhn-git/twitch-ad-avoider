@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from conftest import ConfigManagerTestCase
 from src.favorites_manager import FavoritesManager
-from src.config_manager import ConfigManager
 from src.webapi import TwitchViewerAPI
 
 
@@ -82,17 +80,10 @@ class FakeStreamService:
         }
 
 
-class TestTwitchViewerAPI(unittest.TestCase):
+class TestTwitchViewerAPI(ConfigManagerTestCase):
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.config = ConfigManager(Path(self.temp_dir) / "settings.json")
+        super().setUp()
         self.favorites_path = Path(self.temp_dir) / "favorites.json"
-
-    def tearDown(self):
-        for child in Path(self.temp_dir).glob("*"):
-            if child.is_file():
-                child.unlink()
-        os.rmdir(self.temp_dir)
 
     def make_api(self, **kwargs):
         manager = FavoritesManager(self.favorites_path)

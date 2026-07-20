@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import webbrowser
 from datetime import datetime
@@ -47,7 +48,7 @@ class TwitchViewerAPI:
             push_event=self._on_stream_event,
             add_activity=self._add_activity,
         )
-        self._stream_service.purge_expired_recordings()
+        threading.Thread(target=self._stream_service.purge_expired_recordings, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Window and pushes
@@ -176,7 +177,7 @@ class TwitchViewerAPI:
             previous = self._favorites.get_channel_info(channel)
             if is_live and previous and not previous.is_live:
                 newly_live.append(channel)
-            self._favorites.update_channel_status(channel, is_live)
+        self._favorites.update_channel_statuses(status_results)
         payload = self._favorites_payload()
         self._push("__onFavoritesUpdated", payload)
         live_count = sum(1 for is_live in status_results.values() if is_live)
@@ -336,11 +337,9 @@ class TwitchViewerAPI:
         return {"ok": key not in failed_keys}
 
     def save_settings(self, patch: dict) -> dict:
-        failed_keys = self._config.validate_update(patch)
-        if failed_keys:
-            return {"ok": False, "error": f"Invalid values for: {', '.join(failed_keys)}"}
         if not self._config.update(patch):
-            return {"ok": False, "error": "Failed to apply settings update"}
+            failed_keys = self._config.validate_update(patch)
+            return {"ok": False, "error": f"Invalid values for: {', '.join(failed_keys)}"}
         if not self._config.save_settings():
             return {"ok": False, "error": "Failed to write settings file"}
         reconfigure_logging_from_config(self._config)

@@ -11,17 +11,13 @@ from typing import Optional, cast
 
 import requests
 
-from src.constants import DEFAULT_SETTINGS
+from src.constants import DEFAULT_SETTINGS, TWITCH_GQL_URL, TWITCH_GQL_CLIENT_ID
 from src.exceptions import ValidationError
 from src.logging_config import get_logger
 from src.validators import validate_channel_name
 
 logger = get_logger(__name__)
 
-_GQL_URL = "https://gql.twitch.tv/gql"
-# Public client ID embedded in the Twitch website — used by streamlink and
-# other open-source Twitch clients for anonymous GQL queries.
-_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 _DEFAULT_TIMEOUT_SECONDS = cast(int, DEFAULT_SETTINGS["network_timeout"])
 
 
@@ -74,9 +70,9 @@ def fetch_stream_preview_info(
 
     try:
         response = requests.post(
-            _GQL_URL,
+            TWITCH_GQL_URL,
             json={"query": query},
-            headers={"Client-ID": _CLIENT_ID},
+            headers={"Client-ID": TWITCH_GQL_CLIENT_ID},
             timeout=timeout,
         )
         response.raise_for_status()

@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from conftest import ConfigManagerTestCase
 from scripts.gui_test_support import patch_temp_dir
 from src import recording_index
-from src.config_manager import ConfigManager
 from src.web_stream_service import WebStreamService, WebStreamSession
 
 
@@ -24,10 +23,11 @@ class FakeStream:
         return Mock(read=Mock(return_value=b""))
 
 
-class TestWebStreamService(unittest.TestCase):
+class WebStreamServiceTestCase(ConfigManagerTestCase):
+    """Base for tests needing a live WebStreamService wired to a temp config."""
+
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.config = ConfigManager(Path(self.temp_dir) / "settings.json")
+        super().setUp()
         self.events = []
         self.activity = []
         self.service = WebStreamService(
@@ -35,11 +35,10 @@ class TestWebStreamService(unittest.TestCase):
             self.events.append,
             lambda level, message, category=None: self.activity.append((level, message, category)),
         )
+        self.addCleanup(self.service.shutdown)
 
-    def tearDown(self):
-        self.service.shutdown()
-        shutil.rmtree(self.temp_dir)
 
+class TestWebStreamService(WebStreamServiceTestCase):
     def _recording_file_with_elapsed(
         self, name: str, elapsed_seconds: int
     ) -> tuple[Path, datetime]:
@@ -49,6 +48,33 @@ class TestWebStreamService(unittest.TestCase):
         mtime = start_time + timedelta(seconds=elapsed_seconds)
         os.utime(recording, (mtime.timestamp(), mtime.timestamp()))
         return recording, start_time
+
+    def _make_session(
+        self,
+        status: str = "live",
+        recording_path: str | None = None,
+        recording_start_time: datetime | None = None,
+        last_recorded_at: datetime | None = None,
+    ) -> WebStreamSession:
+        return WebStreamSession(
+            session_id="abc",
+            channel="testuser",
+            quality="best",
+            stream_url="https://example.test/live.m3u8",
+            stream_args={},
+            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+            recording_path=recording_path,
+            recording_start_time=recording_start_time,
+            last_recorded_at=last_recorded_at,
+            status=status,
+        )
+
+    def _stub_ffmpeg_success(self, mock_run) -> None:
+        def write_output(cmd, **_kwargs):
+            Path(cmd[-1]).write_bytes(b"x" * 2048)
+            return Mock(stderr=b"")
+
+        mock_run.side_effect = write_output
 
     @patch("src.web_stream_service.streamlink.Streamlink")
     def test_start_exposes_loopback_playback_url_without_recording(self, mock_streamlink):
@@ -79,17 +105,7 @@ class TestWebStreamService(unittest.TestCase):
         self.assertEqual(state["quality"], "best")
 
     def test_stop_clears_state(self):
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
-            recording_path=None,
-            recording_start_time=None,
-            status="live",
-        )
+        self.service._session = self._make_session()
 
         state = self.service.stop()
 
@@ -184,17 +200,10 @@ segment001.ts
     def test_state_reports_clip_not_ready_until_selected_duration_recorded(self):
         self.config.set("stream_manager_clip_duration_seconds", 30)
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 10)
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
             last_recorded_at=start_time + timedelta(seconds=10),
-            status="live",
         )
 
         state = self.service.get_state()
@@ -206,17 +215,10 @@ segment001.ts
     def test_state_reports_clip_ready_after_selected_duration_recorded(self):
         self.config.set("stream_manager_clip_duration_seconds", 30)
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 45)
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
             last_recorded_at=start_time + timedelta(seconds=45),
-            status="live",
         )
 
         state = self.service.get_state()
@@ -231,23 +233,12 @@ segment001.ts
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 60)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
-            status="live",
         )
 
-        def write_output(cmd, **_kwargs):
-            Path(cmd[-1]).write_bytes(b"x" * 2048)
-            return Mock(stderr=b"")
-
-        mock_run.side_effect = write_output
+        self._stub_ffmpeg_success(mock_run)
 
         result = self.service.create_clip(30)
 
@@ -261,23 +252,12 @@ segment001.ts
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 100)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
-            status="live",
         )
 
-        def write_output(cmd, **_kwargs):
-            Path(cmd[-1]).write_bytes(b"x" * 2048)
-            return Mock(stderr=b"")
-
-        mock_run.side_effect = write_output
+        self._stub_ffmpeg_success(mock_run)
 
         result = self.service.create_clip(30, behind_live_seconds=20)
 
@@ -293,23 +273,12 @@ segment001.ts
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 60)
         clip_dir = Path(self.temp_dir) / "clips"
         self.config.set("clip_directory", str(clip_dir))
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
-            status="live",
         )
 
-        def write_output(cmd, **_kwargs):
-            Path(cmd[-1]).write_bytes(b"x" * 2048)
-            return Mock(stderr=b"")
-
-        mock_run.side_effect = write_output
+        self._stub_ffmpeg_success(mock_run)
 
         result = self.service.create_clip(30, behind_live_seconds=100000)
 
@@ -326,17 +295,10 @@ segment001.ts
         recording, start_time = self._recording_file_with_elapsed("recording.ts", 80)
         recorded_until = datetime.now() - timedelta(seconds=20)
         os.utime(recording, (recorded_until.timestamp(), recorded_until.timestamp()))
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
             recording_path=str(recording),
             recording_start_time=start_time,
             last_recorded_at=recorded_until,
-            status="live",
         )
 
         result = self.service.create_clip(30, behind_live_seconds=0)
@@ -366,23 +328,13 @@ segment001.ts
         mtime_epoch = stream_end_time.timestamp()
         os.utime(recording, (mtime_epoch, mtime_epoch))
 
-        self.service._session = WebStreamSession(
-            session_id="abc",
-            channel="testuser",
-            quality="best",
-            stream_url="https://example.test/live.m3u8",
-            stream_args={},
-            playback_url="http://127.0.0.1/playlist/abc.m3u8",
+        self.service._session = self._make_session(
+            status="ended",
             recording_path=str(recording),
             recording_start_time=start_time,
-            status="ended",
         )
 
-        def write_output(cmd, **_kwargs):
-            Path(cmd[-1]).write_bytes(b"x" * 2048)
-            return Mock(stderr=b"")
-
-        mock_run.side_effect = write_output
+        self._stub_ffmpeg_success(mock_run)
 
         result = self.service.create_clip(30, behind_live_seconds=100)
 
@@ -394,22 +346,14 @@ segment001.ts
         self.assertAlmostEqual(start_offset, 270.0, delta=1.0)
 
 
-class TestDayScopedRecording(unittest.TestCase):
+class TestDayScopedRecording(WebStreamServiceTestCase):
     """Stage 1: temp/<channel>/<date>/ storage replaces the old rolling
     recording_<channel>.ts file. Every test here redirects TEMP_DIR to a
     scratch dir via patch_temp_dir() so it never touches the real temp/
     folder (which may have a real recording in progress)."""
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.config = ConfigManager(Path(self.temp_dir) / "settings.json")
-        self.events = []
-        self.activity = []
-        self.service = WebStreamService(
-            self.config,
-            self.events.append,
-            lambda level, message, category=None: self.activity.append((level, message, category)),
-        )
+        super().setUp()
         # _prepare_recording looks up the true Twitch stream start time (Stage 2) -
         # stub it out so these tests never make a real network call.
         preview_patcher = patch(
@@ -418,10 +362,6 @@ class TestDayScopedRecording(unittest.TestCase):
         )
         self.mock_fetch_preview = preview_patcher.start()
         self.addCleanup(preview_patcher.stop)
-
-    def tearDown(self):
-        self.service.shutdown()
-        shutil.rmtree(self.temp_dir)
 
     @patch("src.web_stream_service.streamlink.Streamlink")
     def test_stop_then_start_creates_two_distinct_segment_files(self, mock_streamlink):

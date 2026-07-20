@@ -137,12 +137,16 @@ class WebStreamService:
         self.stop(join_timeout=2.0)
         self._ensure_proxy()
 
+        # Overlaps with `_resolve_stream` below instead of running after it -
+        # both are independent Twitch network round-trips on this critical path.
+        stream_start_prefetch = self._prefetch_true_stream_start(channel)
+
         selected_quality, stream_url, stream_args, stream_obj = self._resolve_stream(
             channel, quality
         )
         session_id = uuid.uuid4().hex
         playback_url = self._playlist_url(session_id)
-        prep = self._prepare_recording(channel)
+        prep = self._prepare_recording(channel, stream_start_prefetch)
 
         session = WebStreamSession(
             session_id=session_id,
@@ -435,7 +439,11 @@ class WebStreamService:
             return translated if isinstance(translated, str) else None
         return None
 
-    def _prepare_recording(self, channel: str) -> _RecordingPrep:
+    def _prepare_recording(
+        self,
+        channel: str,
+        stream_start_prefetch: Optional[Callable[[], Optional[datetime]]] = None,
+    ) -> _RecordingPrep:
         """Start a new day-scoped recording segment for `channel`.
 
         Every call gets its own uniquely-named raw file under
@@ -444,6 +452,10 @@ class WebStreamService:
         still locked/in-use for some reason (unlike the old single rolling
         `recording_<channel>.ts`, which would silently append onto stale
         content when its unlink failed).
+
+        `stream_start_prefetch`, if given, is the callable returned by
+        `_prefetch_true_stream_start` - it blocks until that background fetch
+        completes instead of starting a fresh (sequential) one here.
         """
         if not self.config.get("clip_enabled", True):
             return _RecordingPrep(None, None, None, None)
@@ -456,7 +468,10 @@ class WebStreamService:
         index = recording_index.load_index(day_dir)
         recording_index.close_dangling_segments(index, day_dir, now)
 
-        stream_created_at = self._resolve_true_stream_start(channel)
+        if stream_start_prefetch is not None:
+            stream_created_at = stream_start_prefetch()
+        else:
+            stream_created_at = self._resolve_true_stream_start(channel)
         if stream_created_at is not None:
             index.stream_created_at = stream_created_at
 
@@ -465,6 +480,25 @@ class WebStreamService:
 
         raw_path = day_dir / segment.raw_filename
         return _RecordingPrep(str(raw_path), segment.start, day_dir, segment.id)
+
+    def _prefetch_true_stream_start(self, channel: str) -> Callable[[], Optional[datetime]]:
+        """Kick off `_resolve_true_stream_start` on a background thread so it
+        can overlap with `_resolve_stream`'s network round-trip in `start()`.
+        Returns a callable that blocks until the background fetch finishes
+        and yields its result."""
+        result: list[Optional[datetime]] = [None]
+
+        def _fetch() -> None:
+            result[0] = self._resolve_true_stream_start(channel)
+
+        thread = threading.Thread(target=_fetch, daemon=True)
+        thread.start()
+
+        def _join() -> Optional[datetime]:
+            thread.join()
+            return result[0]
+
+        return _join
 
     def _resolve_true_stream_start(self, channel: str) -> Optional[datetime]:
         """The real moment the broadcast went live on Twitch, independent of
@@ -780,21 +814,21 @@ class WebStreamService:
             return configured
         return shutil.which("ffmpeg")
 
+    def _int_setting(self, key: str, default: int) -> int:
+        value = self.config.get(key, default)
+        return value if isinstance(value, int) else default
+
     def _retry_attempts(self) -> int:
-        attempts = self.config.get("connection_retry_attempts", 3)
-        return attempts if isinstance(attempts, int) else 3
+        return self._int_setting("connection_retry_attempts", 3)
 
     def _retry_delay(self) -> int:
-        delay = self.config.get("retry_delay", 5)
-        return delay if isinstance(delay, int) else 5
+        return self._int_setting("retry_delay", 5)
 
     def _network_timeout(self) -> int:
-        timeout = self.config.get("network_timeout", 30)
-        return timeout if isinstance(timeout, int) else 30
+        return self._int_setting("network_timeout", 30)
 
     def _clip_duration_setting(self) -> int:
-        duration = self.config.get("stream_manager_clip_duration_seconds", 30)
-        return duration if isinstance(duration, int) else 30
+        return self._int_setting("stream_manager_clip_duration_seconds", 30)
 
     def _recorded_ready_seconds(self, session: WebStreamSession) -> float:
         if not session.recording_start_time:

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import os
-import shutil
-import tempfile
 import unittest
 from datetime import datetime, timedelta
-from pathlib import Path
 
+from conftest import TempDirTestCase
 from src.recording_index import (
     DayIndex,
     close_dangling_segments,
@@ -62,13 +60,7 @@ class TestSegmentLifecycle(unittest.TestCase):
         self.assertIsNone(segment.end)
 
 
-class TestCloseDanglingSegments(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
+class TestCloseDanglingSegments(TempDirTestCase):
     def test_dangling_segment_closed_using_file_mtime(self):
         index = DayIndex()
         start = datetime(2026, 7, 18, 10, 0, 0)
@@ -174,13 +166,7 @@ class TestResolveTimestamp(unittest.TestCase):
         self.assertEqual(result.offset_seconds, 0.0)
 
 
-class TestIndexPersistence(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
+class TestIndexPersistence(TempDirTestCase):
     def test_roundtrip_preserves_segments_and_stream_created_at(self):
         index = DayIndex(stream_created_at=datetime(2026, 7, 18, 9, 30, 0))
         start = datetime(2026, 7, 18, 10, 0, 0)
@@ -209,22 +195,16 @@ class TestIndexPersistence(unittest.TestCase):
         self.assertEqual(loaded.segments, [])
 
 
-class TestPurgeOldDays(unittest.TestCase):
-    def setUp(self):
-        self.channel_dir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        shutil.rmtree(self.channel_dir, ignore_errors=True)
-
+class TestPurgeOldDays(TempDirTestCase):
     def test_purges_directories_older_than_keep_days(self):
         now = datetime(2026, 7, 18)
-        old_day = self.channel_dir / "2026-07-10"
+        old_day = self.temp_dir / "2026-07-10"
         old_day.mkdir()
         (old_day / "raw_abc.ts").write_bytes(b"x")
-        recent_day = self.channel_dir / "2026-07-17"
+        recent_day = self.temp_dir / "2026-07-17"
         recent_day.mkdir()
 
-        removed = purge_old_days(self.channel_dir, keep_days=3, now=now)
+        removed = purge_old_days(self.temp_dir, keep_days=3, now=now)
 
         self.assertEqual(removed, [old_day])
         self.assertFalse(old_day.exists())
@@ -232,16 +212,16 @@ class TestPurgeOldDays(unittest.TestCase):
 
     def test_ignores_non_date_directories(self):
         now = datetime(2026, 7, 18)
-        junk_dir = self.channel_dir / "not-a-date"
+        junk_dir = self.temp_dir / "not-a-date"
         junk_dir.mkdir()
 
-        removed = purge_old_days(self.channel_dir, keep_days=3, now=now)
+        removed = purge_old_days(self.temp_dir, keep_days=3, now=now)
 
         self.assertEqual(removed, [])
         self.assertTrue(junk_dir.exists())
 
     def test_missing_channel_dir_returns_empty(self):
-        missing = self.channel_dir / "nope"
+        missing = self.temp_dir / "nope"
         self.assertEqual(purge_old_days(missing, keep_days=3, now=datetime(2026, 7, 18)), [])
 
 

@@ -9,16 +9,12 @@ stream-url lookups.
 
 import requests
 from typing import Dict, List
+from src.constants import TWITCH_GQL_URL, TWITCH_GQL_CLIENT_ID
 from src.exceptions import ValidationError
 from src.logging_config import get_logger
 from src.validators import validate_channel_name
 
 logger = get_logger(__name__)
-
-_GQL_URL = "https://gql.twitch.tv/gql"
-# Public client ID embedded in the Twitch website — used by streamlink and
-# other open-source Twitch clients for anonymous GQL queries.
-_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
 
 class StatusMonitor:
@@ -75,9 +71,9 @@ class StatusMonitor:
         query = "{ " + " ".join(aliases) + " }"
 
         response = requests.post(
-            _GQL_URL,
+            TWITCH_GQL_URL,
             json={"query": query},
-            headers={"Client-ID": _CLIENT_ID},
+            headers={"Client-ID": TWITCH_GQL_CLIENT_ID},
             timeout=self.check_timeout,
         )
         response.raise_for_status()

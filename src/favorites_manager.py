@@ -222,32 +222,7 @@ class FavoritesManager:
 
     def get_favorites_with_status(self) -> List[FavoriteChannelInfo]:
         """Get list of favorite channels with their status information"""
-        favorites = []
-        for channel_data in self.favorites_data.values():
-            # Parse datetime strings back to datetime objects
-            last_checked = channel_data.get("last_checked")
-            if last_checked and isinstance(last_checked, str):
-                try:
-                    last_checked = datetime.fromisoformat(last_checked)
-                except ValueError:
-                    last_checked = None
-
-            last_seen_live = channel_data.get("last_seen_live")
-            if last_seen_live and isinstance(last_seen_live, str):
-                try:
-                    last_seen_live = datetime.fromisoformat(last_seen_live)
-                except ValueError:
-                    last_seen_live = None
-
-            favorites.append(
-                FavoriteChannelInfo(
-                    channel_name=channel_data["channel_name"],
-                    is_live=channel_data.get("is_live", False),
-                    is_pinned=channel_data.get("is_pinned", False),
-                    last_checked=last_checked,
-                    last_seen_live=last_seen_live,
-                )
-            )
+        favorites = [self._record_to_info(data) for data in self.favorites_data.values()]
 
         return sorted(
             favorites,
@@ -258,15 +233,28 @@ class FavoritesManager:
         """Update status information for a favorite channel"""
         normalized = self._normalize_channel(channel_name)
         if normalized and normalized in self.favorites_data:
-            now = datetime.now(timezone.utc)
-
-            self.favorites_data[normalized].update({"is_live": is_live, "last_checked": now})
-
-            # Update last_seen_live if stream is currently live
-            if is_live:
-                self.favorites_data[normalized]["last_seen_live"] = now
-
+            self._apply_channel_status(normalized, is_live)
             self._save_favorites()
+
+    def update_channel_statuses(self, statuses: Dict[str, bool]) -> None:
+        """Update status information for multiple favorite channels in one save."""
+        changed = False
+        for channel_name, is_live in statuses.items():
+            normalized = self._normalize_channel(channel_name)
+            if normalized and normalized in self.favorites_data:
+                self._apply_channel_status(normalized, is_live)
+                changed = True
+        if changed:
+            self._save_favorites()
+
+    def _apply_channel_status(self, normalized: str, is_live: bool) -> None:
+        """Update the in-memory record for an already-normalized, known channel."""
+        now = datetime.now(timezone.utc)
+        self.favorites_data[normalized].update({"is_live": is_live, "last_checked": now})
+
+        # Update last_seen_live if stream is currently live
+        if is_live:
+            self.favorites_data[normalized]["last_seen_live"] = now
 
     def is_favorite(self, channel_name: str) -> bool:
         """Check if a channel is in favorites"""
@@ -277,31 +265,29 @@ class FavoritesManager:
         """Get status information for a specific channel"""
         normalized = self._normalize_channel(channel_name)
         if normalized and normalized in self.favorites_data:
-            channel_data = self.favorites_data[normalized]
-
-            # Parse datetime strings
-            last_checked = channel_data.get("last_checked")
-            if last_checked and isinstance(last_checked, str):
-                try:
-                    last_checked = datetime.fromisoformat(last_checked)
-                except ValueError:
-                    last_checked = None
-
-            last_seen_live = channel_data.get("last_seen_live")
-            if last_seen_live and isinstance(last_seen_live, str):
-                try:
-                    last_seen_live = datetime.fromisoformat(last_seen_live)
-                except ValueError:
-                    last_seen_live = None
-
-            return FavoriteChannelInfo(
-                channel_name=channel_data["channel_name"],
-                is_live=channel_data.get("is_live", False),
-                is_pinned=channel_data.get("is_pinned", False),
-                last_checked=last_checked,
-                last_seen_live=last_seen_live,
-            )
+            return self._record_to_info(self.favorites_data[normalized])
         return None
+
+    def _record_to_info(self, channel_data: Dict) -> FavoriteChannelInfo:
+        """Convert a stored favorites record into a FavoriteChannelInfo."""
+
+        def _parse_datetime(value: object) -> Optional[datetime]:
+            if isinstance(value, str):
+                try:
+                    return datetime.fromisoformat(value)
+                except ValueError:
+                    return None
+            # Not yet serialized to a string (e.g. set in-memory since the
+            # last save/reload) - already a datetime, or absent.
+            return value if isinstance(value, datetime) else None
+
+        return FavoriteChannelInfo(
+            channel_name=channel_data["channel_name"],
+            is_live=channel_data.get("is_live", False),
+            is_pinned=channel_data.get("is_pinned", False),
+            last_checked=_parse_datetime(channel_data.get("last_checked")),
+            last_seen_live=_parse_datetime(channel_data.get("last_seen_live")),
+        )
 
     def toggle_pin(self, channel_name: str) -> bool:
         """Toggle pin status for a channel. Returns new pin state."""

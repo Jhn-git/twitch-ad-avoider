@@ -13,10 +13,6 @@ const EMERGENCY_GAP_SECONDS = 15;
 // minute, but stays slow enough that speech never sounds sped up.
 const CATCHUP_PLAYBACK_RATE = 1.1;
 
-function clampRatio(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
 window.Components.VideoStage = function VideoStage({
   selectedChannel,
   preview,
@@ -66,7 +62,7 @@ window.Components.VideoStage = function VideoStage({
     const bufferedStart = video.buffered.start(0);
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     const span = Math.max(0.001, bufferedEnd - bufferedStart);
-    const ratio = clampRatio((video.currentTime - bufferedStart) / span, 0, 1);
+    const ratio = window.AppHelpers.clampRatio((video.currentTime - bufferedStart) / span, 0, 1);
     if (seekFillRef.current) seekFillRef.current.style.width = `${ratio * 100}%`;
     if (seekThumbRef.current) seekThumbRef.current.style.left = `${ratio * 100}%`;
     // Measured against the true buffered end (what dragging can actually reach),
@@ -194,7 +190,7 @@ window.Components.VideoStage = function VideoStage({
     if (!track || !video || !video.buffered || !video.buffered.length) return;
     const rect = track.getBoundingClientRect();
     if (rect.width <= 0) return;
-    const ratio = clampRatio((evt.clientX - rect.left) / rect.width, 0, 1);
+    const ratio = window.AppHelpers.clampRatio((evt.clientX - rect.left) / rect.width, 0, 1);
     const bufferedStart = video.buffered.start(0);
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     video.currentTime = bufferedStart + ratio * (bufferedEnd - bufferedStart);
@@ -267,7 +263,7 @@ window.Components.VideoStage = function VideoStage({
     if (!track || !video || !segmentsIndex || !segmentsIndex.segments.length) return;
     const rect = track.getBoundingClientRect();
     if (rect.width <= 0) return;
-    const ratio = clampRatio((evt.clientX - rect.left) / rect.width, 0, 1);
+    const ratio = window.AppHelpers.clampRatio((evt.clientX - rect.left) / rect.width, 0, 1);
     const bounds = window.AppHelpers.computeTimelineBounds(segmentsIndex);
     const target = window.AppHelpers.ratioToTimestamp(ratio, bounds);
     const segment = window.AppHelpers.findSegmentAt(segmentsIndex, target);
@@ -299,7 +295,7 @@ window.Components.VideoStage = function VideoStage({
       });
       return;
     }
-    video.currentTime = clampRatio(desiredTime, bufferedStart, bufferedEnd);
+    video.currentTime = window.AppHelpers.clampRatio(desiredTime, bufferedStart, bufferedEnd);
     userSeekedRef.current = true;
     updateSeekVisuals(video);
   };

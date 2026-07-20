@@ -45,9 +45,8 @@ window.Components.StreamManager = function StreamManager({
       if (timer) window.clearTimeout(timer);
     };
   }, [autoCollapseEnabled, isWatching]);
-  const [quality, setQuality] = React.useState(
-    state.stream?.quality || state.settings.preferred_quality || state.launch_quality || "best"
-  );
+  const quality =
+    state.stream?.quality || state.settings.preferred_quality || state.launch_quality || "best";
 
   const [segmentsIndex, setSegmentsIndex] = React.useState(null);
   const streamActive = Boolean(state.stream?.active);
@@ -158,6 +157,19 @@ window.Components.StreamManager = function StreamManager({
     });
   }, [api, state.favorites]);
 
+  // Runs an api.* call, always toasting on failure (result.ok === false)
+  // instead of leaving individual call sites to remember to do it themselves.
+  const runApiAction = (promise, { errorMessage, onSuccess, onError } = {}) => {
+    promise.then((result) => {
+      if (!result.ok) {
+        onToast({ kind: "error", message: result.error || errorMessage || "Action failed" });
+        onError?.(result);
+        return;
+      }
+      onSuccess?.(result);
+    });
+  };
+
   const selectChannel = (channel, startAfterSelect = false) => {
     const requestId = previewRequestRef.current + 1;
     previewRequestRef.current = requestId;
@@ -166,88 +178,83 @@ window.Components.StreamManager = function StreamManager({
       : basicPreviewForChannel(channel);
     onState({ selected_channel: channel, preview: optimisticPreview });
 
-    api.select_channel(channel).then((result) => {
-      if (!result.ok) {
-        onToast({ kind: "error", message: result.error || "Channel select failed" });
-        return;
-      }
-      onState((current) => {
-        if (!current || current.selected_channel !== channel) return current;
-        return {
-          ...current,
-          selected_channel: result.selected_channel,
-          preview: result.preview || optimisticPreview,
-        };
-      });
-      fetchSelectedPreview(result.selected_channel, requestId);
-      if (startAfterSelect) startStream(result.selected_channel);
+    runApiAction(api.select_channel(channel), {
+      errorMessage: "Channel select failed",
+      onSuccess: (result) => {
+        onState((current) => {
+          if (!current || current.selected_channel !== channel) return current;
+          return {
+            ...current,
+            selected_channel: result.selected_channel,
+            preview: result.preview || optimisticPreview,
+          };
+        });
+        fetchSelectedPreview(result.selected_channel, requestId);
+        if (startAfterSelect) startStream(result.selected_channel);
+      },
     });
   };
 
   const startStream = (channel = selectedChannel) => {
     if (!channel) return;
-    api.start_stream(channel, quality).then((result) => {
-      if (!result.ok) {
-        onToast({ kind: "error", message: result.error || "Stream failed" });
+    runApiAction(api.start_stream(channel, quality), {
+      errorMessage: "Stream failed",
+      onError: (result) => {
         if (result.stream) onState({ stream: result.stream });
-        return;
-      }
-      onState({ stream: result.stream, selected_channel: result.stream.channel || channel });
+      },
+      onSuccess: (result) => {
+        onState({ stream: result.stream, selected_channel: result.stream.channel || channel });
+      },
     });
   };
 
   const stopStream = () => {
-    api.stop_stream().then((result) => {
-      if (result.ok) onState({ stream: result.stream });
+    runApiAction(api.stop_stream(), {
+      errorMessage: "Stop stream failed",
+      onSuccess: (result) => onState({ stream: result.stream }),
     });
   };
 
   const refreshFavorites = () => {
-    api.refresh_favorites().then((result) => {
-      if (result.ok) {
-        onState({ favorites: result.favorites });
-      } else {
-        onToast({ kind: "error", message: result.error || "Favorites refresh failed" });
-      }
+    runApiAction(api.refresh_favorites(), {
+      errorMessage: "Favorites refresh failed",
+      onSuccess: (result) => onState({ favorites: result.favorites }),
     });
   };
 
   const addFavorite = () => {
     const channel = window.prompt("Channel name");
     if (!channel) return;
-    api.add_favorite(channel).then((result) => {
-      if (!result.ok) {
-        onToast({ kind: "error", message: result.error || "Favorite not added" });
-        return;
-      }
-      onState({ favorites: result.favorites });
+    runApiAction(api.add_favorite(channel), {
+      errorMessage: "Favorite not added",
+      onSuccess: (result) => onState({ favorites: result.favorites }),
     });
   };
 
   const removeFavorite = (channel) => {
-    api.remove_favorite(channel).then((result) => {
-      if (result.ok) {
-        onState({
-          favorites: result.favorites,
-          selected_channel: result.selected_channel,
-          preview: result.selected_channel ? state.preview : null,
-        });
-      }
+    runApiAction(api.remove_favorite(channel), {
+      errorMessage: "Failed to remove favorite",
+      onSuccess: (result) => onState({
+        favorites: result.favorites,
+        selected_channel: result.selected_channel,
+        preview: result.selected_channel ? state.preview : null,
+      }),
     });
   };
 
   const togglePin = (channel) => {
-    api.toggle_pin(channel).then((result) => {
-      if (result.ok) onState({ favorites: result.favorites });
+    runApiAction(api.toggle_pin(channel), {
+      errorMessage: "Failed to update pin",
+      onSuccess: (result) => onState({ favorites: result.favorites }),
     });
   };
 
   const changeQuality = (nextQuality) => {
-    setQuality(nextQuality);
     const nextSettings = { ...state.settings, preferred_quality: nextQuality };
     onState({ settings: nextSettings });
-    api.save_settings(nextSettings).then((result) => {
-      if (result.ok) onState({ settings: result.settings });
+    runApiAction(api.save_settings(nextSettings), {
+      errorMessage: "Failed to save quality setting",
+      onSuccess: (result) => onState({ settings: result.settings }),
     });
   };
 
@@ -256,10 +263,8 @@ window.Components.StreamManager = function StreamManager({
   };
 
   const createClip = (behindLiveSeconds = 0) => {
-    api.create_clip(clipDuration, behindLiveSeconds).then((result) => {
-      if (!result.ok) {
-        onToast({ kind: "error", message: result.error || "Clip failed" });
-      }
+    runApiAction(api.create_clip(clipDuration, behindLiveSeconds), {
+      errorMessage: "Clip failed",
     });
   };
 

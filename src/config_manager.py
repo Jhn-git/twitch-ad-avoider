@@ -82,6 +82,7 @@ class ConfigManager:
         """
         self.config_path = config_path or CONFIG_FILE
         self._settings: Dict[str, Any] = {}
+        self._validators = self._setting_validators()
         self.load_settings()
 
     def load_settings(self) -> Dict[str, Any]:
@@ -482,7 +483,7 @@ class ConfigManager:
             True if setting is valid, False otherwise
         """
         try:
-            validator = self._setting_validators().get(key)
+            validator = self._validators.get(key)
             if key not in _KNOWN_SETTINGS or validator is None:
                 raise ValidationError(f"Unknown setting key: {key}")
             validator(value)

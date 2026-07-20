@@ -6,14 +6,15 @@ import subprocess
 import shutil
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_related_project_name_is_absent_from_repo_content():
-    root = Path(__file__).resolve().parents[1]
     pattern = "ka" + "tch|Ka" + "tch"
 
     result = subprocess.run(
         ["rg", "-n", pattern, "."],
-        cwd=root,
+        cwd=ROOT,
         text=True,
         capture_output=True,
     )
@@ -22,8 +23,7 @@ def test_related_project_name_is_absent_from_repo_content():
 
 
 def test_make_check_is_non_mutating():
-    root = Path(__file__).resolve().parents[1]
-    makefile = (root / "Makefile").read_text()
+    makefile = (ROOT / "Makefile").read_text()
 
     assert "format-check:" in makefile
     assert "$(PYTHON) -m black --check ." in makefile
@@ -32,11 +32,10 @@ def test_make_check_is_non_mutating():
 
 
 def test_root_guide_files_are_local_only():
-    root = Path(__file__).resolve().parents[1]
 
     result = subprocess.run(
         ["git", "check-ignore", "AGENTS.md", "CLAUDE.md", "TODO.md"],
-        cwd=root,
+        cwd=ROOT,
         text=True,
         capture_output=True,
     )
@@ -46,11 +45,10 @@ def test_root_guide_files_are_local_only():
 
 
 def test_project_scripts_do_not_run_git_clean():
-    root = Path(__file__).resolve().parents[1]
     checked_paths = [
-        root / "Makefile",
-        *sorted((root / "scripts").glob("*.ps1")),
-        *sorted((root / "scripts").glob("*.py")),
+        ROOT / "Makefile",
+        *sorted((ROOT / "scripts").glob("*.ps1")),
+        *sorted((ROOT / "scripts").glob("*.py")),
     ]
 
     for path in checked_paths:
@@ -59,8 +57,7 @@ def test_project_scripts_do_not_run_git_clean():
 
 
 def test_pyinstaller_spec_does_not_bundle_local_config():
-    root = Path(__file__).resolve().parents[1]
-    spec = (root / "scripts" / "twitchadavoider.spec").read_text()
+    spec = (ROOT / "scripts" / "twitchadavoider.spec").read_text()
 
     assert 'os.path.join(ROOT, "config")' not in spec
     assert '"PyQt5"' not in spec
@@ -69,13 +66,12 @@ def test_pyinstaller_spec_does_not_bundle_local_config():
 
 
 def test_powershell_scripts_are_ascii_safe():
-    root = Path(__file__).resolve().parents[1]
     script_paths = [
-        root / "scripts" / "run.ps1",
-        root / "scripts" / "update-daily-exe.ps1",
-        root / "scripts" / "build.ps1",
-        root / "scripts" / "release.ps1",
-        root / "scripts" / "TwitchUtilities.psm1",
+        ROOT / "scripts" / "run.ps1",
+        ROOT / "scripts" / "update-daily-exe.ps1",
+        ROOT / "scripts" / "build.ps1",
+        ROOT / "scripts" / "release.ps1",
+        ROOT / "scripts" / "TwitchUtilities.psm1",
     ]
 
     for script_path in script_paths:
@@ -87,13 +83,12 @@ def test_powershell_scripts_parse_when_powershell_is_available():
     if powershell is None:
         return
 
-    root = Path(__file__).resolve().parents[1]
     script_paths = [
-        root / "scripts" / "run.ps1",
-        root / "scripts" / "update-daily-exe.ps1",
-        root / "scripts" / "build.ps1",
-        root / "scripts" / "release.ps1",
-        root / "scripts" / "TwitchUtilities.psm1",
+        ROOT / "scripts" / "run.ps1",
+        ROOT / "scripts" / "update-daily-exe.ps1",
+        ROOT / "scripts" / "build.ps1",
+        ROOT / "scripts" / "release.ps1",
+        ROOT / "scripts" / "TwitchUtilities.psm1",
     ]
 
     paths_json = json.dumps([str(path) for path in script_paths])
@@ -120,7 +115,7 @@ def test_powershell_scripts_parse_when_powershell_is_available():
 
     result = subprocess.run(
         [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded_script],
-        cwd=root,
+        cwd=ROOT,
         text=True,
         capture_output=True,
         timeout=20,

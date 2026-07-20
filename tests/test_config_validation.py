@@ -1,26 +1,14 @@
 """Tests for ConfigManager validation and legacy setting migration."""
 
 import json
-import os
-import tempfile
 import unittest
-from pathlib import Path
 
+from conftest import ConfigManagerTestCase
 from src.config_manager import ConfigManager
 from src.constants import DEFAULT_SETTINGS
 
 
-class TestConfigManagerValidation(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.config_path = Path(self.temp_dir) / "test_settings.json"
-        self.config = ConfigManager(self.config_path)
-
-    def tearDown(self):
-        if self.config_path.exists():
-            self.config_path.unlink()
-        os.rmdir(self.temp_dir)
-
+class TestConfigManagerValidation(ConfigManagerTestCase):
     def test_defaults_are_the_clean_web_schema(self):
         settings = self.config.get_all()
 
@@ -101,26 +89,14 @@ class TestConfigManagerValidation(unittest.TestCase):
         for quality in ("1080p", "4k", "ultra", "", None):
             self.assertFalse(self.config.set("preferred_quality", quality))
 
-    def test_numeric_range_validation(self):
-        for timeout in (10, 30, 120):
-            self.assertTrue(self.config.set("network_timeout", timeout))
-        for timeout in (9, 121, "30", None):
-            self.assertFalse(self.config.set("network_timeout", timeout))
-
+    def test_hls_live_edge_range_validation(self):
+        # network_timeout/connection_retry_attempts/retry_delay range validation
+        # lives in test_network_config.py; hls_live_edge is the one numeric
+        # range setting that isn't a network setting.
         for edge in (1, 3, 10):
             self.assertTrue(self.config.set("hls_live_edge", edge))
         for edge in (0, 11, "3", None):
             self.assertFalse(self.config.set("hls_live_edge", edge))
-
-        for attempts in (1, 3, 10):
-            self.assertTrue(self.config.set("connection_retry_attempts", attempts))
-        for attempts in (0, 11, "3", None):
-            self.assertFalse(self.config.set("connection_retry_attempts", attempts))
-
-        for delay in (1, 5, 30):
-            self.assertTrue(self.config.set("retry_delay", delay))
-        for delay in (0, 31, "5", None):
-            self.assertFalse(self.config.set("retry_delay", delay))
 
     def test_boolean_validation(self):
         boolean_settings = [

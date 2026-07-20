@@ -1,6 +1,10 @@
 window.AppHelpers = {
   _soundCache: {},
 
+  clampRatio(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  },
+
   playSound(relativePath) {
     let audio = this._soundCache[relativePath];
     if (!audio) {
@@ -57,12 +61,12 @@ window.AppHelpers = {
   timestampToRatio(date, bounds) {
     const span = bounds.end.getTime() - bounds.start.getTime();
     if (span <= 0) return 1;
-    return Math.min(1, Math.max(0, (date.getTime() - bounds.start.getTime()) / span));
+    return this.clampRatio((date.getTime() - bounds.start.getTime()) / span, 0, 1);
   },
 
   ratioToTimestamp(ratio, bounds) {
     const span = bounds.end.getTime() - bounds.start.getTime();
-    const clamped = Math.min(1, Math.max(0, ratio));
+    const clamped = this.clampRatio(ratio, 0, 1);
     return new Date(bounds.start.getTime() + clamped * span);
   },
 
