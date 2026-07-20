@@ -10,11 +10,12 @@ ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 ICON_PATH = os.path.join(ROOT, "assets", "twitch-cartoon-logo.ico")
 
 
-def collect_tree(source, destination):
+def collect_tree(source, destination, skip_dirs=()):
     entries = []
     if not os.path.isdir(source):
         return entries
-    for root, _dirs, files in os.walk(source):
+    for root, dirs, files in os.walk(source):
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
         for file_name in files:
             file_path = os.path.join(root, file_name)
             rel_dir = os.path.relpath(root, source)
@@ -24,7 +25,7 @@ def collect_tree(source, destination):
 
 
 datas = []
-datas.extend(collect_tree(os.path.join(ROOT, "gui_web"), "gui_web"))
+datas.extend(collect_tree(os.path.join(ROOT, "gui_web"), "gui_web", skip_dirs=("demo-assets",)))
 datas.extend(collect_tree(os.path.join(ROOT, "assets"), "assets"))
 
 hiddenimports = [

@@ -47,6 +47,7 @@ Ordered by priority. Not started unless noted.
 
 ## Backlog
 
+- Polish the merged scrub bar's visuals (`gui_web/components/video_stage.jsx` / `.scrub-*` CSS in `gui_web/index.html`). User feedback 2026-07-19 after the seek-bar/day-timeline merge: "it appears to be working but it looks a little bad." Functionally correct (see `session-notes/session-27-merged-scrub-bar-and-demo-harness.md`) - this is purely a visual-treatment pass, no specifics requested yet.
 - Viewer count and game/category in the preview metadata.
 - Browse/search live channels or categories.
 - Real Twitch following import instead of hand-typed favorites.
@@ -57,5 +58,6 @@ Ordered by priority. Not started unless noted.
 
 ## Recently Completed
 
+- 2026-07-19: Merged the live seek bar and the day-timeline recording-history strip into one bar (user felt the two stacked green bars were redundant). The merged `.scrub-track` shows the whole session's segments (past/current/gaps) with a highlighted `.scrub-live-window` overlay marking the actually-scrubbable buffered range, floored to a minimum width so it stays draggable on long sessions. Also fixed the browser-only demo harness (`?demo` mode) so it can actually exercise this: `scripts/run_demo_server.py` now generates a small local HLS test clip via ffmpeg on first run, and `demoApi()` points `playback_url`/`get_recording_segments` at it, giving demo mode a real playable stream instead of an always-empty player. User feedback after seeing it working: "it appears to be working but it looks a little bad" - functionally correct, visual polish is a separate backlog item (see Backlog above). See `session-notes/session-27-merged-scrub-bar-and-demo-harness.md`.
 - 2026-07-19: Fixed stream start landing too far behind live. Root cause was two-fold: nothing re-synced to live on startup (fixed with a client-side auto-catch-up mechanism, capped at a barely-perceptible 1.1x speed instead of a jarring hard seek), and the playback path was never actually using Twitch's low-latency stream data in the first place (fixed by recognizing and rewriting Twitch's prefetch segments in the manifest proxy). User confirmed live: "that is working much better." See `session-notes/session-25-stream-latency-autocatchup-and-prefetch-segments.md`.
 - 2026-07-18: Clip split-button styling, clip-duration dropdown flip-up behavior, and duplicate "Clip saved" toast were fixed. See `session-notes/session-24-clip-split-button-and-toast-fixes.md`.

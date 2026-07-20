@@ -42,6 +42,7 @@ window.Components.VideoStage = function VideoStage({
   const segmentsIndexRef = React.useRef(segmentsIndex);
   const timelineBoundsRef = React.useRef(null);
   const [isLive, setIsLive] = React.useState(true);
+  const [theaterMode, setTheaterMode] = React.useState(false);
   const playbackUrl = stream?.playback_url;
   const previewImageUrl = preview?.preview_image_url;
   const [previewImageFailed, setPreviewImageFailed] = React.useState(false);
@@ -274,6 +275,26 @@ window.Components.VideoStage = function VideoStage({
     syncToLiveEdge(video);
   };
 
+  // Keeps the OS window's real fullscreen state (title bar, Windows taskbar)
+  // in lockstep with theaterMode - toggle_fullscreen() flips, so this must be
+  // called exactly once per theaterMode transition, from both the button and
+  // the Escape handler, never independently.
+  const setTheaterState = React.useCallback((next) => {
+    setTheaterMode(next);
+    window.pywebview?.api?.toggle_fullscreen?.()?.catch?.(() => {});
+  }, []);
+
+  const toggleTheaterMode = () => setTheaterState(!theaterMode);
+
+  React.useEffect(() => {
+    if (!theaterMode) return undefined;
+    const handleKeyDown = (evt) => {
+      if (evt.key === "Escape") setTheaterState(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [theaterMode, setTheaterState]);
+
   const handleClip = () => {
     const video = videoRef.current;
     let behindLiveSeconds = 0;
@@ -356,11 +377,13 @@ window.Components.VideoStage = function VideoStage({
   const title = window.AppHelpers.titleForPreview(preview);
 
   return (
-    <main className="stage">
-      <div className="channel-meta">
-        <h1 className="channel-name">{selectedChannel || "No channel selected"}</h1>
-        <div className="channel-title">{title}</div>
-      </div>
+    <main className={`stage ${theaterMode ? "theater-mode" : ""}`}>
+      {!theaterMode && (
+        <div className="channel-meta">
+          <h1 className="channel-name">{selectedChannel || "No channel selected"}</h1>
+          <div className="channel-title">{title}</div>
+        </div>
+      )}
 
       <section className="player-shell">
         {live && (
@@ -368,6 +391,13 @@ window.Components.VideoStage = function VideoStage({
             <span className="live-dot" /> LIVE
           </div>
         )}
+        <button
+          className="theater-toggle"
+          onClick={toggleTheaterMode}
+          title={theaterMode ? "Exit maximized view" : "Maximize"}
+        >
+          <Icon name={theaterMode ? "minimize" : "maximize"} />
+        </button>
         {hasPlayback ? (
           <video ref={videoRef} controls playsInline />
         ) : showPreviewImage ? (
@@ -382,7 +412,7 @@ window.Components.VideoStage = function VideoStage({
         )}
       </section>
 
-      {hasPlayback && (
+      {hasPlayback && !theaterMode && (
         <div className="scrub-row">
           <div className="scrub-track" ref={scrubTrackRef} onClick={handleDayTimelineClick}>
             {dayTimelineBands.map((band) => (
@@ -411,31 +441,33 @@ window.Components.VideoStage = function VideoStage({
         </div>
       )}
 
-      <div className="stage-actions">
-        <span className="clip-split">
-          <button
-            className="btn primary"
-            disabled={!clipReady}
-            onClick={handleClip}
-            title={clipWarmupReason}
-          >
-            <Icon name="scissors" />
-            Clip ({window.AppHelpers.durationLabel(clipDuration)})
+      {!theaterMode && (
+        <div className="stage-actions">
+          <span className="clip-split">
+            <button
+              className="btn primary"
+              disabled={!clipReady}
+              onClick={handleClip}
+              title={clipWarmupReason}
+            >
+              <Icon name="scissors" />
+              Clip ({window.AppHelpers.durationLabel(clipDuration)})
+            </button>
+            <Dropdown
+              title="Clip duration"
+              value={clipDuration}
+              options={clipOptions}
+              onChange={(seconds) => onClipDuration(Number(seconds))}
+              className="clip-duration-dropdown"
+              buttonClassName="clip-menu-button"
+              renderValue={() => ""}
+            />
+          </span>
+          <button className="btn" onClick={onOpenClips}>
+            <Icon name="folder" /> Open Clips Folder
           </button>
-          <Dropdown
-            title="Clip duration"
-            value={clipDuration}
-            options={clipOptions}
-            onChange={(seconds) => onClipDuration(Number(seconds))}
-            className="clip-duration-dropdown"
-            buttonClassName="clip-menu-button"
-            renderValue={() => ""}
-          />
-        </span>
-        <button className="btn" onClick={onOpenClips}>
-          <Icon name="folder" /> Open Clips Folder
-        </button>
-      </div>
+        </div>
+      )}
     </main>
   );
 };

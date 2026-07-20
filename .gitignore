@@ -48,6 +48,10 @@ config/settings.json
 config/favorites.json
 temp/
 
+# Generated demo/test fixture (scripts/run_demo_server.py builds this on
+# first run; never shipped or committed)
+gui_web/demo-assets/
+
 # Logs
 *.log
 

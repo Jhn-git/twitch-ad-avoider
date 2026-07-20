@@ -57,6 +57,12 @@ class TwitchViewerAPI:
     def set_window(self, window) -> None:
         self._window = window
 
+    def toggle_fullscreen(self) -> dict:
+        if not self._window:
+            return {"ok": False, "error": "Window not ready"}
+        self._window.toggle_fullscreen()
+        return {"ok": True}
+
     def shutdown(self) -> None:
         # Runs synchronously on the UI thread via window.events.closing. Must be set
         # before stopping the stream service, since stop()/_add_activity() still push
