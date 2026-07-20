@@ -339,32 +339,51 @@
     border-radius: 50%;
     background: var(--accent);
   }
-  .seek-row {
+  .scrub-row {
     width: var(--stage-content-width);
     display: flex;
     align-items: center;
     gap: 12px;
     margin-top: 14px;
   }
-  .seek-track {
+  .scrub-track {
     flex: 1;
     position: relative;
-    height: 16px;
+    height: 12px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-2);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  /* One band per recorded segment, scaled across the whole session
+     (stream start -> now), same data the old standalone day-timeline used. */
+  .scrub-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--ink-4);
+    pointer-events: none;
+  }
+  .scrub-segment.is-current {
+    background: var(--accent-soft);
+  }
+  /* The sub-range of the segment above that's actually buffered and
+     scrubbable right now - rendered solid so it visually pops out of the
+     muted is-current band behind it. */
+  .scrub-live-window {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0%;
+    width: 100%;
     display: flex;
     align-items: center;
+    background: var(--accent);
     cursor: pointer;
     touch-action: none;
   }
-  .seek-track::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--line-2);
-  }
-  .seek-fill {
+  .scrub-fill {
     position: absolute;
     left: 0;
     top: 50%;
@@ -372,17 +391,18 @@
     height: 4px;
     width: 0%;
     border-radius: 2px;
-    background: var(--accent);
+    background: #06130b;
+    opacity: 0.35;
     pointer-events: none;
   }
-  .seek-thumb {
+  .scrub-thumb {
     position: absolute;
     left: 0%;
     top: 50%;
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--ink);
     transform: translate(-50%, -50%);
     box-shadow: 0 1px 4px var(--shadow);
     pointer-events: none;
@@ -398,27 +418,6 @@
   }
   .go-live-btn:not(.is-live):hover {
     background: #27d878;
-  }
-  .day-timeline {
-    width: var(--stage-content-width);
-    position: relative;
-    height: 10px;
-    margin-top: 6px;
-    border-radius: 4px;
-    background: var(--panel-2);
-    border: 1px solid var(--line-2);
-    cursor: pointer;
-    overflow: hidden;
-  }
-  .day-timeline-segment {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    background: var(--ink-4);
-    pointer-events: none;
-  }
-  .day-timeline-segment.is-current {
-    background: var(--accent);
   }
   .stage-actions {
     display: flex;

@@ -57,7 +57,7 @@ Two of my own refactors broke something, both caught by the test suite before an
 1. **Commit today's changes.** Nothing committed yet, by design.
 2. **The one skipped frontend fix** (parallelizing `select_channel`/`get_preview`) — deliberately not applied; see reasoning above. Not worth revisiting unless `select_channel` itself becomes network-bound in the future (it currently isn't).
 3. **Carried over from session 25, still open** (not touched this session, just flagging so they aren't lost):
-   - `TODO.md` item 1 ("Fix stream start landing too far behind live") is functionally resolved by session 25's work but the file itself still lists it as open — needs a pass to move it to "Recently Completed".
+   - ~~`TODO.md` item 1 ("Fix stream start landing too far behind live") is functionally resolved by session 25's work but the file itself still lists it as open — needs a pass to move it to "Recently Completed".~~ **Done** (same session, after the user asked to make sure docs like this stay in sync): moved to `TODO.md`'s "Recently Completed" section, remaining items renumbered.
    - Whether Twitch low-latency prefetch segments are actually being delivered on any real channel the user watches is still unconfirmed (would need temporary logging in `_rewrite_playlist`).
    - The ad-filtering contradiction from session 25 (no ad-filtering code exists on the playback path, yet the user reports never seeing ads) is still unresolved.
 4. **Demo-mode validation-error display path** wasn't independently browser-verified this session (see Verification note above) — low risk since it's covered by Python unit tests, but worth keeping in mind if a debounce-related UI bug ever gets reported.

@@ -12,6 +12,10 @@ const EMERGENCY_GAP_SECONDS = 15;
 // Deliberately mild: closes a few seconds of drift within well under a
 // minute, but stays slow enough that speech never sounds sped up.
 const CATCHUP_PLAYBACK_RATE = 1.1;
+// Floor for the live-buffer highlight's width within the session-scaled scrub
+// track, so it stays comfortably draggable even once the session has run long
+// enough that the real buffered window is a tiny sliver of the whole session.
+const MIN_LIVE_WINDOW_PCT = 10;
 
 window.Components.VideoStage = function VideoStage({
   selectedChannel,
@@ -28,13 +32,15 @@ window.Components.VideoStage = function VideoStage({
   const Dropdown = window.Components.Dropdown;
   const videoRef = React.useRef(null);
   const hlsRef = React.useRef(null);
-  const seekTrackRef = React.useRef(null);
-  const seekFillRef = React.useRef(null);
-  const seekThumbRef = React.useRef(null);
-  const dayTimelineRef = React.useRef(null);
+  const scrubTrackRef = React.useRef(null);
+  const liveWindowRef = React.useRef(null);
+  const scrubFillRef = React.useRef(null);
+  const scrubThumbRef = React.useRef(null);
   const draggingRef = React.useRef(false);
   const isLiveRef = React.useRef(true);
   const userSeekedRef = React.useRef(false);
+  const segmentsIndexRef = React.useRef(segmentsIndex);
+  const timelineBoundsRef = React.useRef(null);
   const [isLive, setIsLive] = React.useState(true);
   const playbackUrl = stream?.playback_url;
   const previewImageUrl = preview?.preview_image_url;
@@ -57,14 +63,57 @@ window.Components.VideoStage = function VideoStage({
     setPreviewImageFailed(false);
   }, [previewImageUrl]);
 
+  // Session bounds (stream start -> now), shared by the segment background
+  // bands and the live-buffer highlight below so both agree on the same scale.
+  const timelineBounds = React.useMemo(() => {
+    if (!segmentsIndex || !segmentsIndex.segments || !segmentsIndex.segments.length) return null;
+    return window.AppHelpers.computeTimelineBounds(segmentsIndex);
+  }, [segmentsIndex]);
+
+  // Read via refs inside updateSeekVisuals (rather than as a dependency) so
+  // segmentsIndex refreshing doesn't change updateSeekVisuals's identity and
+  // re-trigger the hls attach effect below.
+  React.useEffect(() => {
+    segmentsIndexRef.current = segmentsIndex;
+  }, [segmentsIndex]);
+  React.useEffect(() => {
+    timelineBoundsRef.current = timelineBounds;
+  }, [timelineBounds]);
+
   const updateSeekVisuals = React.useCallback((video) => {
     if (!video.buffered || !video.buffered.length) return;
     const bufferedStart = video.buffered.start(0);
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     const span = Math.max(0.001, bufferedEnd - bufferedStart);
+
+    // Position the live-buffer highlight within the session-scaled track by
+    // converting the buffered range to wall-clock time (video.currentTime
+    // advances 1:1 with wall-clock time on a live source) and reusing the
+    // same bounds/ratio math as the day-timeline segments. Falls back to a
+    // full-width highlight when there's no session data yet.
+    const bounds = timelineBoundsRef.current;
+    const segmentsIndexNow = segmentsIndexRef.current;
+    let liveLeftPct = 0;
+    let liveWidthPct = 100;
+    if (bounds && segmentsIndexNow) {
+      const nowMs = segmentsIndexNow.now ? new Date(segmentsIndexNow.now).getTime() : Date.now();
+      const bufferedStartWall = new Date(nowMs - (bufferedEnd - bufferedStart) * 1000);
+      const rawLeft = window.AppHelpers.timestampToRatio(bufferedStartWall, bounds) * 100;
+      // Never let the highlight shrink below MIN_LIVE_WINDOW_PCT, anchored to
+      // the live (right) edge - once the session runs long relative to the
+      // buffer window this is no longer strictly proportional, but it stays
+      // draggable instead of collapsing to an unusable sliver.
+      liveLeftPct = Math.min(rawLeft, 100 - MIN_LIVE_WINDOW_PCT);
+      liveWidthPct = 100 - liveLeftPct;
+    }
+    if (liveWindowRef.current) {
+      liveWindowRef.current.style.left = `${liveLeftPct}%`;
+      liveWindowRef.current.style.width = `${liveWidthPct}%`;
+    }
+
     const ratio = window.AppHelpers.clampRatio((video.currentTime - bufferedStart) / span, 0, 1);
-    if (seekFillRef.current) seekFillRef.current.style.width = `${ratio * 100}%`;
-    if (seekThumbRef.current) seekThumbRef.current.style.left = `${ratio * 100}%`;
+    if (scrubFillRef.current) scrubFillRef.current.style.width = `${ratio * 100}%`;
+    if (scrubThumbRef.current) scrubThumbRef.current.style.left = `${ratio * 100}%`;
     // Measured against the true buffered end (what dragging can actually reach),
     // not hls.js's own conservative liveSyncPosition target - for this stream's
     // segment cadence that target sits far enough behind the real edge that
@@ -185,7 +234,7 @@ window.Components.VideoStage = function VideoStage({
   }, [playbackUrl, updateSeekVisuals, maybeAutoCatchUp]);
 
   const seekFromEvent = (evt) => {
-    const track = seekTrackRef.current;
+    const track = liveWindowRef.current;
     const video = videoRef.current;
     if (!track || !video || !video.buffered || !video.buffered.length) return;
     const rect = track.getBoundingClientRect();
@@ -239,15 +288,14 @@ window.Components.VideoStage = function VideoStage({
   // gaps between them, e.g. from closing and reopening the app) across the
   // whole stream's timeline, not just what hls.js still has buffered.
   const dayTimelineBands = React.useMemo(() => {
-    if (!segmentsIndex || !segmentsIndex.segments || !segmentsIndex.segments.length) return [];
-    const bounds = window.AppHelpers.computeTimelineBounds(segmentsIndex);
+    if (!segmentsIndex || !segmentsIndex.segments || !segmentsIndex.segments.length || !timelineBounds) return [];
     const now = segmentsIndex.now ? new Date(segmentsIndex.now) : new Date();
     const currentId = window.AppHelpers.currentSegment(segmentsIndex)?.id;
     return segmentsIndex.segments.map((segment) => {
       const start = new Date(segment.start);
       const end = segment.end ? new Date(segment.end) : now;
-      const leftPct = window.AppHelpers.timestampToRatio(start, bounds) * 100;
-      const rightPct = window.AppHelpers.timestampToRatio(end, bounds) * 100;
+      const leftPct = window.AppHelpers.timestampToRatio(start, timelineBounds) * 100;
+      const rightPct = window.AppHelpers.timestampToRatio(end, timelineBounds) * 100;
       return {
         key: segment.id,
         leftPct,
@@ -255,10 +303,10 @@ window.Components.VideoStage = function VideoStage({
         isCurrent: segment.id === currentId,
       };
     });
-  }, [segmentsIndex]);
+  }, [segmentsIndex, timelineBounds]);
 
   const handleDayTimelineClick = (evt) => {
-    const track = dayTimelineRef.current;
+    const track = scrubTrackRef.current;
     const video = videoRef.current;
     if (!track || !video || !segmentsIndex || !segmentsIndex.segments.length) return;
     const rect = track.getBoundingClientRect();
@@ -335,33 +383,31 @@ window.Components.VideoStage = function VideoStage({
       </section>
 
       {hasPlayback && (
-        <div className="seek-row">
-          <div
-            className="seek-track"
-            ref={seekTrackRef}
-            onPointerDown={handleSeekPointerDown}
-            onPointerMove={handleSeekPointerMove}
-            onPointerUp={handleSeekPointerUp}
-            onPointerCancel={handleSeekPointerUp}
-          >
-            <div className="seek-fill" ref={seekFillRef} />
-            <div className="seek-thumb" ref={seekThumbRef} />
+        <div className="scrub-row">
+          <div className="scrub-track" ref={scrubTrackRef} onClick={handleDayTimelineClick}>
+            {dayTimelineBands.map((band) => (
+              <div
+                key={band.key}
+                className={`scrub-segment ${band.isCurrent ? "is-current" : "is-past"}`}
+                style={{ left: `${band.leftPct}%`, width: `${band.widthPct}%` }}
+              />
+            ))}
+            <div
+              className="scrub-live-window"
+              ref={liveWindowRef}
+              onClick={(evt) => evt.stopPropagation()}
+              onPointerDown={handleSeekPointerDown}
+              onPointerMove={handleSeekPointerMove}
+              onPointerUp={handleSeekPointerUp}
+              onPointerCancel={handleSeekPointerUp}
+            >
+              <div className="scrub-fill" ref={scrubFillRef} />
+              <div className="scrub-thumb" ref={scrubThumbRef} />
+            </div>
           </div>
           <button className={`btn go-live-btn ${isLive ? "is-live" : ""}`} disabled={isLive} onClick={goLive}>
             <Icon name="skipToLive" /> Go Live
           </button>
-        </div>
-      )}
-
-      {hasPlayback && dayTimelineBands.length > 0 && (
-        <div className="day-timeline" ref={dayTimelineRef} onClick={handleDayTimelineClick}>
-          {dayTimelineBands.map((band) => (
-            <div
-              key={band.key}
-              className={`day-timeline-segment ${band.isCurrent ? "is-current" : "is-past"}`}
-              style={{ left: `${band.leftPct}%`, width: `${band.widthPct}%` }}
-            />
-          ))}
         </div>
       )}
 
