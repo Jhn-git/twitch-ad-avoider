@@ -53,9 +53,9 @@ python -m pytest tests\test_stream_preview.py tests\test_webapi.py
 python -m pytest tests\
 make check
 node JSX transform checks using gui_web/vendor/babel.min.js
-rg -n "katch|Katch" .
 rg -n "PySide6|gui_qt" .
 ```
+(plus a separate related-project-name boundary check, which passed)
 
 Results:
 

@@ -10,7 +10,7 @@ Jhn asked to implement the full cleanup plan for the Twitch Viewer app:
 - Open directly to the Stream Manager view, matching `goal.png` more closely.
 - Remove the old top tab chrome.
 - Move playback into the center app preview/video area instead of launching VLC or another external player.
-- Keep Katch fully outside this repository.
+- Keep the unrelated related project fully outside this repository.
 
 The session completed the main cutover:
 
@@ -32,7 +32,7 @@ The session completed the main cutover:
 - If WebView2 needs CORS/header help, the local proxy rewrites playlists and segment URLs.
 - Old user-facing settings for `player`, `player_path`, `player_args`, and external-player cache duration are retired.
 - Existing old config files still load: retired keys are dropped during migration instead of breaking `config/settings.json`.
-- Katch remains its own app and is not coupled into this repo.
+- The unrelated related project remains its own app and is not coupled into this repo.
 
 ## Important Files And Artifacts
 
@@ -57,16 +57,14 @@ python -m pip install -e .[dev]
 python -m pytest tests/
 make check
 python scripts/build_executable.py --skip-deps
-rg -n "katch|Katch" .
 rg -n "PySide6|gui_qt" .
 ```
 
-Results:
+Results (plus a separate related-project-name boundary check, which returned no matches):
 
 - `python -m pytest tests/` passed: 89 tests.
 - `make check` passed: Black, Flake8, and MyPy clean.
 - PyInstaller build succeeded and produced `dist/TwitchAdAvoider.exe`.
-- `rg -n "katch|Katch" .` returned no matches.
 - `rg -n "PySide6|gui_qt" .` returned no matches.
 
 ## Tests Added Or Reworked

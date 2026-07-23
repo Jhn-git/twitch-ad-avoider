@@ -54,6 +54,26 @@ function App() {
     });
   }, [pushToast]);
 
+  const pinnedRefreshInFlightRef = React.useRef(false);
+
+  // Separate, faster-cadence refresh scoped to pinned favorites only - a
+  // background tick, so failures stay silent (no toast spam) same as the
+  // idle preview refresh in stream_manager.jsx. Independent in-flight guard
+  // from refreshFavorites' - the two check overlapping but different channel
+  // sets and there's no need to block one on the other.
+  const refreshPinnedFavorites = React.useCallback((bridge) => {
+    if (!bridge?.refresh_favorites || pinnedRefreshInFlightRef.current) return;
+    pinnedRefreshInFlightRef.current = true;
+    bridge.refresh_favorites(true).then((result) => {
+      if (!result.ok) return;
+      setState((current) => (
+        current ? { ...current, favorites: result.favorites || current.favorites } : current
+      ));
+    }).catch(() => {}).finally(() => {
+      pinnedRefreshInFlightRef.current = false;
+    });
+  }, []);
+
   const refreshFavoritesOnStartup = React.useCallback((bridge, initial) => {
     if (initial.settings?.favorites_auto_refresh === false) return;
     if (!initial.favorites?.length) return;
@@ -131,6 +151,18 @@ function App() {
     }, refreshIntervalSeconds * 1000);
     return () => window.clearInterval(id);
   }, [api, autoRefreshEnabled, refreshIntervalSeconds, refreshFavorites]);
+
+  const pinnedRefreshIntervalSeconds = state?.settings?.pinned_favorites_refresh_interval;
+
+  React.useEffect(() => {
+    if (!api || !autoRefreshEnabled || !pinnedRefreshIntervalSeconds || pinnedRefreshIntervalSeconds <= 0) {
+      return undefined;
+    }
+    const id = window.setInterval(() => {
+      refreshPinnedFavorites(api);
+    }, pinnedRefreshIntervalSeconds * 1000);
+    return () => window.clearInterval(id);
+  }, [api, autoRefreshEnabled, pinnedRefreshIntervalSeconds, refreshPinnedFavorites]);
 
   if (!ready || !state || !api) {
     return <div className="loading">Loading Stream Manager...</div>;

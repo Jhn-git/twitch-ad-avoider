@@ -125,6 +125,7 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
               <h3>Favorites</h3>
               <Field label="Auto refresh" keyName="favorites_auto_refresh" type="bool" />
               <Field label="Refresh interval" keyName="favorites_refresh_interval" type="number" />
+              <Field label="Pinned refresh interval" keyName="pinned_favorites_refresh_interval" type="number" />
               <Field label="Check timeout" keyName="favorites_check_timeout" type="number" />
               <Field label="Live notifications" keyName="favorite_live_notifications_enabled" type="bool" />
               <Field label="Notification sound" keyName="favorite_live_notification_sound_enabled" type="bool" />

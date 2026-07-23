@@ -10,7 +10,7 @@ This session was a code-review pass focused on the latest preview/dimming change
 
 - Reviewed the recent change set centered on stream preview fetching, preview rendering, dimming while streaming, settings wiring, and related tests.
 - Ran targeted tests for the changed areas in the repo venv: **69 passed**.
-- Also checked full-suite health: the full test run still fails during collection because `tests/test_katch_*` imports a `katch` package that is not present in this checkout.
+- Also checked full-suite health: the full test run still fails during collection because two stray test files import an unrelated related-project package that is not present in this checkout.
 - Main conclusion: the app is not wildly inefficient overall, but preview/state/settings logic is now spread across enough places that it is getting easier to miss edge cases and harder to reason about confidently.
 
 ## Concrete Fixes To Make
@@ -32,8 +32,8 @@ This session was a code-review pass focused on the latest preview/dimming change
    - There is a queued one-shot refresh path that can still fire after shutdown starts.
    - Why this matters: small polish issue, but it can cause weird “still doing work while closing” behavior and noisy logs.
 
-5. **Clean up the broken `katch` test situation separately.**
-   - Targeted changed-area tests passed, but the full suite still fails because `tests/test_katch_config.py` and `tests/test_katch_keyword_matcher.py` import a missing `katch` package.
+5. **Clean up the broken stray-test situation separately.**
+   - Targeted changed-area tests passed, but the full suite still fails because two stray test files import a missing unrelated related-project package.
    - Why this matters: “run all tests” should mean something again; this is repo health, not a preview-feature bug.
 
 ## Logic / Maintainability Follow-Ups Worth Doing
@@ -69,7 +69,7 @@ This session was a code-review pass focused on the latest preview/dimming change
 ## Verification Performed
 
 - Targeted changed-area tests in the repo venv: **69 passed**.
-- Full suite check: collection fails on the pre-existing `katch` import problem.
+- Full suite check: collection fails on the pre-existing stray-module import problem.
 - Also directly reproduced a real preview-setting issue: turning previews off does not currently clear/suppress preview UI the way a user would expect.
 
 ## Recommended Fix Order
@@ -78,7 +78,7 @@ This session was a code-review pass focused on the latest preview/dimming change
 2. Fix mypy config.
 3. Wire preview requests to the existing timeout settings.
 4. Stop the shutdown-time extra refresh.
-5. Repair full-suite `katch` test health.
+5. Repair full-suite stray-module test health.
 6. Then do the bigger architecture cleanups (preview-state centralization, settings deduplication, config cleanup, validator refactor).
 
 ## Current Status

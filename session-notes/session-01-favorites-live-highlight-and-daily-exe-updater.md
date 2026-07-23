@@ -48,7 +48,7 @@ Date: 2026-06-30
 - The testing toggle is available in `Settings -> Favorites Settings`.
 - The updater script has not been run against the live desktop install yet.
 - The current `dist/TwitchAdAvoider.exe` was built before the later highlight-polish and testing-toggle edits, so the build artifact is behind the latest source state.
-- There were unrelated pre-existing worktree changes in files such as `gui_qt/controllers/stream_controller.py`, `src/twitch_viewer.py`, `tests/test_stream_controller.py`, `tests/test_twitch_viewer.py`, `pyproject.toml`, plus untracked `config/` and Katch-related test files. Those were intentionally left alone.
+- There were unrelated pre-existing worktree changes in files such as `gui_qt/controllers/stream_controller.py`, `src/twitch_viewer.py`, `tests/test_stream_controller.py`, `tests/test_twitch_viewer.py`, `pyproject.toml`, plus untracked `config/` and an unrelated related project's test files. Those were intentionally left alone.
 
 ## Things We Haven't Tried Yet
 

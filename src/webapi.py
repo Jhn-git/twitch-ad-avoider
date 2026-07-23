@@ -149,6 +149,16 @@ class TwitchViewerAPI:
             return {"ok": False, "error": str(exc)}
         if not self._favorites.add_favorite(normalized):
             return {"ok": False, "error": "Favorite already exists"}
+        # New favorites default to is_live=False and would otherwise sit that
+        # way until the next scheduled favorites_refresh_interval tick - check
+        # the new channel immediately so an already-live streamer shows live
+        # right away instead of looking offline for up to that whole interval.
+        # Best-effort: an empty result means the check itself failed (network
+        # error), so leave the default False rather than fail the whole add.
+        self._status_monitor.update_timeout(self._int_setting("favorites_check_timeout", 5))
+        status_results = self._status_monitor.check_channels([normalized])
+        if status_results:
+            self._favorites.update_channel_statuses(status_results)
         self._add_activity("info", f"Added favorite: {normalized}", "FAVORITES")
         payload = self._favorites_payload()
         self._push("__onFavoritesUpdated", payload)
@@ -170,8 +180,15 @@ class TwitchViewerAPI:
         self._push("__onFavoritesUpdated", payload)
         return {"ok": True, "is_pinned": new_state, "favorites": payload}
 
-    def refresh_favorites(self) -> dict:
-        favorites = self._favorites.get_favorites()
+    def refresh_favorites(self, pinned_only: bool = False) -> dict:
+        if pinned_only:
+            favorites = [
+                info.channel_name
+                for info in self._favorites.get_favorites_with_status()
+                if info.is_pinned
+            ]
+        else:
+            favorites = self._favorites.get_favorites()
         if not favorites:
             return {"ok": True, "favorites": []}
         self._status_monitor.update_timeout(self._int_setting("favorites_check_timeout", 5))
@@ -187,9 +204,10 @@ class TwitchViewerAPI:
         payload = self._favorites_payload()
         self._push("__onFavoritesUpdated", payload)
         live_count = sum(1 for is_live in status_results.values() if is_live)
+        scope_label = "Pinned refresh" if pinned_only else "Refresh"
         self._add_activity(
             "info",
-            f"Refresh complete: {live_count}/{len(status_results)} live",
+            f"{scope_label} complete: {live_count}/{len(status_results)} live",
             "FAVORITES",
         )
         if newly_live and self._config.get("favorite_live_notifications_enabled", True):
@@ -257,9 +275,25 @@ class TwitchViewerAPI:
             "channel": info.channel,
             "is_live": info.is_live,
             "title": info.title,
-            "preview_image_url": info.preview_image_url,
+            "preview_image_url": self._cache_busted_preview_url(info.preview_image_url),
             "profile_image_url": info.profile_image_url,
         }
+
+    def _cache_busted_preview_url(self, url: Optional[str]) -> Optional[str]:
+        """Append a cache-busting query param so repeated fetches of the same
+        channel produce a visually distinct URL.
+
+        Twitch's GQL previewImageURL is a stable, templated CDN URL for a
+        given channel+resolution - the URL text itself never changes between
+        calls even though Twitch refreshes the image bytes behind it
+        periodically. Without this, the <img src> never changes, so React
+        never re-renders it and the browser's own HTTP image cache would
+        serve stale bytes for that exact URL even if it did.
+        """
+        if not url:
+            return url
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}_t={int(time.time())}"
 
     def _profile_image_for_channel(self, channel: str) -> Optional[str]:
         cached = self._preview_cache.get(channel)

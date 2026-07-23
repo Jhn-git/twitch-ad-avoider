@@ -116,6 +116,7 @@ window.AppHelpers = {
       enable_network_diagnostics: true,
       favorites_auto_refresh: true,
       favorites_refresh_interval: 300,
+      pinned_favorites_refresh_interval: 60,
       favorites_check_timeout: 5,
       favorite_live_notifications_enabled: true,
       favorite_live_highlight_test_mode: false,

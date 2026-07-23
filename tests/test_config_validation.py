@@ -98,6 +98,12 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
         for edge in (0, 11, "3", None):
             self.assertFalse(self.config.set("hls_live_edge", edge))
 
+    def test_pinned_favorites_refresh_interval_range_validation(self):
+        for seconds in (30, 60, 3600):
+            self.assertTrue(self.config.set("pinned_favorites_refresh_interval", seconds))
+        for seconds in (29, 3601, "60", None):
+            self.assertFalse(self.config.set("pinned_favorites_refresh_interval", seconds))
+
     def test_boolean_validation(self):
         boolean_settings = [
             "debug",

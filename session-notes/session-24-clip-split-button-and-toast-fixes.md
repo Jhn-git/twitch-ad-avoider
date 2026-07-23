@@ -58,7 +58,7 @@ Implemented the split-button and dropdown fix first, then the user noticed a sec
 ## Still Pending / Things We Havnt Tried
 
 1. Full `python -m pytest tests/` still fails on two pre-existing `tests/test_project_boundary.py` checks:
-   - historical `session-notes/` content contains `katch` references;
+   - historical `session-notes/` content contains references to an unrelated related project;
    - `git check-ignore AGENTS.md CLAUDE.md TODO.md` does not currently match the test expectation.
    - These were not caused by today's GUI/toast work.
 2. The fixes were verified in demo/browser mode, not by clipping from a live Twitch stream in the real pywebview app.

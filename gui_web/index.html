@@ -301,7 +301,22 @@
     background: #000;
     object-fit: contain;
   }
+  .player-shell video.is-backgrounded {
+    /* Stays mounted (and playing/buffering) so previewing another channel
+       doesn't tear down the attached hls.js instance - just visually hidden
+       behind the preview-image/placeholder overlay. visibility:hidden (not
+       display:none) is deliberate: a hidden-but-laid-out element keeps
+       playing audio+video normally, the standard "hide video, keep audio"
+       technique - display:none risks some browsers suspending decode. */
+    visibility: hidden;
+  }
   .player-shell video::-webkit-media-controls-timeline {
+    display: none;
+  }
+  .player-shell video::-webkit-media-controls-fullscreen-button {
+    /* Calls the standard Fullscreen Web API, which pywebview's WebView2 host
+       doesn't act on - dead weight next to our working .theater-toggle
+       button. */
     display: none;
   }
   .theater-toggle {
@@ -339,6 +354,8 @@
     box-shadow: none;
   }
   .stream-preview-image {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     display: block;

@@ -39,7 +39,7 @@ Date: 2026-07-03
 
 ## Verification So Far
 
-- `pytest tests/` (excluding two pre-existing, unrelated `test_katch_*` failures caused by a missing `katch` module — confirmed pre-existing, not touched this session): **162 passed**.
+- `pytest tests/` (excluding two pre-existing, unrelated stray-module test failures caused by a missing unrelated related-project package — confirmed pre-existing, not touched this session): **162 passed**.
 - Offscreen Qt harness (`QT_QPA_PLATFORM=offscreen`, script lived only in the session scratchpad temp dir, **not committed, will not exist in a future session** — recreate if needed) drove the real `ChatPanel` + `StreamPreviewController` against the **live** Twitch GQL API:
   - Live channel (`jg_darhk`): real title + real thumbnail fetched and rendered correctly.
   - Offline/invalid channel: correctly showed the "Offline" placeholder, no crash.
@@ -126,7 +126,7 @@ In every one of these — using the actual production `MainWindow`/`FavoritesPan
 
 **Leading remaining hypothesis**: the bug may be specific to *native* Windows interactive window-border dragging, which runs through a nested win32 message pump separate from Qt's normal event loop — this is a documented class of Qt/Windows quirk where posted events (like the `LayoutRequest` that `setFixedHeight()`/`updateGeometry()` schedules) can lag or get starved for the duration of the drag in a way that a scripted `.resize()` + `.processEvents()` cannot replicate, since scripted resizes always fully flush the event queue between steps. If true, this may present as a **transient rendering artifact** during the drag itself (an OS-cached backing-store bitmap being stretched while Qt's own relayout/repaint hasn't caught up) rather than a persistent logical layout bug — which would also explain why it's hard to catch outside of a live screenshot at exactly the wrong moment.
 
-**Also added `tests/test_chat_panel_preview_resize.py`** (new file): a fast, meaningful unit test for the sizeHint invariant (passes/fails correctly with/without the fix — verified both ways), plus a slower sanity test that drives the real `MainWindow`→`FavoritesPanel`+`ChatPanel` nesting through a 40-step resize sweep and asserts the column stays within its 60% share — this is *not* a reproduction of the reported bug (see above), just regression coverage so a future change can't silently break the stretch ratio. Full suite: 164 passed (162 prior + 2 new; same 2 pre-existing unrelated `test_katch_*` failures as noted earlier, caused by a missing `katch` module).
+**Also added `tests/test_chat_panel_preview_resize.py`** (new file): a fast, meaningful unit test for the sizeHint invariant (passes/fails correctly with/without the fix — verified both ways), plus a slower sanity test that drives the real `MainWindow`→`FavoritesPanel`+`ChatPanel` nesting through a 40-step resize sweep and asserts the column stays within its 60% share — this is *not* a reproduction of the reported bug (see above), just regression coverage so a future change can't silently break the stretch ratio. Full suite: 164 passed (162 prior + 2 new; same 2 pre-existing unrelated stray-module test failures as noted earlier, caused by a missing unrelated related-project package).
 
 **Still open / next steps if the user reports the bug persists after this fix**:
 1. Ask the user to reproduce it live and note precisely: does it happen mid-drag (releasing the mouse fixes it) or does it persist after releasing/settling? This distinguishes "transient rendering artifact" from "persistent layout state bug" and determines which class of fix is even relevant.
@@ -168,7 +168,7 @@ The raw `[PREVIEW-DEBUG]` log data (966 lines) showed **no anomaly whatsoever** 
 - **Confirmed the bug reproduces**: with the cap temporarily disabled, the label's bottom edge landed at y=901 while `ChatPanel` was only 761px tall — a 140px overflow, clipped exactly as described.
 - **Confirmed the fix resolves it**: with the cap restored, the label's bottom edge (713) stays within `ChatPanel`'s bottom edge (761).
 - Added `tests/test_chat_panel_preview_resize.py::test_preview_image_does_not_overflow_chat_panel_on_wide_maximized_window` — asserts this exact invariant (label bottom ≤ ChatPanel height, and StatusDisplay bottom ≤ window height) at both the 902×823 and 1920×1009 dimensions from the log. Verified via temporarily disabling the fix that this test **fails** without it (`901 <= 761` assertion error) and **passes** with it restored — this is a real, proven-effective regression test, unlike the earlier sizeHint-feedback-loop test which never actually distinguished fixed/unfixed code in a realistic scenario.
-- Full suite: **165 passed** (164 prior + 1 new; same 2 pre-existing unrelated `test_katch_*` failures, excluded via `--ignore`).
+- Full suite: **165 passed** (164 prior + 1 new; same 2 pre-existing unrelated stray-module test failures, excluded via `--ignore`).
 
 **Status**: fix implemented and verified via a reproduction that matches the real bug exactly (confirmed fails without the fix, passes with it, at the real app's own logged dimensions). Awaiting final user confirmation by re-testing the actual running app (maximize + resize at various sizes) before considering this fully closed.
 

@@ -36,7 +36,7 @@ Date: 2026-07-01
 - Focused suite passed: `55 passed, 9 subtests passed`.
 - Ran `.\.venv\Scripts\python.exe -m py_compile src/player_args.py src/twitch_viewer.py src/config_manager.py gui_qt/controllers/stream_controller.py gui_qt/components/settings_tab.py`.
 - Ran `git diff --check`.
-- Attempted a broader `.\.venv\Scripts\python.exe -m pytest tests\`, but collection stopped on unrelated `katch` import errors in `tests/test_katch_config.py` and `tests/test_katch_keyword_matcher.py`.
+- Attempted a broader `.\.venv\Scripts\python.exe -m pytest tests\`, but collection stopped on unrelated import errors in two stray test files belonging to an unrelated related project.
 
 ## Current Progress
 
@@ -44,7 +44,7 @@ Date: 2026-07-01
 - VLC runtime cache args now follow `cache_duration`, and old managed cache flags in `player_args` are stripped during config load.
 - The Settings UI now hints that cache is managed separately from freeform player args.
 - The main unresolved UX edge case is still manual double-clicking during an active reconnect window; the current UI can interrupt the reconnect cycle and start a fresh launch.
-- There is still an unrelated repo-wide test-collection issue around the `katch` tests, but it did not block the focused stream/reconnect verification.
+- There is still an unrelated repo-wide test-collection issue around those stray tests, but it did not block the focused stream/reconnect verification.
 
 ## Things We Haven't Tried Yet
 
@@ -53,7 +53,7 @@ Date: 2026-07-01
 - Deciding whether manual double-click/start requests should be ignored, debounced, or queued while reconnect is already in progress.
 - Trying different `cache_duration` values in the live app to see whether the added buffer is worth the startup delay.
 - Deciding whether the non-VLC players should keep ignoring `cache_duration` or whether they need a similar managed-buffer path later.
-- Running the full repo test suite after the unrelated `katch` import issue is fixed.
+- Running the full repo test suite after the unrelated stray-module import issue is fixed.
 
 ## Next Steps
 

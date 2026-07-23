@@ -400,6 +400,12 @@ class ConfigManager:
                 MIN_REFRESH_INTERVAL,
                 MAX_REFRESH_INTERVAL,
             ),
+            "pinned_favorites_refresh_interval": lambda value: self._validate_int_range_setting(
+                value,
+                "Pinned favorites refresh interval",
+                MIN_REFRESH_INTERVAL,
+                MAX_REFRESH_INTERVAL,
+            ),
             "favorites_check_timeout": lambda value: self._validate_int_range_setting(
                 value,
                 "Favorites check timeout",

@@ -19,7 +19,7 @@ def test_video_stage_shows_live_preview_image_without_playback():
     index_source = (ROOT / "gui_web" / "index.html").read_text()
 
     assert "preview?.preview_image_url" in stage_source
-    assert "!hasPlayback && selectedChannel && preview?.is_live" in stage_source
+    assert "!isViewingActiveStream && selectedChannel && preview?.is_live" in stage_source
     assert 'className="stream-preview-image"' in stage_source
     assert ".stream-preview-image" in index_source
 
@@ -71,7 +71,7 @@ def test_clip_button_uses_backend_clip_readiness_not_just_recording_flag():
 
     assert "stream?.clip_ready" in stage_source
     assert "clipReadySeconds >= clipDuration" in stage_source
-    assert "disabled={!clipReady}" in stage_source
-    assert "title={clipWarmupReason}" in stage_source
+    assert "disabled={!isViewingActiveStream || !clipReady}" in stage_source
+    assert "title={clipButtonTitle}" in stage_source
     assert "clip_ready_seconds" in helpers_source
     assert "clip_warmup_reason" in helpers_source

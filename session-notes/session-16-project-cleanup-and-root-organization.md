@@ -47,7 +47,7 @@ Expected root-level files/folders after cleanup:
 - `powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module .\scripts\TwitchUtilities.psm1 -Force; Test-PythonInstallation"` passed.
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release.ps1 -DryRun` passed.
 - `python scripts\build_executable.py --skip-deps` passed and produced `dist/TwitchAdAvoider.exe`; build artifacts were removed afterward.
-- `rg -n "katch|Katch|PySide6|gui_qt" . --glob '!gui_web/vendor/**'` returned no matches.
+- `rg -n "PySide6|gui_qt" . --glob '!gui_web/vendor/**'` returned no matches, and a separate related-project-name boundary check also returned no matches.
 
 ## Current Git State
 

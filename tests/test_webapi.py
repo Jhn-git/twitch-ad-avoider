@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from conftest import ConfigManagerTestCase
 from src.favorites_manager import FavoritesManager
+from src.status_monitor import StatusMonitor
 from src.webapi import TwitchViewerAPI
 
 
@@ -101,6 +102,13 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
             )
         )
         patches.append(patch("src.webapi.fetch_stream_preview_info", self.preview_fetch))
+        # Default to "check failed" ({}), matching add_favorite's/refresh_favorites'
+        # own graceful fallback - keeps every existing add_favorite() call in this
+        # file hermetic (no real network) without changing its observed behavior.
+        # Tests that care about the live-check result override this per-call via
+        # patch.object(api._status_monitor, "check_channels", ...).
+        self.status_check = Mock(return_value={})
+        patches.append(patch.object(StatusMonitor, "check_channels", self.status_check))
         for patcher in patches:
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -162,6 +170,24 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
         self.assertTrue(pinned["is_pinned"])
         self.assertTrue(removed["ok"])
         self.assertEqual(removed["favorites"], [])
+
+    def test_add_favorite_checks_live_status_immediately(self):
+        api = self.make_api()
+
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            result = api.add_favorite("TestUser")
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["favorites"][0]["is_live"])
+
+    def test_add_favorite_still_succeeds_when_status_check_fails(self):
+        api = self.make_api()
+
+        with patch.object(api._status_monitor, "check_channels", return_value={}):
+            result = api.add_favorite("TestUser")
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["favorites"][0]["is_live"])
 
     def test_start_stop_and_clip_delegate_to_stream_service(self):
         api = self.make_api(launch_channel="testuser")
@@ -238,6 +264,22 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
                 "__onFavoritesUpdated" in call.args[0] for call in window.evaluate_js.call_args_list
             )
         )
+
+    def test_refresh_favorites_pinned_only_checks_only_pinned_channels(self):
+        api = self.make_api()
+        api.add_favorite("PinnedUser")
+        api.add_favorite("UnpinnedUser")
+        api.toggle_pin("pinneduser")
+
+        check = Mock(return_value={"pinneduser": True})
+        with patch.object(api._status_monitor, "check_channels", check):
+            result = api.refresh_favorites(pinned_only=True)
+
+        check.assert_called_once_with(["pinneduser"])
+        self.assertTrue(result["ok"])
+        favorites_by_name = {f["channel_name"]: f for f in result["favorites"]}
+        self.assertTrue(favorites_by_name["pinneduser"]["is_live"])
+        self.assertFalse(favorites_by_name["unpinneduser"]["is_live"])
 
     def test_refresh_favorites_preserves_status_on_check_failure(self):
         api = self.make_api()

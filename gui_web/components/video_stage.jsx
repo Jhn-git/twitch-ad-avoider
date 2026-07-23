@@ -370,10 +370,24 @@ window.Components.VideoStage = function VideoStage({
   };
 
   const hasPlayback = Boolean(playbackUrl);
-  const live = stream?.active || preview?.is_live;
+  // "Am I looking at the channel that's actually playing" - not just "is
+  // anything playing." Without this, once any stream has ever started, the
+  // <video> branch below wins forever, even after clicking a different
+  // favorite (or after the watched stream ends - an ended session's
+  // playback_url stays non-null until an explicit new start/stop call).
+  const isViewingActiveStream = hasPlayback && Boolean(selectedChannel) && stream?.channel === selectedChannel;
+  const live = isViewingActiveStream ? Boolean(stream?.active) : Boolean(preview?.is_live);
   const showPreviewImage = Boolean(
-    !hasPlayback && selectedChannel && preview?.is_live && previewImageUrl && !previewImageFailed
+    !isViewingActiveStream && selectedChannel && preview?.is_live && previewImageUrl && !previewImageFailed
   );
+  const placeholderText = !selectedChannel
+    ? "video player"
+    : preview?.is_live
+      ? `${selectedChannel} preview unavailable`
+      : `${selectedChannel} is offline`;
+  const clipButtonTitle = !isViewingActiveStream
+    ? "Select the streamer that's currently playing to create a clip."
+    : clipWarmupReason;
   const title = window.AppHelpers.titleForPreview(preview);
 
   return (
@@ -398,21 +412,29 @@ window.Components.VideoStage = function VideoStage({
         >
           <Icon name={theaterMode ? "minimize" : "maximize"} />
         </button>
-        {hasPlayback ? (
-          <video ref={videoRef} controls playsInline />
-        ) : showPreviewImage ? (
-          <img
-            className="stream-preview-image"
-            src={previewImageUrl}
-            alt=""
-            onError={() => setPreviewImageFailed(true)}
+        {hasPlayback && (
+          <video
+            ref={videoRef}
+            controls
+            playsInline
+            className={isViewingActiveStream ? "" : "is-backgrounded"}
           />
-        ) : (
-          <div className="placeholder">video player</div>
+        )}
+        {!isViewingActiveStream && (
+          showPreviewImage ? (
+            <img
+              className="stream-preview-image"
+              src={previewImageUrl}
+              alt=""
+              onError={() => setPreviewImageFailed(true)}
+            />
+          ) : (
+            <div className="placeholder">{placeholderText}</div>
+          )
         )}
       </section>
 
-      {hasPlayback && !theaterMode && (
+      {isViewingActiveStream && !theaterMode && (
         <div className="scrub-row">
           <div className="scrub-track" ref={scrubTrackRef} onClick={handleDayTimelineClick}>
             {dayTimelineBands.map((band) => (
@@ -446,9 +468,9 @@ window.Components.VideoStage = function VideoStage({
           <span className="clip-split">
             <button
               className="btn primary"
-              disabled={!clipReady}
+              disabled={!isViewingActiveStream || !clipReady}
               onClick={handleClip}
-              title={clipWarmupReason}
+              title={clipButtonTitle}
             >
               <Icon name="scissors" />
               Clip ({window.AppHelpers.durationLabel(clipDuration)})

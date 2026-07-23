@@ -1,5 +1,11 @@
 window.Components = window.Components || {};
 
+// How often to silently refresh the selected channel's preview while idle,
+// so its thumbnail/title don't go stale between explicit selections. Chosen
+// to comfortably outlast Twitch's own thumbnail regeneration cadence
+// without hammering the GQL endpoint on every render.
+const PREVIEW_IDLE_REFRESH_INTERVAL_MS = 60000;
+
 window.Components.StreamManager = function StreamManager({
   api,
   state,
@@ -50,9 +56,16 @@ window.Components.StreamManager = function StreamManager({
 
   const [segmentsIndex, setSegmentsIndex] = React.useState(null);
   const streamActive = Boolean(state.stream?.active);
+  // Recording segments (the day-timeline / scrub bar data) belong to
+  // whichever channel is actually playing, not whichever channel is merely
+  // selected/previewed - without this, clicking a different favorite while a
+  // background stream keeps playing starts polling that favorite's unrelated
+  // (or nonexistent) segment history every 30s. Mirrors video_stage.jsx's
+  // isViewingActiveStream.
+  const isViewingActiveStream = streamActive && selectedChannel === state.stream?.channel;
 
   React.useEffect(() => {
-    if (!selectedChannel || !streamActive) {
+    if (!isViewingActiveStream) {
       setSegmentsIndex(null);
       return undefined;
     }
@@ -68,7 +81,7 @@ window.Components.StreamManager = function StreamManager({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [api, selectedChannel, streamActive]);
+  }, [api, selectedChannel, isViewingActiveStream]);
 
   const mergeFavoriteProfile = (favorites, channel, profileImageUrl) => {
     if (!profileImageUrl) return favorites;
@@ -120,6 +133,28 @@ window.Components.StreamManager = function StreamManager({
       applySelectedPreview(channel, result.preview, requestId);
     });
   };
+
+  // Idle preview refresh (TODO.md #6): periodically re-fetches the selected
+  // channel's preview so its thumbnail/title don't go stale while the user
+  // just leaves it selected. Deliberately silent on failure (no onToast) -
+  // a transient network blip on a background ~60s tick shouldn't interrupt
+  // the user the way a user-initiated fetchSelectedPreview failure should.
+  // applySelectedPreview's own selected-channel/requestId guards keep a slow
+  // response from clobbering a channel switch that happened in the
+  // meantime, and it only ever patches state.preview/state.favorites -
+  // never state.selected_channel or state.stream.
+  React.useEffect(() => {
+    if (!selectedChannel) return undefined;
+    const interval = window.setInterval(() => {
+      const requestId = previewRequestRef.current + 1;
+      previewRequestRef.current = requestId;
+      api.get_preview(selectedChannel).then((result) => {
+        if (!result.ok) return;
+        applySelectedPreview(selectedChannel, result.preview, requestId);
+      });
+    }, PREVIEW_IDLE_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [api, selectedChannel]);
 
   React.useEffect(() => {
     const preview = state.preview;
@@ -214,6 +249,43 @@ window.Components.StreamManager = function StreamManager({
       onSuccess: (result) => onState({ stream: result.stream }),
     });
   };
+
+  // Auto-swap to the next live pinned favorite when the currently-playing
+  // pinned streamer goes offline, so watching isn't left staring at a
+  // frozen, no-longer-live stream. Deliberately scoped to the natural
+  // "ended" status (reconnect attempts exhausted - the streamer is actually
+  // offline), not "stopped" (the user clicked Stop) or "error" (a different
+  // failure class the user should notice via the existing error toast, not
+  // have silently papered over). Only triggers when the ended channel was
+  // pinned, per spec - never auto-swaps to a non-pinned favorite, and does
+  // nothing if no other pinned favorite is currently live.
+  const handledEndedStreamRef = React.useRef(false);
+  React.useEffect(() => {
+    const stream = state.stream;
+    if (!stream) return;
+    if (stream.active) {
+      // A session is live/recording - re-arm so the *next* time a pinned
+      // stream ends (even the same channel, restarted), this can fire again.
+      handledEndedStreamRef.current = false;
+      return;
+    }
+    if (stream.status !== "ended" || handledEndedStreamRef.current) return;
+    handledEndedStreamRef.current = true;
+
+    const endedChannel = stream.channel;
+    if (!endedChannel || !favoriteForChannel(endedChannel)?.is_pinned) return;
+
+    const nextPinnedLive = (state.favorites || []).find(
+      (favorite) => favorite.is_pinned && favorite.is_live && favorite.channel_name !== endedChannel
+    );
+    if (!nextPinnedLive) return;
+
+    onToast({
+      kind: "info",
+      message: `${endedChannel} went offline - switched to ${nextPinnedLive.channel_name}`,
+    });
+    startStream(nextPinnedLive.channel_name);
+  }, [state.stream, state.favorites]);
 
   const refreshFavorites = () => {
     runApiAction(api.refresh_favorites(), {

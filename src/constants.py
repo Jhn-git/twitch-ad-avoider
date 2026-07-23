@@ -37,6 +37,7 @@ DEFAULT_SETTINGS = {
     # Favorites settings
     "favorites_auto_refresh": True,  # Automatically refresh favorite channels status
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
+    "pinned_favorites_refresh_interval": 60,  # Faster refresh for pinned favorites only, in seconds
     "favorites_check_timeout": 5,  # Timeout for the batched status check (all channels), in seconds
     "favorite_live_notifications_enabled": True,  # Show in-app live notifications
     "favorite_live_highlight_test_mode": False,  # Re-trigger recent-live highlight each refresh

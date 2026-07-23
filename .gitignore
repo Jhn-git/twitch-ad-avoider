@@ -78,3 +78,8 @@ mockups/favorites-layout-options.html
 mockups/pinned-indicator-options.html
 .agents/*
 
+# Local-only guide files (not shared to the public remote)
+/AGENTS.md
+/CLAUDE.md
+/TODO.md
+

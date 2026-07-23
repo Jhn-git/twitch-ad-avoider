@@ -18,7 +18,7 @@ Continuation of the preview-thumbnail feature from [session-06-stream-preview-th
 8. **User explicitly asked for a regression test** so this can't silently reoccur. Added `tests/test_chat_panel_preview_dimming.py` with the real dark theme QSS loaded (necessary since the bug is specifically about a QSS-styled property being suppressed - a bare `QApplication` with no stylesheet wouldn't have exposed it, which is exactly how the first, buggy implementation slipped through verification).
 9. **Proved the new test actually catches the regression**: rather than repeat the earlier `git stash` mistake (see [session-07](session-07-preview-resize-fix-and-title-overlay.md)'s "Errors and fixes" - stashing a whole file reverts *all* uncommitted changes to it, not just the latest edit), this time the old buggy `QGraphicsOpacityEffect`-on-parent approach was reproduced in a standalone scratch script that imported the real `ChatPanel`/`_LandscapePreviewLabel` classes and manually attached the old-style effect, without editing any tracked file. Confirmed the title-bar pixel comes back as pure red (`(255, 0, 0)`, i.e. no background painted) under that old approach - exactly the condition `test_title_overlay_stays_visible_and_styled_through_dim_cycle`'s first assertion catches.
 10. Note: `git stash push -- gui_qt/components/chat_panel.py` *was* run once this session (to test the old behavior) and immediately reverted **all** uncommitted changes to that file, exactly the same mistake documented in session 07. Caught immediately and fixed via `git stash pop`, restoring everything with no lost work - see "Errors and fixes" below for the reinforced lesson.
-11. Full suite (`pytest tests/ --ignore=tests/test_katch_config.py --ignore=tests/test_katch_keyword_matcher.py`): **167 passed** (165 prior + 2 new dimming tests; same 2 pre-existing unrelated katch-module failures excluded, untouched).
+11. Full suite (`pytest tests/` with the two stray unrelated test files excluded via `--ignore`): **167 passed** (165 prior + 2 new dimming tests; same 2 pre-existing unrelated stray-module failures excluded, untouched).
 12. User confirmed the fix works ("that worked").
 
 ## Key Decisions
@@ -39,7 +39,7 @@ Continuation of the preview-thumbnail feature from [session-06-stream-preview-th
 
 ## Verification Performed
 
-- Full suite: **167 passed** at the final checkpoint (165 prior + 2 new; same 2 pre-existing unrelated `test_katch_*` failures, not touched).
+- Full suite: **167 passed** at the final checkpoint (165 prior + 2 new; same 2 pre-existing unrelated stray-module test failures, not touched).
 - Offscreen scripts with the real `dark.qss` loaded confirmed, across a full dim -> undim cycle: title stays visible with its darkened background bar intact and text preserved; image pixel goes fully grayscale (`r == g == b`) while dimmed; both fully restore to original appearance after undimming.
 - Confirmed the new regression test actually fails against the old buggy code: reproduced the old `QGraphicsOpacityEffect`-on-parent approach in an isolated scratch script (not touching any tracked file) and observed the title bar pixel render as pure, unmodified red - i.e. no background painted at all - which is exactly what the test's first assertion (`pixel_before != (255, 0, 0)`) is designed to catch.
 - **Confirmed live in the real running app by the user** ("that worked") - both the dimming behavior and the restored title overlay.
