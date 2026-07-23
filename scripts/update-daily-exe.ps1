@@ -9,7 +9,7 @@ Set-Location $ProjectRoot
 Import-Module "$ProjectRoot\scripts\TwitchUtilities.psm1" -Force
 
 $BuiltAppDir = Join-Path $ProjectRoot "dist\twitchadavoider"
-$TargetDir = "C:\Users\redacted\Desktop\Jhn Apps\jhn-twitch-viewer"
+$TargetDir = Join-Path $env:USERPROFILE "Desktop\Jhn Apps\jhn-twitch-viewer"
 $TargetExe = Join-Path $TargetDir "twitchadavoider.exe"
 $TargetParentDir = Split-Path -Parent $TargetDir
 

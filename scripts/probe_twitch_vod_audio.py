@@ -18,7 +18,7 @@ import streamlink
 
 
 DEFAULT_OUTPUT_DIR = Path("temp") / "vod-audio-probe"
-DEFAULT_TRANSCRIBE_YT_ROOT = Path(r"C:\Users\redacted\Desktop\transcribe-yt")
+DEFAULT_TRANSCRIBE_YT_ROOT = Path.home() / "Desktop" / "transcribe-yt"
 STREAMLINK_CHUNK_SIZE = 64 * 1024
 TRANSCRIBE_PROGRESS_PREFIX = "__probe_progress__="
 TRANSCRIBE_RESULT_PREFIX = "__probe_result__="

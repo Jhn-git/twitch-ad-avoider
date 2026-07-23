@@ -267,7 +267,7 @@ SRT transcript:  C:\\temp\\probe.srt
             output_dir="C:\\temp\\vod-audio-probe",
             reuse_existing_audio=False,
             transcribe=True,
-            transcribe_yt_root="C:\\Users\\redacted\\Desktop\\transcribe-yt",
+            transcribe_yt_root="C:\\fake\\transcribe-yt",
         )
         fake_stream = object()
         fake_plugin = FakePlugin({"audio_only": fake_stream})
@@ -309,7 +309,7 @@ SRT transcript:  C:\\temp\\probe.srt
                 output_dir=str(output_dir),
                 reuse_existing_audio=True,
                 transcribe=False,
-                transcribe_yt_root="C:\\Users\\redacted\\Desktop\\transcribe-yt",
+                transcribe_yt_root="C:\\fake\\transcribe-yt",
             )
             fake_stream = object()
             fake_plugin = FakePlugin({"audio_only": fake_stream})

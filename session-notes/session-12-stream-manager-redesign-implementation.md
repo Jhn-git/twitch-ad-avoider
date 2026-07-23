@@ -7,7 +7,7 @@ Date: 2026-07-06
 - User asked to pull a UI mockup called "Stream Manager.dc.html" from a Claude Design project (via the `claude_design` MCP / `/design-login`) and implement it in the real app.
 - The mockup redesigns the main streaming screen into a collapsible three-pane layout — Favorites rail (left), video/clip stage (center), Options rail (right) — plus a slide-up Activity log drawer at the bottom, using a new darker color palette (near-black background, dark panels, green accent) instead of the app's current blue-accented dark theme.
 - Explored the existing `gui_qt/` code first and found almost everything needed already existed in some form: favorites list + live status (`FavoritesPanel`), stream start/stop + clip capture at 30/60/120/300s + quality selection + open channel/chat (`ChatPanel`, `StreamController`), and an activity log (`StatusDisplay`). This was a UI restructuring/restyling job, not new backend work.
-- Went through a full plan-mode pass (exploration agents, then a planning agent, then clarifying questions) before writing any code. The plan is saved at `C:\Users\redacted\.claude\plans\use-the-claude-design-mcp-twinkly-stroustrup.md` if the detailed reasoning is needed again.
+- Went through a full plan-mode pass (exploration agents, then a planning agent, then clarifying questions) before writing any code. The plan is saved at `C:\Users\<user>\.claude\plans\use-the-claude-design-mcp-twinkly-stroustrup.md` if the detailed reasoning is needed again.
 - Implemented the full plan (see Files Changed below), then ran the test suite and lint/type checks, then launched the real app (`python main.py`) and got a screenshot from the user confirming it renders correctly: three-pane dark/green layout, avatar rail with live-status dots and Pinned/Others sections, Clip button + dropdown, Options rail with Quality dropdown, Activity drawer pull-tab at the bottom.
 - Note: the app was launched in the background for that check and **may still be running** (a `python main.py` process) — worth closing manually if not needed anymore, since my own attempt to screenshot/control that window via PowerShell failed (window handle came back null/inaccessible from the automation session), so I couldn't cleanly verify or close it programmatically.
 - Session ended on the user asking whether it'd be easier to migrate parts of the app to TypeScript because the redesigned UI "looked rough" in the screenshot. I recommended against it (that's a full platform/runtime change — Electron/Node + packaging + IPC — for what's really just QSS/layout polish, not a technology ceiling) and asked if they wanted a polish pass instead.
@@ -139,8 +139,8 @@ just isolated bugs, is the problem. This invokes the standing condition from ear
 structural rather than incidental, so **the plan is now to migrate the GUI off PySide6/Qt entirely**,
 rather than continue polishing it.
 
-**Target architecture**: `pywebview` + a no-build-step React frontend, modeled directly on the user's
-other project `C:\Users\redacted\Desktop\projects\REDACTED-PROJECT`. Shape to follow:
+**Target architecture**: `pywebview` + a no-build-step React frontend, modeled directly on an existing
+pywebview+React app the user had already built (referred to below as "the reference project"). Shape to follow:
 - Python (`main.py`) creates a `pywebview` window loading a local `index.html`, passing a single
   backend API class as `js_api=` so it's exposed to JS as `window.pywebview.api.*`.
 - That one API class is the entire JS-callable surface (stream control, favorites, config, clip

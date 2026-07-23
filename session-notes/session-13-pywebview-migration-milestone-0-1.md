@@ -2,9 +2,9 @@
 
 ## Context
 
-Session 12 ended with the user deciding to migrate the GUI off PySide6/Qt entirely (see the "Decision: Migrating Off PySide6/Qt" section at the end of `session-12-stream-manager-redesign-implementation.md`), after a clean bug investigation still left the app looking "pretty bad." Target architecture: `pywebview` + a no-build-step React frontend, modeled on the user's other project `REDACTED-PROJECT`.
+Session 12 ended with the user deciding to migrate the GUI off PySide6/Qt entirely (see the "Decision: Migrating Off PySide6/Qt" section at the end of `session-12-stream-manager-redesign-implementation.md`), after a clean bug investigation still left the app looking "pretty bad." Target architecture: `pywebview` + a no-build-step React frontend, modeled on an existing pywebview+React app the user had already built (referred to below as "the reference project").
 
-This session executed the plan approved in plan mode: research the current `gui_qt/` surface and the `REDACTED-PROJECT` reference architecture in depth, design a full migration plan (API method inventory, screen-by-screen port order, threading migration, packaging changes), and begin implementation.
+This session executed the plan approved in plan mode: research the current `gui_qt/` surface and the reference project's architecture in depth, design a full migration plan (API method inventory, screen-by-screen port order, threading migration, packaging changes), and begin implementation.
 
 ## Decisions made with the user
 
@@ -15,7 +15,7 @@ The full migration plan (API method names, screen-by-screen milestones, threadin
 
 ## Environment blocker found and fixed: Python 3.14 incompatible with pywebview's Windows backend
 
-The repo's existing `.venv` was on Python 3.14. `pywebview`'s Windows backend depends on `pythonnet`, which does not yet support Python 3.14 — the same constraint `REDACTED-PROJECT` already guards against via its own `runtime_check.py` (ported here verbatim as `runtime_check.verify_compatible()`).
+The repo's existing `.venv` was on Python 3.14. `pywebview`'s Windows backend depends on `pythonnet`, which does not yet support Python 3.14 — the same constraint the reference project already guards against via its own `runtime_check.py` (ported here verbatim as `runtime_check.verify_compatible()`).
 
 Fix: created a **new**, separate `.venv312` (Python 3.12) alongside the existing `.venv` — non-destructive, nothing was deleted. Installed the project (`pip install -e ".[dev]"`) into it; `pywebview>=4.4` was added to `pyproject.toml`'s dependencies and pulled in cleanly, along with `pythonnet`/`clr_loader`/`bottle` as transitive deps.
 
@@ -25,7 +25,7 @@ Fix: created a **new**, separate `.venv312` (Python 3.12) alongside the existing
 
 ### Milestone 0 — pywebview skeleton (done)
 
-- `runtime_check.py` (new, repo root) — Python-version/pythonnet compatibility guard, ported from `REDACTED-PROJECT`.
+- `runtime_check.py` (new, repo root) — Python-version/pythonnet compatibility guard, ported from the reference project.
 - `webapi.py` (new, repo root) — `TwitchViewerAPI` class, the flat JS-callable surface. This session implemented the bootstrap + settings + UI-state slice only:
   - `set_window`, `_push` (shared `evaluate_js` helper, guarded against a torn-down window)
   - `get_initial_state()` — aggregate settings + dark_mode + UI-state for the frontend's initial load
@@ -34,7 +34,7 @@ Fix: created a **new**, separate `.venv312` (Python 3.12) alongside the existing
   - Favorites/stream/clip/preview API methods are **not yet implemented** — those land with their respective milestones (E, F).
 - `gui_web/` (new folder) — frontend shell:
   - `index.html` — CDN React 18 + ReactDOM + `@babel/standalone`, no build step. Theme CSS ported by hand from `gui_qt/styles/dark.qss`/`light.qss` into CSS custom properties (oklch-based, Twitch-purple accent instead of the reference project's amber), toggled via `data-theme` attribute.
-  - `app.jsx` — root component: pywebview-readiness detection (`window.pywebview` check + `pywebviewready` event listener + timeout fallback, same pattern as `REDACTED-PROJECT`'s `app.jsx`), tab routing between "Stream Manager" (placeholder for now) and "Settings".
+  - `app.jsx` — root component: pywebview-readiness detection (`window.pywebview` check + `pywebviewready` event listener + timeout fallback, same pattern as the reference project's `app.jsx`), tab routing between "Stream Manager" (placeholder for now) and "Settings".
   - `helpers.jsx` — `window.AppHelpers.applyTheme(darkMode)`.
 - `main.py` — added a `--web-gui` flag; when set, builds `TwitchViewerAPI`, creates the pywebview window (1280×800, min 1000×650), and starts the event loop, entirely separate from the existing Qt branch (which remains the default/no-flag path).
 - `pyproject.toml` — added `pywebview>=4.4` to dependencies (PySide6 stays until cutover).

@@ -8,7 +8,7 @@ Date: 2026-06-30
 - The first pass used a rectangular green tint plus a left green bar. After visual feedback, the bar was removed and the highlight was changed to a softer rounded green background to better match the app.
 - Added per-channel timer-based recent-live state so highlights expire after 120 seconds and clear immediately when a channel goes offline.
 - Added a testing-only Favorites setting, `Always retrigger recent-live highlight on refresh (testing)`, so the highlight can re-fire on every refresh without changing the normal toast/sound behavior.
-- Added `update-daily-exe.ps1` at the repo root to fast-build, back up, replace, and relaunch the desktop EXE at `C:\Users\redacted\Desktop\Jhn Apps\jhn-twitch-viewer\twitchadavoider.exe`.
+- Added `update-daily-exe.ps1` at the repo root to fast-build, back up, replace, and relaunch the desktop EXE at `C:\Users\<user>\Desktop\Jhn Apps\jhn-twitch-viewer\twitchadavoider.exe`.
 
 ## Key Decisions
 

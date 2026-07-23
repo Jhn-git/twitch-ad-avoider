@@ -32,7 +32,7 @@ The original question was whether Twitch's newer VOD caption experience might gi
 ### 3. Wired an optional handoff into the existing `transcribe-yt` repo
 
 - `--transcribe` is opt-in.
-- The default external workflow root for this probe is `C:\Users\redacted\Desktop\transcribe-yt`, overrideable with `--transcribe-yt-root`.
+- The default external workflow root for this probe is `C:\Users\<user>\Desktop\transcribe-yt`, overrideable with `--transcribe-yt-root`.
 - The probe expects `transcribe-youtube.py` plus that repo's `.venv\Scripts\python.exe`.
 - When transcription is requested, the probe calls the existing `transcribe-yt` environment rather than re-implementing Whisper in this repo.
 - The script prints transcript output paths when it can detect them.
