@@ -2,6 +2,7 @@ window.Components = window.Components || {};
 
 const ICON_PATHS = {
   activity: <React.Fragment><path d="M22 12h-4l-3 8-6-16-3 8H2" /></React.Fragment>,
+  camera: <React.Fragment><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><circle cx="12" cy="13" r="3" /></React.Fragment>,
   chevron: <path d="m9 18 6-6-6-6" />,
   chevronDown: <path d="m6 9 6 6 6-6" />,
   close: <React.Fragment><path d="M18 6 6 18" /><path d="m6 6 12 12" /></React.Fragment>,

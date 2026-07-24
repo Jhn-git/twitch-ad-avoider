@@ -340,6 +340,12 @@ window.Components.StreamManager = function StreamManager({
     });
   };
 
+  const takeScreenshot = (dataUrl) => {
+    runApiAction(api.save_screenshot(dataUrl, selectedChannel), {
+      errorMessage: "Screenshot failed",
+    });
+  };
+
   return (
     <div className={`app-shell ${leftRailOpen ? "" : "left-collapsed"} ${rightRailOpen ? "" : "right-collapsed"}`}>
       <window.Components.FavoritesRail
@@ -362,6 +368,7 @@ window.Components.StreamManager = function StreamManager({
           onClipDuration={changeClipDuration}
           onClip={createClip}
           onOpenClips={() => api.open_clips_folder()}
+          onScreenshot={takeScreenshot}
           segmentsIndex={segmentsIndex}
           onToast={onToast}
         />

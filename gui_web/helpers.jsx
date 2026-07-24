@@ -217,6 +217,12 @@ window.AppHelpers = {
         window.__onStreamEvent?.({ type: "clip_created", path: "clips/demo.mp4" });
         return Promise.resolve({ ok: true, path: "clips/demo.mp4" });
       },
+      save_screenshot: () => {
+        const path = "clips/screenshots/demo.png";
+        window.__onStreamEvent?.({ type: "screenshot_created", path });
+        return Promise.resolve({ ok: true, path });
+      },
+      reveal_in_explorer: () => Promise.resolve({ ok: true }),
       open_channel: () => Promise.resolve({ ok: true }),
       open_chat: () => Promise.resolve({ ok: true }),
       open_clips_folder: () => Promise.resolve({ ok: true }),

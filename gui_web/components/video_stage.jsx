@@ -25,6 +25,7 @@ window.Components.VideoStage = function VideoStage({
   onClipDuration,
   onClip,
   onOpenClips,
+  onScreenshot,
   segmentsIndex,
   onToast,
 }) {
@@ -305,6 +306,16 @@ window.Components.VideoStage = function VideoStage({
     onClip(behindLiveSeconds);
   };
 
+  const handleScreenshot = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    onScreenshot(canvas.toDataURL("image/png"));
+  };
+
   // Full-day recorded-history strip: shows today's recorded segments (and the
   // gaps between them, e.g. from closing and reopening the app) across the
   // whole stream's timeline, not just what hls.js still has buffered.
@@ -485,6 +496,14 @@ window.Components.VideoStage = function VideoStage({
               renderValue={() => ""}
             />
           </span>
+          <button
+            className="btn"
+            disabled={!isViewingActiveStream}
+            onClick={handleScreenshot}
+            title="Save a screenshot of the current frame"
+          >
+            <Icon name="camera" /> Screenshot
+          </button>
           <button className="btn" onClick={onOpenClips}>
             <Icon name="folder" /> Open Clips Folder
           </button>

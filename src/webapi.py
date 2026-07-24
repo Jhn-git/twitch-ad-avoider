@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import threading
 import time
@@ -18,7 +20,11 @@ from src.logging_config import get_logger, reconfigure_logging_from_config
 from src.status_monitor import StatusMonitor
 from src.stream_preview import StreamPreviewInfo, fetch_stream_preview_info
 from src.validators import validate_channel_name
-from src.web_stream_service import WebStreamService, open_path_in_explorer
+from src.web_stream_service import (
+    WebStreamService,
+    open_path_in_explorer,
+    reveal_path_in_explorer,
+)
 
 logger = get_logger(__name__)
 
@@ -363,6 +369,35 @@ class TwitchViewerAPI:
 
     def open_clips_folder(self) -> dict:
         open_path_in_explorer(Path(self._config.get("clip_directory", str(CLIPS_DIR))))
+        return {"ok": True}
+
+    def save_screenshot(self, data_url: str, channel: Optional[str] = None) -> dict:
+        target = channel or self._selected_channel or "screenshot"
+        _header, _, encoded = (data_url or "").partition(",")
+        if not encoded:
+            return {"ok": False, "error": "Invalid image data"}
+        try:
+            image_bytes = base64.b64decode(encoded)
+        except (binascii.Error, ValueError):
+            return {"ok": False, "error": "Invalid image data"}
+
+        clip_dir = Path(self._config.get("clip_directory", str(CLIPS_DIR)))
+        screenshot_dir = clip_dir / "screenshots"
+        try:
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = screenshot_dir / f"{target}_{timestamp}.png"
+            output_path.write_bytes(image_bytes)
+        except OSError as exc:
+            self._add_activity("error", f"Screenshot failed: {exc}", "SCREENSHOT")
+            return {"ok": False, "error": str(exc)}
+
+        self._add_activity("success", f"Screenshot saved: {output_path}", "SCREENSHOT")
+        self._on_stream_event({"type": "screenshot_created", "path": str(output_path)})
+        return {"ok": True, "path": str(output_path)}
+
+    def reveal_in_explorer(self, path: str) -> dict:
+        reveal_path_in_explorer(Path(path))
         return {"ok": True}
 
     # ------------------------------------------------------------------

@@ -903,3 +903,15 @@ def open_path_in_explorer(path: Path) -> None:
         os.startfile(str(resolved))  # type: ignore[attr-defined]
     else:
         subprocess.Popen(["xdg-open", str(resolved)])
+
+
+def reveal_path_in_explorer(path: Path) -> None:
+    """Open the platform file browser with a specific file pre-selected."""
+    resolved = path.resolve()
+    if not resolved.exists():
+        open_path_in_explorer(resolved.parent)
+        return
+    if os.name == "nt":
+        subprocess.Popen(["explorer", f"/select,{resolved}"])
+    else:
+        open_path_in_explorer(resolved.parent)

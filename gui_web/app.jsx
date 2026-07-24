@@ -7,11 +7,19 @@ function App() {
 
   const pushToast = React.useCallback((toast) => {
     const id = `t${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setToasts((items) => [...items, { id, kind: toast.kind || "info", message: toast.message }]);
+    setToasts((items) => [
+      ...items,
+      { id, kind: toast.kind || "info", message: toast.message, onClick: toast.onClick },
+    ]);
     window.setTimeout(() => {
       setToasts((items) => items.filter((item) => item.id !== id));
     }, 3600);
   }, []);
+
+  const apiRef = React.useRef(null);
+  React.useEffect(() => {
+    apiRef.current = api;
+  }, [api]);
 
   const hoverSoundEnabledRef = React.useRef(true);
   React.useEffect(() => {
@@ -87,6 +95,13 @@ function App() {
       }
       if (event && event.type === "clip_created") {
         pushToast({ kind: "success", message: "Clip saved" });
+      }
+      if (event && event.type === "screenshot_created") {
+        pushToast({
+          kind: "success",
+          message: "Screenshot saved (click to open)",
+          onClick: () => apiRef.current?.reveal_in_explorer?.(event.path),
+        });
       }
       if (event && event.type === "error") {
         pushToast({ kind: "error", message: event.error || "Stream error" });
