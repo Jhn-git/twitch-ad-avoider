@@ -4,6 +4,8 @@ function App() {
   const [view, setView] = React.useState("stream");
   const [state, setState] = React.useState(null);
   const [toasts, setToasts] = React.useState([]);
+  const [recentClip, setRecentClip] = React.useState(null);
+  const [clipEditorOpen, setClipEditorOpen] = React.useState(false);
 
   const pushToast = React.useCallback((toast) => {
     const id = `t${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -94,7 +96,18 @@ function App() {
         setState((current) => ({ ...current, stream: event.state }));
       }
       if (event && event.type === "clip_created") {
-        pushToast({ kind: "success", message: "Clip saved" });
+        if (event.clip) {
+          setRecentClip(event.clip);
+          setClipEditorOpen(true);
+        }
+        pushToast({
+          kind: "success",
+          message: "Clip saved",
+          onClick: () => setClipEditorOpen(true),
+        });
+      }
+      if (event && event.type === "clip_edit_updated" && event.clip) {
+        setRecentClip(event.clip);
       }
       if (event && event.type === "screenshot_created") {
         pushToast({
@@ -141,6 +154,9 @@ function App() {
         setState(initial);
         setReady(true);
         refreshFavoritesOnStartup(bridge, initial);
+        bridge.get_recent_clip?.().then((result) => {
+          if (result?.ok && result.clip) setRecentClip(result.clip);
+        }).catch(() => {});
       }).catch((error) => {
         pushToast({ kind: "error", message: String(error) });
       });
@@ -206,6 +222,11 @@ function App() {
         onUiState={setUiState}
         onToast={pushToast}
         onOpenSettings={() => setView("settings")}
+        recentClip={recentClip}
+        clipEditorOpen={clipEditorOpen}
+        onOpenClipEditor={() => setClipEditorOpen(true)}
+        onCloseClipEditor={() => setClipEditorOpen(false)}
+        onRecentClip={setRecentClip}
       />
       {view === "settings" && (
         <window.Components.SettingsView

@@ -30,6 +30,7 @@ datas.extend(collect_tree(os.path.join(ROOT, "assets"), "assets"))
 
 hiddenimports = [
     "main",
+    "src.clip_editor",
     "src.config_manager",
     "src.constants",
     "src.exceptions",

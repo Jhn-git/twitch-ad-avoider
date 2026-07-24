@@ -13,6 +13,11 @@ window.Components.StreamManager = function StreamManager({
   onUiState,
   onToast,
   onOpenSettings,
+  recentClip,
+  clipEditorOpen,
+  onOpenClipEditor,
+  onCloseClipEditor,
+  onRecentClip,
 }) {
   const selectedChannel = state.selected_channel;
   const clipDuration = state.ui_state.stream_manager_clip_duration_seconds || 30;
@@ -337,6 +342,12 @@ window.Components.StreamManager = function StreamManager({
   const createClip = (behindLiveSeconds = 0) => {
     runApiAction(api.create_clip(clipDuration, behindLiveSeconds), {
       errorMessage: "Clip failed",
+      onSuccess: (result) => {
+        if (result.clip) {
+          onRecentClip(result.clip);
+          onOpenClipEditor();
+        }
+      },
     });
   };
 
@@ -370,6 +381,17 @@ window.Components.StreamManager = function StreamManager({
           onOpenClips={() => api.open_clips_folder()}
           onScreenshot={takeScreenshot}
           segmentsIndex={segmentsIndex}
+          onToast={onToast}
+          clipEditorOpen={clipEditorOpen}
+          hasRecentClip={Boolean(recentClip)}
+          onOpenRecentClip={onOpenClipEditor}
+        />
+        <window.Components.ClipEditor
+          api={api}
+          clip={recentClip}
+          open={clipEditorOpen}
+          onClose={onCloseClipEditor}
+          onClipUpdate={onRecentClip}
           onToast={onToast}
         />
         <window.Components.ActivityDrawer

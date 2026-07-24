@@ -259,13 +259,17 @@ segment001.ts
 
         self._stub_ffmpeg_success(mock_run)
 
-        result = self.service.create_clip(30, behind_live_seconds=20)
+        with patch.object(self.service, "_automatic_postroll_worker"):
+            result = self.service.create_clip(30, behind_live_seconds=20)
 
         self.assertTrue(result["ok"])
         cmd = mock_run.call_args.args[0]
         start_offset = float(cmd[cmd.index("-ss") + 1])
         # elapsed (~100s) - behind_live_seconds (20) - duration (30) = ~50s
         self.assertAlmostEqual(start_offset, 50.0, delta=1.0)
+        # The editor anchor follows the original player position on the
+        # recording clock, independent of the currently recorded edge.
+        self.assertAlmostEqual(self.service._recent_clip.anchor_seconds, 80.0, delta=1.0)
 
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
@@ -280,7 +284,8 @@ segment001.ts
 
         self._stub_ffmpeg_success(mock_run)
 
-        result = self.service.create_clip(30, behind_live_seconds=100000)
+        with patch.object(self.service, "_automatic_postroll_worker"):
+            result = self.service.create_clip(30, behind_live_seconds=100000)
 
         self.assertTrue(result["ok"])
         cmd = mock_run.call_args.args[0]
@@ -336,7 +341,8 @@ segment001.ts
 
         self._stub_ffmpeg_success(mock_run)
 
-        result = self.service.create_clip(30, behind_live_seconds=100)
+        with patch.object(self.service, "_automatic_postroll_worker"):
+            result = self.service.create_clip(30, behind_live_seconds=100)
 
         self.assertTrue(result["ok"])
         cmd = mock_run.call_args.args[0]
@@ -344,6 +350,7 @@ segment001.ts
         # elapsed must track the file's real content (~400s), not wall-clock
         # "now" (~700s): (400 - 100) - 30 = 270, not (700 - 100) - 30 = 570.
         self.assertAlmostEqual(start_offset, 270.0, delta=1.0)
+        self.assertAlmostEqual(self.service._recent_clip.anchor_seconds, 300.0, delta=1.0)
 
 
 class TestDayScopedRecording(WebStreamServiceTestCase):

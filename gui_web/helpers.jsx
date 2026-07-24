@@ -40,6 +40,22 @@ window.AppHelpers = {
     return `${seconds}s`;
   },
 
+  timeLabel(seconds) {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safe / 60);
+    const remainder = safe - minutes * 60;
+    return `${minutes}:${remainder.toFixed(1).padStart(4, "0")}`;
+  },
+
+  kebabSlug(value) {
+    return String(value || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  },
+
   // Full-day recording timeline math (day-scoped scrub history). segmentsIndex
   // is the payload from api.get_recording_segments(): { stream_created_at,
   // segments: [{id, start, end}], now } - all timestamps ISO strings, `end`
@@ -133,6 +149,7 @@ window.AppHelpers = {
       auto_collapse_panels_enabled: true,
     };
     let selected = "theonlymonto";
+    let recentClip = null;
     let stream = {
       active: false,
       channel: null,
@@ -213,9 +230,62 @@ window.AppHelpers = {
       }),
       remove_favorite: () => Promise.resolve({ ok: true, favorites }),
       toggle_pin: () => Promise.resolve({ ok: true, favorites }),
-      create_clip: () => {
-        window.__onStreamEvent?.({ type: "clip_created", path: "clips/demo.mp4" });
-        return Promise.resolve({ ok: true, path: "clips/demo.mp4" });
+      create_clip: (durationSeconds = 30) => {
+        const capturedAt = new Date();
+        const channelSlug = window.AppHelpers.kebabSlug(stream.channel || selected);
+        const stamp = capturedAt.toISOString().replace(/\D/g, "").slice(0, 14);
+        const baseName = `${channelSlug}-${stamp.slice(0, 8)}-${stamp.slice(8)}`;
+        const duration = Math.min(Number(durationSeconds) || 30, 45);
+        recentClip = {
+          id: `demo-${Date.now()}`,
+          channel: stream.channel || selected,
+          captured_at: capturedAt.toISOString(),
+          path: `clips/${baseName}.mp4`,
+          base_name: baseName,
+          filename: `${baseName}.mp4`,
+          title: "",
+          status: "ready",
+          message: "Added 5s post-roll",
+          error: null,
+          preview_url: "demo-assets/stream.m3u8",
+          preview_revision: 1,
+          preview_duration_seconds: duration,
+          selection_start_seconds: 0,
+          selection_end_seconds: duration,
+          tail_seconds: 5,
+        };
+        window.__onStreamEvent?.({ type: "clip_created", path: recentClip.path, clip: recentClip });
+        return Promise.resolve({ ok: true, path: recentClip.path, clip: recentClip });
+      },
+      get_recent_clip: () => Promise.resolve({ ok: true, clip: recentClip }),
+      request_clip_tail_extension: () => {
+        if (!recentClip) return Promise.resolve({ ok: false, error: "No recent clip" });
+        recentClip = {
+          ...recentClip,
+          preview_revision: recentClip.preview_revision + 1,
+          preview_duration_seconds: recentClip.preview_duration_seconds + 5,
+          selection_end_seconds: recentClip.selection_end_seconds + 5,
+          tail_seconds: recentClip.tail_seconds + 5,
+          message: `Captured ${recentClip.tail_seconds + 5}s after the original clip point`,
+        };
+        window.__onStreamEvent?.({ type: "clip_edit_updated", clip: recentClip });
+        return Promise.resolve({ ok: true, clip: recentClip });
+      },
+      save_clip_edit: (_clipId, startSeconds, endSeconds, title) => {
+        if (!recentClip) return Promise.resolve({ ok: false, error: "No recent clip" });
+        const titleSlug = window.AppHelpers.kebabSlug(title).slice(0, 80);
+        const filename = `${recentClip.base_name}${titleSlug ? `-${titleSlug}` : ""}.mp4`;
+        recentClip = {
+          ...recentClip,
+          filename,
+          path: `clips/${filename}`,
+          title,
+          selection_start_seconds: startSeconds,
+          selection_end_seconds: endSeconds,
+          message: "Clip saved",
+        };
+        window.__onStreamEvent?.({ type: "clip_edit_updated", clip: recentClip });
+        return Promise.resolve({ ok: true, path: recentClip.path, clip: recentClip });
       },
       save_screenshot: () => {
         const path = "clips/screenshots/demo.png";

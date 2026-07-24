@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* https://*.twitch.tv https://*.ttvnw.net https://static-cdn.jtvnw.net data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src 'self' http://127.0.0.1:* blob:; img-src 'self' https://*.twitch.tv https://*.ttvnw.net https://static-cdn.jtvnw.net data:;" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* https://*.twitch.tv https://*.ttvnw.net https://static-cdn.jtvnw.net data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' http://127.0.0.1:* blob:; img-src 'self' https://*.twitch.tv https://*.ttvnw.net https://static-cdn.jtvnw.net data:;" />
 <title>TwitchAdAvoider - Stream Manager</title>
 <style>
   :root {
@@ -815,6 +815,183 @@
     margin-top: 16px;
   }
 
+  .clip-editor-drawer {
+    position: absolute;
+    z-index: 16;
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+    max-height: calc(100% - 36px);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    background: var(--rail);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .clip-editor-header {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .clip-editor-header h2 {
+    margin: 1px 0 0;
+    font-size: 18px;
+  }
+  .clip-editor-eyebrow {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+  .clip-editor-body {
+    display: grid;
+    grid-template-columns: minmax(320px, 1.15fr) minmax(300px, 0.85fr);
+    gap: 14px;
+    padding: 14px;
+    overflow-y: auto;
+  }
+  .clip-editor-preview {
+    min-width: 0;
+  }
+  .clip-editor-preview video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: block;
+    border-radius: 7px;
+    background: #000;
+  }
+  .clip-editor-status {
+    min-height: 20px;
+    margin-top: 7px;
+    color: var(--ink-3);
+    font-size: 12px;
+  }
+  .clip-editor-status.working { color: var(--warn); }
+  .clip-editor-status.error,
+  .clip-editor-error { color: var(--bad); }
+  .clip-editor-controls {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .clip-title-field {
+    display: grid;
+    gap: 5px;
+    color: var(--ink-2);
+    font-size: 12px;
+  }
+  .clip-title-field input {
+    min-width: 0;
+    min-height: 34px;
+    border: 1px solid var(--line-2);
+    border-radius: 6px;
+    background: var(--field);
+    color: var(--ink);
+    padding: 0 9px;
+  }
+  .clip-filename-preview {
+    min-height: 18px;
+    color: var(--ink-3);
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .trim-control {
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel);
+  }
+  .trim-control.is-disabled { opacity: 0.55; }
+  .trim-label-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 7px;
+    color: var(--ink-2);
+    font-size: 11px;
+  }
+  .trim-track {
+    height: 28px;
+    position: relative;
+    border-radius: 5px;
+    background: var(--field);
+  }
+  .trim-selection {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    border-radius: 4px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .trim-range {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+  .trim-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: transparent;
+  }
+  .trim-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 24px;
+    margin-top: -9px;
+    border: 2px solid var(--rail);
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    cursor: ew-resize;
+    pointer-events: auto;
+  }
+  .trim-range:disabled::-webkit-slider-thumb { cursor: default; }
+  .trim-end { z-index: 2; }
+  .trim-start { z-index: 3; }
+  .clip-nudge-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .clip-nudge-grid > div {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .clip-nudge-grid span {
+    margin-right: 2px;
+    color: var(--ink-3);
+    font-size: 11px;
+  }
+  .btn.compact {
+    min-height: 29px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+  .clip-editor-error {
+    font-size: 12px;
+  }
+  .clip-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 4px;
+  }
+
   .toast-stack {
     position: fixed;
     right: 16px;
@@ -863,6 +1040,8 @@
     .app-shell.left-collapsed { --left-rail-width: 66px; }
     .app-shell.right-collapsed { --right-rail-width: 66px; }
     .stage { padding-left: 24px; padding-right: 24px; }
+    .clip-editor-body { grid-template-columns: 1fr; }
+    .clip-editor-preview video { max-height: 280px; }
   }
   @media (max-width: 820px) {
     .app-shell {
@@ -900,6 +1079,7 @@
 <script type="text/babel" src="components/toast.jsx"></script>
 <script type="text/babel" src="components/dropdown.jsx"></script>
 <script type="text/babel" src="components/favorites_rail.jsx"></script>
+<script type="text/babel" src="components/clip_editor.jsx"></script>
 <script type="text/babel" src="components/video_stage.jsx"></script>
 <script type="text/babel" src="components/options_rail.jsx"></script>
 <script type="text/babel" src="components/activity_drawer.jsx"></script>

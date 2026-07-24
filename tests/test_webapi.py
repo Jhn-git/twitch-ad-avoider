@@ -65,6 +65,17 @@ class FakeStreamService:
         self.last_clip_args = (duration_seconds, behind_live_seconds)
         return {"ok": True, "path": f"clips/test-{duration_seconds}.mp4"}
 
+    def get_recent_clip(self):
+        return {"ok": True, "clip": {"id": "recent"}}
+
+    def request_clip_tail_extension(self, clip_id, seconds=5.0):
+        self.last_tail_args = (clip_id, seconds)
+        return {"ok": True, "clip": {"id": clip_id, "tail_seconds": seconds}}
+
+    def save_clip_edit(self, clip_id, start_seconds, end_seconds, title=""):
+        self.last_edit_args = (clip_id, start_seconds, end_seconds, title)
+        return {"ok": True, "path": "clips/edited.mp4", "clip": {"id": clip_id}}
+
     def shutdown(self):
         self.shutdown_called = True
 
@@ -210,6 +221,22 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
 
         self.assertTrue(clipped["ok"])
         self.assertEqual(api._stream_service.last_clip_args, (60, 12.5))
+
+    def test_recent_clip_edit_methods_delegate_to_stream_service(self):
+        api = self.make_api()
+
+        recent = api.get_recent_clip()
+        extended = api.request_clip_tail_extension("recent", 5)
+        saved = api.save_clip_edit("recent", 1.25, 34.5, "Batman Cape look")
+
+        self.assertEqual(recent["clip"]["id"], "recent")
+        self.assertTrue(extended["ok"])
+        self.assertTrue(saved["ok"])
+        self.assertEqual(api._stream_service.last_tail_args, ("recent", 5))
+        self.assertEqual(
+            api._stream_service.last_edit_args,
+            ("recent", 1.25, 34.5, "Batman Cape look"),
+        )
 
     def test_get_recording_segments_forwards_selected_channel(self):
         api = self.make_api(launch_channel="testuser")

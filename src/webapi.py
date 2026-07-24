@@ -353,6 +353,26 @@ class TwitchViewerAPI:
             self._add_activity("error", result.get("error", "Clip failed"), "CLIP")
         return result
 
+    def get_recent_clip(self) -> dict:
+        return self._stream_service.get_recent_clip()
+
+    def request_clip_tail_extension(self, clip_id: str, seconds: float = 5.0) -> dict:
+        return self._stream_service.request_clip_tail_extension(clip_id, seconds)
+
+    def save_clip_edit(
+        self,
+        clip_id: str,
+        start_seconds: float,
+        end_seconds: float,
+        title: str = "",
+    ) -> dict:
+        return self._stream_service.save_clip_edit(
+            clip_id,
+            start_seconds,
+            end_seconds,
+            title,
+        )
+
     def open_channel(self, channel: Optional[str] = None) -> dict:
         target = channel or self._selected_channel
         if not target:

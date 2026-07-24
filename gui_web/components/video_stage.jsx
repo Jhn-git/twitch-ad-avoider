@@ -28,6 +28,9 @@ window.Components.VideoStage = function VideoStage({
   onScreenshot,
   segmentsIndex,
   onToast,
+  clipEditorOpen,
+  hasRecentClip,
+  onOpenRecentClip,
 }) {
   const Icon = window.Components.Icon;
   const Dropdown = window.Components.Dropdown;
@@ -64,6 +67,16 @@ window.Components.VideoStage = function VideoStage({
   React.useEffect(() => {
     setPreviewImageFailed(false);
   }, [previewImageUrl]);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!clipEditorOpen || !video) return undefined;
+    const wasMuted = video.muted;
+    video.muted = true;
+    return () => {
+      video.muted = wasMuted;
+    };
+  }, [clipEditorOpen, playbackUrl]);
 
   // Session bounds (stream start -> now), shared by the segment background
   // bands and the live-buffer highlight below so both agree on the same scale.
@@ -504,6 +517,11 @@ window.Components.VideoStage = function VideoStage({
           >
             <Icon name="camera" /> Screenshot
           </button>
+          {hasRecentClip && !clipEditorOpen && (
+            <button className="btn" onClick={onOpenRecentClip}>
+              <Icon name="scissors" /> Edit Latest Clip
+            </button>
+          )}
           <button className="btn" onClick={onOpenClips}>
             <Icon name="folder" /> Open Clips Folder
           </button>

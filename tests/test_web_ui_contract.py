@@ -75,3 +75,34 @@ def test_clip_button_uses_backend_clip_readiness_not_just_recording_flag():
     assert "title={clipButtonTitle}" in stage_source
     assert "clip_ready_seconds" in helpers_source
     assert "clip_warmup_reason" in helpers_source
+
+
+def test_recent_clip_editor_is_event_driven_and_reopenable():
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+    manager_source = (ROOT / "gui_web" / "components" / "stream_manager.jsx").read_text()
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
+
+    assert 'event.type === "clip_edit_updated"' in app_source
+    assert "setClipEditorOpen(true)" in app_source
+    assert "bridge.get_recent_clip?.()" in app_source
+    assert "<window.Components.ClipEditor" in manager_source
+    assert "Edit Latest Clip" in stage_source
+    assert "video.muted = true" in stage_source
+    assert "video.muted = wasMuted" in stage_source
+    assert 'src="components/clip_editor.jsx"' in index_source
+
+
+def test_clip_editor_replays_boundaries_and_exposes_tail_and_save_actions():
+    editor_source = (ROOT / "gui_web" / "components" / "clip_editor.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+
+    assert "video.currentTime = safeStart" in editor_source
+    assert "video.currentTime >= selectionEnd" in editor_source
+    assert 'type="range"' in editor_source
+    assert "request_clip_tail_extension(clip.id, 5)" in editor_source
+    assert "pendingTailSelectionRef" in editor_source
+    assert "save_clip_edit(clip.id, selectionStart, selectionEnd, title)" in editor_source
+    assert "Save &amp; Return" in editor_source
+    assert "kebabSlug(title)" in editor_source
+    assert "kebabSlug(value)" in helpers_source
