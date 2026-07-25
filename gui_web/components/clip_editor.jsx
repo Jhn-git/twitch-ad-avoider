@@ -18,6 +18,7 @@ window.Components.ClipEditor = function ClipEditor({
   const [saving, setSaving] = React.useState(false);
 
   const previewDuration = Math.max(1, Number(clip?.preview_duration_seconds || 1));
+  const minimumSelectionSeconds = Math.min(1, previewDuration);
   const busyStatuses = [
     "capturing_postroll",
     "rendering_postroll",
@@ -80,11 +81,35 @@ window.Components.ClipEditor = function ClipEditor({
   const restartSelection = () => restartAt(selectionStart, selectionEnd);
 
   const applySelection = (nextStart, nextEnd) => {
-    const boundedStart = window.AppHelpers.clampRatio(nextStart, 0, previewDuration - 1);
-    const boundedEnd = window.AppHelpers.clampRatio(nextEnd, boundedStart + 1, previewDuration);
+    const boundedStart = window.AppHelpers.clampRatio(
+      nextStart,
+      0,
+      previewDuration - minimumSelectionSeconds,
+    );
+    const boundedEnd = window.AppHelpers.clampRatio(
+      nextEnd,
+      boundedStart + minimumSelectionSeconds,
+      previewDuration,
+    );
     setSelectionStart(boundedStart);
     setSelectionEnd(boundedEnd);
     window.requestAnimationFrame(() => restartAt(boundedStart, boundedEnd));
+  };
+
+  const moveStart = (value) => {
+    setSelectionStart(window.AppHelpers.clampRatio(
+      value,
+      0,
+      selectionEnd - minimumSelectionSeconds,
+    ));
+  };
+
+  const moveEnd = (value) => {
+    setSelectionEnd(window.AppHelpers.clampRatio(
+      value,
+      selectionStart + minimumSelectionSeconds,
+      previewDuration,
+    ));
   };
 
   const handleTimeUpdate = () => {
@@ -135,6 +160,7 @@ window.Components.ClipEditor = function ClipEditor({
 
   const startPct = (selectionStart / previewDuration) * 100;
   const endPct = (selectionEnd / previewDuration) * 100;
+  const selectedDuration = Math.max(0, selectionEnd - selectionStart);
   const titleSlug = window.AppHelpers.kebabSlug(title).slice(0, 80);
   const requestedFilename = `${clip.base_name}${titleSlug ? `-${titleSlug}` : ""}.mp4`;
   const computedFilename = title === (clip.title || "")
@@ -183,39 +209,46 @@ window.Components.ClipEditor = function ClipEditor({
           <div className={`trim-control ${editable ? "" : "is-disabled"}`}>
             <div className="trim-label-row">
               <span>Start {window.AppHelpers.timeLabel(selectionStart)}</span>
+              <span className="trim-selected-duration">
+                Keep {window.AppHelpers.timeLabel(selectedDuration)}
+              </span>
               <span>End {window.AppHelpers.timeLabel(selectionEnd)}</span>
             </div>
             <div className="trim-track">
-              <div className="trim-selection" style={{
-                left: `${startPct}%`,
-                width: `${Math.max(0, endPct - startPct)}%`,
-              }} />
-              <input
-                className="trim-range trim-start"
-                type="range"
-                aria-label="Clip start"
-                min="0"
-                max={Math.max(0, selectionEnd - 1)}
-                step="0.05"
-                value={selectionStart}
-                disabled={!editable}
-                onChange={(event) => setSelectionStart(Number(event.target.value))}
-                onPointerUp={restartSelection}
-                onKeyUp={restartSelection}
-              />
-              <input
-                className="trim-range trim-end"
-                type="range"
-                aria-label="Clip end"
-                min={Math.min(previewDuration, selectionStart + 1)}
-                max={previewDuration}
-                step="0.05"
-                value={selectionEnd}
-                disabled={!editable}
-                onChange={(event) => setSelectionEnd(Number(event.target.value))}
-                onPointerUp={restartSelection}
-                onKeyUp={restartSelection}
-              />
+              <div className="trim-track-scale">
+                <div className="trim-selection" style={{
+                  left: `${startPct}%`,
+                  width: `${Math.max(0, endPct - startPct)}%`,
+                }} />
+                <input
+                  className="trim-range trim-start"
+                  type="range"
+                  aria-label="Clip start"
+                  title="Move clip start"
+                  min="0"
+                  max={previewDuration}
+                  step="0.05"
+                  value={selectionStart}
+                  disabled={!editable}
+                  onChange={(event) => moveStart(Number(event.target.value))}
+                  onPointerUp={restartSelection}
+                  onKeyUp={restartSelection}
+                />
+                <input
+                  className="trim-range trim-end"
+                  type="range"
+                  aria-label="Clip end"
+                  title="Move clip end"
+                  min="0"
+                  max={previewDuration}
+                  step="0.05"
+                  value={selectionEnd}
+                  disabled={!editable}
+                  onChange={(event) => moveEnd(Number(event.target.value))}
+                  onPointerUp={restartSelection}
+                  onKeyUp={restartSelection}
+                />
+              </div>
             </div>
           </div>
 

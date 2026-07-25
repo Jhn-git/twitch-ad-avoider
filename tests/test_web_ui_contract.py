@@ -100,6 +100,10 @@ def test_clip_editor_replays_boundaries_and_exposes_tail_and_save_actions():
     assert "video.currentTime = safeStart" in editor_source
     assert "video.currentTime >= selectionEnd" in editor_source
     assert 'type="range"' in editor_source
+    assert editor_source.count("max={previewDuration}") == 2
+    assert "selectionEnd - minimumSelectionSeconds" in editor_source
+    assert "selectionStart + minimumSelectionSeconds" in editor_source
+    assert "Keep {window.AppHelpers.timeLabel(selectedDuration)}" in editor_source
     assert "request_clip_tail_extension(clip.id, 5)" in editor_source
     assert "pendingTailSelectionRef" in editor_source
     assert "save_clip_edit(clip.id, selectionStart, selectionEnd, title)" in editor_source

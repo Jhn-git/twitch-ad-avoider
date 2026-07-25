@@ -910,18 +910,28 @@
   }
   .trim-control.is-disabled { opacity: 0.55; }
   .trim-label-row {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
     gap: 12px;
     margin-bottom: 7px;
     color: var(--ink-2);
     font-size: 11px;
+  }
+  .trim-label-row > :last-child { text-align: right; }
+  .trim-selected-duration {
+    color: var(--accent);
+    font-weight: 700;
   }
   .trim-track {
     height: 28px;
     position: relative;
     border-radius: 5px;
     background: var(--field);
+  }
+  .trim-track-scale {
+    position: absolute;
+    inset: 0 7px;
   }
   .trim-selection {
     position: absolute;
@@ -935,8 +945,10 @@
     -webkit-appearance: none;
     appearance: none;
     position: absolute;
-    inset: 0;
-    width: 100%;
+    top: 0;
+    bottom: 0;
+    left: -7px;
+    width: calc(100% + 14px);
     height: 28px;
     margin: 0;
     background: transparent;
@@ -957,6 +969,15 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.45);
     cursor: ew-resize;
     pointer-events: auto;
+  }
+  .trim-range:focus {
+    z-index: 4;
+    outline: none;
+  }
+  .trim-range:focus-visible::-webkit-slider-thumb {
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 2px 6px rgba(0,0,0,0.45);
   }
   .trim-range:disabled::-webkit-slider-thumb { cursor: default; }
   .trim-end { z-index: 2; }
