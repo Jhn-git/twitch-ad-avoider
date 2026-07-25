@@ -121,6 +121,7 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
             "stream_manager_left_sidebar_open",
             "stream_manager_right_sidebar_open",
             "stream_manager_activity_drawer_open",
+            "stream_manager_edit_after_clip",
             "auto_collapse_panels_enabled",
         ]
 

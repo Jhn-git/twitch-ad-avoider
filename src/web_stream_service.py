@@ -40,7 +40,7 @@ RECORDING_RETENTION_DAYS = 3
 RECORDING_STATE_PUSH_INTERVAL_SECONDS = 5.0
 CLIP_RECORDER_LAG_TOLERANCE_SECONDS = 8.0
 CLIP_AUTO_POSTROLL_SECONDS = 5.0
-CLIP_EDITOR_CONTEXT_SECONDS = 15.0
+CLIP_KEYFRAME_PADDING_SECONDS = 2.0
 CLIP_CAPTURE_WAIT_GRACE_SECONDS = 15.0
 CLIP_CAPTURE_POLL_SECONDS = 0.25
 
@@ -299,7 +299,13 @@ class WebStreamService:
             "now": now.isoformat(),
         }
 
-    def create_clip(self, duration_seconds: int, behind_live_seconds: float = 0.0) -> dict:
+    def create_clip(
+        self,
+        duration_seconds: int,
+        behind_live_seconds: float = 0.0,
+        *,
+        prepare_provisional_preview: bool = True,
+    ) -> dict:
         """Create a clip from the rolling local recording.
 
         ``behind_live_seconds`` is how far the caller's playhead is from the
@@ -412,7 +418,12 @@ class WebStreamService:
         )
         logger.debug("Creating clip: %s", " ".join(cmd))
         try:
-            result = subprocess.run(cmd, capture_output=True, timeout=60)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=60,
+                **self._subprocess_window_kwargs(),
+            )
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "FFmpeg timed out creating clip"}
         except Exception as exc:
@@ -433,6 +444,23 @@ class WebStreamService:
             safety_start = max(0.0, safety_end - duration_seconds)
             clip_id = uuid.uuid4().hex
             preview_token = uuid.uuid4().hex
+            provisional_preview = source_path.parent / f".clip-preview-{clip_id}-1.mp4"
+            provisional_error = None
+            if prepare_provisional_preview:
+                provisional_error = self._copy_provisional_preview(
+                    output_path,
+                    provisional_preview,
+                )
+                safety_duration = self._media_duration_seconds(
+                    provisional_preview,
+                    float(duration_seconds),
+                )
+            else:
+                # Quick Clip still retains a fully editable recent clip once
+                # the background post-roll copy is ready. Avoiding this first
+                # full-file duplicate keeps the button response fast,
+                # especially for the longer clip durations.
+                safety_duration = float(duration_seconds)
             edit = ClipEditSession(
                 id=clip_id,
                 channel=session.channel,
@@ -442,21 +470,51 @@ class WebStreamService:
                 output_path=output_path,
                 duration_seconds=float(duration_seconds),
                 anchor_seconds=anchor_seconds,
-                rendered_start_seconds=safety_start,
-                rendered_end_seconds=safety_end,
-                selected_start_seconds=safety_start,
-                selected_end_seconds=safety_end,
-                preview_start_seconds=safety_start,
-                preview_end_seconds=safety_end,
+                rendered_start_seconds=0.0,
+                rendered_end_seconds=safety_duration,
+                selected_start_seconds=0.0,
+                selected_end_seconds=safety_duration,
+                preview_start_seconds=0.0,
+                preview_end_seconds=safety_duration,
                 preview_token=preview_token,
-                preview_path=output_path,
+                preview_path=provisional_preview,
+                preview_verified=prepare_provisional_preview and provisional_error is None,
+                output_verified=False,
                 tail_seconds=CLIP_AUTO_POSTROLL_SECONDS,
             )
+            if prepare_provisional_preview and provisional_error:
+                edit.message = "Preparing clip preview..."
+                logger.warning(
+                    "Clip provisional preview unavailable: id=%s output=%s preview=%s error=%s",
+                    clip_id,
+                    output_path,
+                    provisional_preview,
+                    provisional_error,
+                )
             self._set_recent_clip(edit)
+            logger.info(
+                "Clip editor created: id=%s anchor=%.3f requested_start=%.3f "
+                "requested_end=%.3f preview_duration=%.3f preview=%s "
+                "preview_verified=%s provisional_requested=%s output=%s",
+                clip_id,
+                anchor_seconds,
+                safety_start,
+                safety_end,
+                safety_duration,
+                provisional_preview,
+                edit.preview_verified,
+                prepare_provisional_preview,
+                output_path,
+            )
             self._add_activity("success", f"Clip saved: {output_path}", "CLIP")
             clip_payload = self._clip_payload(edit)
             self._push_event(
-                {"type": "clip_created", "path": str(output_path), "clip": clip_payload}
+                {
+                    "type": "clip_created",
+                    "path": str(output_path),
+                    "clip": clip_payload,
+                    "open_editor": prepare_provisional_preview,
+                }
             )
             threading.Thread(
                 target=self._automatic_postroll_worker,
@@ -486,17 +544,56 @@ class WebStreamService:
             return {"ok": False, "error": "Tail extension must be between 1 and 60 seconds"}
         if not edit.operation_lock.acquire(blocking=False):
             return {"ok": False, "error": "The clip editor is already processing"}
+        if not edit.preview_verified or not edit.preview_path.exists():
+            edit.operation_lock.release()
+            return {
+                "ok": False,
+                "error": "The clip preview is not ready; retry clip preparation.",
+                "clip": self._clip_payload(edit),
+            }
 
         with self._lock:
             edit.tail_seconds += seconds
             edit.status = "capturing_tail"
             edit.message = f"Capturing another {int(seconds)}s..."
             edit.error = None
+            edit.retry_available = False
         self._push_clip_update(edit)
         threading.Thread(
             target=self._manual_tail_worker,
-            args=(edit,),
+            args=(edit, seconds),
             name=f"clip-tail-{edit.id[:8]}",
+            daemon=True,
+        ).start()
+        return {"ok": True, "clip": self._clip_payload(edit)}
+
+    def retry_clip_edit_preparation(self, clip_id: str) -> dict:
+        try:
+            edit = self._get_recent_clip(clip_id)
+        except ValidationError as exc:
+            return {"ok": False, "error": str(exc)}
+        if edit.status != "error" or not edit.retry_available:
+            return {"ok": False, "error": "Clip preparation is not waiting for a retry"}
+        if not edit.operation_lock.acquire(blocking=False):
+            return {"ok": False, "error": "The clip editor is already processing"}
+
+        with self._lock:
+            edit.tail_seconds = max(CLIP_AUTO_POSTROLL_SECONDS, edit.tail_seconds)
+            edit.status = "capturing_postroll"
+            edit.message = "Retrying the fast padded clip..."
+            edit.error = None
+            edit.retry_available = False
+        logger.info(
+            "Retrying clip preparation: id=%s anchor=%.3f target_tail=%.3f",
+            edit.id,
+            edit.anchor_seconds,
+            edit.tail_seconds,
+        )
+        self._push_clip_update(edit)
+        threading.Thread(
+            target=self._retry_clip_edit_worker,
+            args=(edit,),
+            name=f"clip-retry-{edit.id[:8]}",
             daemon=True,
         ).start()
         return {"ok": True, "clip": self._clip_payload(edit)}
@@ -523,6 +620,12 @@ class WebStreamService:
             return {"ok": False, "error": "The clip editor is still preparing"}
 
         try:
+            if not edit.preview_verified:
+                return {
+                    "ok": False,
+                    "error": "The clip preview is not ready. Retry preparation before saving.",
+                    "clip": self._clip_payload(edit),
+                }
             preview_duration = edit.preview_end_seconds - edit.preview_start_seconds
             start_seconds = float(start_seconds)
             end_seconds = float(end_seconds)
@@ -531,32 +634,40 @@ class WebStreamService:
             if end_seconds - start_seconds < 1.0:
                 return {"ok": False, "error": "A clip must be at least one second long"}
 
-            absolute_start = edit.preview_start_seconds + start_seconds
-            absolute_end = edit.preview_start_seconds + end_seconds
+            logger.info(
+                "Saving clip edit: id=%s preview_verified=%s preview=%s "
+                "submitted_start=%.3f submitted_end=%.3f preview_duration=%.3f",
+                edit.id,
+                edit.preview_verified,
+                edit.preview_path,
+                start_seconds,
+                end_seconds,
+                preview_duration,
+            )
             clip_dir = edit.output_path.parent
             previous_output = edit.output_path
-            preview_followed_output = edit.preview_path == previous_output
             destination = collision_safe_path(
                 clip_dir,
                 clip_filename(edit.channel, edit.captured_at, title),
                 current=previous_output,
             )
             bounds_changed = (
-                abs(absolute_start - edit.rendered_start_seconds) > 0.01
-                or abs(absolute_end - edit.rendered_end_seconds) > 0.01
+                abs(start_seconds - edit.rendered_start_seconds) > 0.01
+                or abs(end_seconds - edit.rendered_end_seconds) > 0.01
             )
 
             with self._lock:
                 edit.status = "saving"
                 edit.message = "Rendering frame-accurate clip..."
                 edit.error = None
+                edit.retry_available = False
             self._push_clip_update(edit)
 
             if bounds_changed:
                 rendered, error = self._render_final_clip(
                     edit,
-                    absolute_start,
-                    absolute_end,
+                    start_seconds,
+                    end_seconds,
                     destination,
                 )
                 if not rendered:
@@ -568,21 +679,16 @@ class WebStreamService:
 
             with self._lock:
                 edit.output_path = destination
-                if preview_followed_output:
-                    edit.preview_path = destination
-                    if bounds_changed:
-                        edit.preview_start_seconds = absolute_start
-                        edit.preview_end_seconds = absolute_end
-                    edit.preview_revision += 1
-                    self._media_files[edit.preview_token] = destination
                 edit.title = title
-                edit.rendered_start_seconds = absolute_start
-                edit.rendered_end_seconds = absolute_end
-                edit.selected_start_seconds = absolute_start
-                edit.selected_end_seconds = absolute_end
+                edit.rendered_start_seconds = start_seconds
+                edit.rendered_end_seconds = end_seconds
+                edit.output_verified = True
+                edit.selected_start_seconds = start_seconds
+                edit.selected_end_seconds = end_seconds
                 edit.status = "ready"
                 edit.message = "Clip saved"
                 edit.error = None
+                edit.retry_available = False
             self._add_activity("success", f"Clip updated: {destination}", "CLIP")
             self._push_clip_update(edit)
             return {"ok": True, "path": str(destination), "clip": self._clip_payload(edit)}
@@ -839,12 +945,13 @@ class WebStreamService:
         with self._lock:
             previous = self._recent_clip
             self._recent_clip = edit
-            self._media_files[edit.preview_token] = edit.preview_path
+            if edit.preview_path != edit.output_path and edit.preview_path.exists():
+                self._media_files[edit.preview_token] = edit.preview_path
             if previous:
                 self._media_files.pop(previous.preview_token, None)
         if previous:
             previous.cancel_event.set()
-            self._remove_preview_file(previous)
+            self._schedule_preview_cleanup(previous.preview_path, previous.output_path)
 
     def _get_recent_clip(self, clip_id: str) -> ClipEditSession:
         with self._lock:
@@ -860,23 +967,52 @@ class WebStreamService:
     def _clip_payload(self, edit: Optional[ClipEditSession]) -> Optional[dict]:
         if not edit:
             return None
-        preview_url = self._media_url(edit.preview_token, edit.preview_revision)
+        preview_url = None
+        if edit.preview_path != edit.output_path and edit.preview_path.exists():
+            preview_url = self._media_url(edit.preview_token, edit.preview_revision)
+        elif edit.preview_path == edit.output_path:
+            logger.error(
+                "Refusing to serve mutable clip output as editor preview: id=%s path=%s",
+                edit.id,
+                edit.output_path,
+            )
         with self._lock:
-            self._media_files[edit.preview_token] = edit.preview_path
-            return edit.to_dict(preview_url)
+            if preview_url:
+                self._media_files[edit.preview_token] = edit.preview_path
+            else:
+                self._media_files.pop(edit.preview_token, None)
+            payload = edit.to_dict(preview_url)
+            payload["can_edit"] = bool(preview_url) and edit.can_edit
+            return payload
 
     def _push_clip_update(self, edit: ClipEditSession) -> None:
         if not self._is_current_clip(edit):
             return
         self._push_event({"type": "clip_edit_updated", "clip": self._clip_payload(edit)})
 
-    def _clip_operation_failed(self, edit: ClipEditSession, error: str) -> dict:
+    def _clip_operation_failed(
+        self,
+        edit: ClipEditSession,
+        error: str,
+        *,
+        retryable: bool = False,
+    ) -> dict:
         if edit.cancel_event.is_set() or self._clip_shutdown_event.is_set():
             return {"ok": False, "error": error, "clip": None}
         with self._lock:
             edit.status = "error"
             edit.message = error
             edit.error = error
+            edit.retry_available = retryable
+        logger.warning(
+            "Clip editor operation failed: id=%s preview_verified=%s "
+            "rendered_start=%.3f rendered_end=%.3f error=%s",
+            edit.id,
+            edit.preview_verified,
+            edit.rendered_start_seconds,
+            edit.rendered_end_seconds,
+            error,
+        )
         self._add_activity("error", error, "CLIP")
         self._push_clip_update(edit)
         return {"ok": False, "error": error, "clip": self._clip_payload(edit)}
@@ -889,88 +1025,86 @@ class WebStreamService:
         if not edit.operation_lock.acquire(blocking=False):
             return
         try:
-            target_end = edit.anchor_seconds + edit.tail_seconds
-            available, complete, ended, error = self._wait_for_clip_source(
-                edit,
-                target_end,
-                source_session,
-            )
-            if error:
-                with self._lock:
-                    edit.tail_seconds = max(
-                        0.0,
-                        edit.rendered_end_seconds - edit.anchor_seconds,
-                    )
-                self._clip_operation_failed(edit, error)
-                return
-            selected_end = target_end if complete else available
-            selected_start = max(0.0, edit.anchor_seconds - edit.duration_seconds)
-            if selected_end <= edit.anchor_seconds and ended:
-                with self._lock:
-                    edit.tail_seconds = max(
-                        0.0,
-                        edit.rendered_end_seconds - edit.anchor_seconds,
-                    )
-                self._clip_operation_failed(
-                    edit,
-                    "The stream ended before any post-roll could be captured; "
-                    "the safety clip was kept.",
-                )
-                return
-
-            with self._lock:
-                edit.status = "rendering_postroll"
-                edit.message = "Applying frame-accurate post-roll..."
-                edit.error = None
-            self._push_clip_update(edit)
-            rendered, render_error = self._render_final_clip(
-                edit,
-                selected_start,
-                selected_end,
-                edit.output_path,
-            )
-            if not rendered:
-                with self._lock:
-                    edit.tail_seconds = max(
-                        0.0,
-                        edit.rendered_end_seconds - edit.anchor_seconds,
-                    )
-                self._clip_operation_failed(
-                    edit,
-                    render_error or "Post-roll render failed; the safety clip was kept.",
-                )
-                return
-
-            with self._lock:
-                edit.rendered_start_seconds = selected_start
-                edit.rendered_end_seconds = selected_end
-                edit.selected_start_seconds = selected_start
-                edit.selected_end_seconds = selected_end
-                edit.tail_seconds = max(0.0, selected_end - edit.anchor_seconds)
-                edit.status = "preparing_preview"
-                edit.message = "Preparing trim preview..."
-            self._push_clip_update(edit)
-
-            preview_ok, preview_error = self._prepare_editor_preview(
-                edit,
-                selected_start,
-                selected_end,
-            )
-            actual_tail = max(0.0, selected_end - edit.anchor_seconds)
-            with self._lock:
-                edit.status = "ready"
-                if ended and not complete:
-                    edit.message = f"Stream ended; added {actual_tail:.1f}s of available post-roll"
-                else:
-                    edit.message = f"Added {actual_tail:.0f}s post-roll"
-                edit.error = preview_error if not preview_ok else None
-            self._push_clip_update(edit)
+            self._run_automatic_postroll(edit, source_session)
         finally:
             edit.operation_lock.release()
 
-    def _manual_tail_worker(self, edit: ClipEditSession) -> None:
+    def _retry_clip_edit_worker(self, edit: ClipEditSession) -> None:
         try:
-            previous_end = edit.selected_end_seconds
+            self._run_automatic_postroll(edit, self._matching_source_session(edit))
+        finally:
+            edit.operation_lock.release()
+
+    def _run_automatic_postroll(
+        self,
+        edit: ClipEditSession,
+        source_session: Optional[WebStreamSession],
+    ) -> None:
+        target_end = edit.anchor_seconds + edit.tail_seconds
+        available, complete, ended, error = self._wait_for_clip_source(
+            edit,
+            target_end,
+            source_session,
+        )
+        if error:
+            self._clip_operation_failed(edit, error, retryable=True)
+            return
+        selected_end = target_end if complete else available
+        if selected_end <= edit.anchor_seconds and ended:
+            self._clip_operation_failed(
+                edit,
+                "The stream ended before any post-roll could be captured; "
+                "the safety clip was kept.",
+                retryable=True,
+            )
+            return
+
+        with self._lock:
+            edit.status = "preparing_preview"
+            edit.message = "Applying fast padded post-roll..."
+            edit.error = None
+        self._push_clip_update(edit)
+        prepared, prepare_error = self._publish_padded_stream_copy(
+            edit,
+            selected_end,
+            replace_output=not edit.output_verified,
+        )
+        if not prepared:
+            self._clip_operation_failed(
+                edit,
+                prepare_error or "Could not apply the padded post-roll; the safety clip was kept.",
+                retryable=True,
+            )
+            return
+
+        actual_tail = max(0.0, selected_end - edit.anchor_seconds)
+        with self._lock:
+            edit.tail_seconds = actual_tail
+            edit.status = "ready"
+            if ended and not complete:
+                edit.message = f"Stream ended; added {actual_tail:.1f}s of available post-roll"
+            else:
+                edit.message = f"Ready with {actual_tail:.0f}s post-roll and safe early padding"
+            edit.error = None
+            edit.retry_available = False
+        logger.info(
+            "Clip editor ready: id=%s anchor=%.3f tail=%.3f "
+            "preview_verified=%s preview_duration=%.3f",
+            edit.id,
+            edit.anchor_seconds,
+            edit.tail_seconds,
+            edit.preview_verified,
+            edit.preview_end_seconds,
+        )
+        self._push_clip_update(edit)
+
+    def _manual_tail_worker(
+        self,
+        edit: ClipEditSession,
+        requested_seconds: float = CLIP_AUTO_POSTROLL_SECONDS,
+    ) -> None:
+        try:
+            previous_tail = max(0.0, edit.tail_seconds - requested_seconds)
             target_end = edit.anchor_seconds + edit.tail_seconds
             source_session = self._matching_source_session(edit)
             available, complete, ended, error = self._wait_for_clip_source(
@@ -980,40 +1114,43 @@ class WebStreamService:
             )
             if error:
                 with self._lock:
-                    edit.tail_seconds = max(0.0, previous_end - edit.anchor_seconds)
-                self._clip_operation_failed(edit, error)
+                    edit.tail_seconds = previous_tail
+                self._clip_operation_failed(edit, error, retryable=True)
                 return
             selected_end = target_end if complete else available
-            if selected_end <= edit.selected_end_seconds + 0.05:
+            if selected_end <= edit.anchor_seconds + previous_tail + 0.05:
                 with self._lock:
-                    edit.tail_seconds = max(0.0, previous_end - edit.anchor_seconds)
-                self._clip_operation_failed(edit, "No additional recorded footage is available yet")
-                return
-
-            with self._lock:
-                edit.selected_end_seconds = selected_end
-                edit.tail_seconds = max(0.0, selected_end - edit.anchor_seconds)
-                edit.status = "preparing_preview"
-                edit.message = "Refreshing trim preview..."
-                edit.error = None
-            self._push_clip_update(edit)
-
-            preview_ok, preview_error = self._prepare_editor_preview(
-                edit,
-                edit.selected_start_seconds,
-                selected_end,
-            )
-            if not preview_ok:
-                with self._lock:
-                    edit.selected_end_seconds = previous_end
-                    edit.tail_seconds = max(0.0, previous_end - edit.anchor_seconds)
+                    edit.tail_seconds = previous_tail
                 self._clip_operation_failed(
                     edit,
-                    preview_error or "Could not refresh the trim preview",
+                    "No additional recorded footage is available yet",
+                    retryable=True,
                 )
                 return
 
             with self._lock:
+                edit.status = "preparing_preview"
+                edit.message = "Applying the additional padded footage..."
+                edit.error = None
+            self._push_clip_update(edit)
+
+            preview_ok, preview_error = self._publish_padded_stream_copy(
+                edit,
+                selected_end,
+                replace_output=not edit.output_verified,
+            )
+            if not preview_ok:
+                with self._lock:
+                    edit.tail_seconds = previous_tail
+                self._clip_operation_failed(
+                    edit,
+                    preview_error or "Could not refresh the padded trim preview",
+                    retryable=True,
+                )
+                return
+
+            with self._lock:
+                edit.tail_seconds = max(0.0, selected_end - edit.anchor_seconds)
                 edit.status = "ready"
                 edit.message = (
                     f"Extended to {edit.tail_seconds:.1f}s after the original clip point"
@@ -1021,6 +1158,7 @@ class WebStreamService:
                     else f"Captured {edit.tail_seconds:.0f}s after the original clip point"
                 )
                 edit.error = None
+                edit.retry_available = False
             self._push_clip_update(edit)
         finally:
             edit.operation_lock.release()
@@ -1099,47 +1237,181 @@ class WebStreamService:
             return 0.0
         return max(0.0, (recorded_at - edit.source_start_time).total_seconds())
 
-    def _prepare_editor_preview(
+    def _publish_padded_stream_copy(
         self,
         edit: ClipEditSession,
-        selected_start: float,
-        selected_end: float,
+        source_end_seconds: float,
+        replace_output: bool,
     ) -> tuple[bool, Optional[str]]:
-        preview_start = max(0.0, selected_start - CLIP_EDITOR_CONTEXT_SECONDS)
-        preview_end = selected_end
+        source_start_seconds = max(
+            0.0,
+            edit.anchor_seconds - edit.duration_seconds - CLIP_KEYFRAME_PADDING_SECONDS,
+        )
+        part_path = edit.output_path.with_name(
+            f".{edit.output_path.stem}-{uuid.uuid4().hex}.part.mp4"
+        )
         preview_path = edit.source_path.parent / (
             f".clip-preview-{edit.id}-{edit.preview_revision + 1}.mp4"
         )
-        rendered, error = self._render_transcoded_clip(
-            edit,
-            preview_start,
-            preview_end,
-            preview_path,
-            preview=True,
+        rendered, preview_duration, error = self._render_stream_copy(
+            edit.source_path,
+            source_start_seconds,
+            source_end_seconds,
+            part_path,
+            edit.cancel_event,
         )
         if not rendered:
             return False, error
+
+        copy_error = self._copy_provisional_preview(part_path, preview_path)
+        if copy_error:
+            self._remove_render_artifact(part_path)
+            return False, f"Could not prepare the clip preview: {copy_error}"
         if (
             edit.cancel_event.is_set()
             or self._clip_shutdown_event.is_set()
             or not self._is_current_clip(edit)
         ):
+            self._remove_render_artifact(part_path)
             self._remove_render_artifact(preview_path)
             return False, "Clip preparation was cancelled"
 
+        if replace_output:
+            replace_error = self._replace_file_with_retry(
+                part_path,
+                edit.output_path,
+                edit.cancel_event,
+            )
+            if replace_error:
+                self._remove_render_artifact(part_path)
+                self._remove_render_artifact(preview_path)
+                logger.warning(
+                    "Padded clip replacement failed: id=%s source_start=%.3f "
+                    "source_end=%.3f output=%s error=%s",
+                    edit.id,
+                    source_start_seconds,
+                    source_end_seconds,
+                    edit.output_path,
+                    replace_error,
+                )
+                return False, replace_error
+        else:
+            self._remove_render_artifact(part_path)
+
         previous_preview = edit.preview_path
+        previous_preview_duration = max(
+            0.0,
+            edit.preview_end_seconds - edit.preview_start_seconds,
+        )
+        added_preview_duration = max(0.0, preview_duration - previous_preview_duration)
         with self._lock:
-            edit.preview_start_seconds = preview_start
-            edit.preview_end_seconds = preview_end
+            edit.preview_start_seconds = 0.0
+            edit.preview_end_seconds = preview_duration
             edit.preview_path = preview_path
             edit.preview_revision += 1
+            edit.preview_verified = True
+            if replace_output:
+                edit.rendered_start_seconds = 0.0
+                edit.rendered_end_seconds = preview_duration
+                edit.selected_start_seconds = 0.0
+                edit.selected_end_seconds = preview_duration
+                edit.output_verified = False
+            else:
+                edit.selected_start_seconds = min(
+                    edit.selected_start_seconds,
+                    max(0.0, preview_duration - 1.0),
+                )
+                edit.selected_end_seconds = min(
+                    preview_duration,
+                    edit.selected_end_seconds + added_preview_duration,
+                )
             self._media_files[edit.preview_token] = preview_path
-        if previous_preview != edit.output_path and previous_preview != preview_path:
-            try:
-                previous_preview.unlink(missing_ok=True)
-            except OSError:
-                pass
+        if previous_preview != preview_path:
+            self._schedule_preview_cleanup(previous_preview, edit.output_path)
+        logger.info(
+            "Padded clip published: id=%s revision=%s source_start=%.3f "
+            "source_end=%.3f preview_duration=%.3f replaced_output=%s preview=%s",
+            edit.id,
+            edit.preview_revision,
+            source_start_seconds,
+            source_end_seconds,
+            preview_duration,
+            replace_output,
+            preview_path,
+        )
         return True, None
+
+    def _render_stream_copy(
+        self,
+        source_path: Path,
+        start_seconds: float,
+        end_seconds: float,
+        destination: Path,
+        cancel_event: threading.Event,
+    ) -> tuple[bool, float, Optional[str]]:
+        ffmpeg_exe = self._get_ffmpeg_executable()
+        if not ffmpeg_exe:
+            return False, 0.0, "FFmpeg not found. Set ffmpeg_path or add ffmpeg to PATH."
+        duration = max(0.0, end_seconds - start_seconds)
+        if duration < 1.0:
+            return False, 0.0, "A clip must be at least one second long"
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            ffmpeg_exe,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-fflags",
+            "+discardcorrupt",
+            "-ss",
+            f"{start_seconds:.6f}",
+            "-i",
+            str(source_path),
+            "-t",
+            f"{duration:.6f}",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0?",
+            "-c",
+            "copy",
+            "-avoid_negative_ts",
+            "make_zero",
+            "-movflags",
+            "+faststart",
+            "-y",
+            str(destination),
+        ]
+        logger.debug("Creating padded stream-copy clip: %s", " ".join(cmd))
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=max(60.0, duration * 2.0),
+                **self._subprocess_window_kwargs(),
+            )
+        except subprocess.TimeoutExpired:
+            self._remove_render_artifact(destination)
+            return False, 0.0, "FFmpeg timed out creating the padded clip"
+        except OSError as exc:
+            self._remove_render_artifact(destination)
+            return False, 0.0, f"Clip copy failed: {exc}"
+
+        if cancel_event.is_set() or self._clip_shutdown_event.is_set():
+            self._remove_render_artifact(destination)
+            return False, 0.0, "Clip preparation was cancelled"
+        output_size = destination.stat().st_size if destination.exists() else 0
+        if result.returncode != 0 or output_size <= 1024:
+            stderr = result.stderr.decode(errors="replace")[-500:] if result.stderr else ""
+            self._remove_render_artifact(destination)
+            return False, 0.0, stderr or "FFmpeg did not create a usable padded clip"
+
+        actual_duration = self._media_duration_seconds(destination, duration)
+        if actual_duration < 1.0:
+            self._remove_render_artifact(destination)
+            return False, 0.0, "The padded clip did not contain usable footage"
+        return True, actual_duration, None
 
     def _render_final_clip(
         self,
@@ -1155,11 +1427,19 @@ class WebStreamService:
             end_seconds,
             part_path,
             preview=False,
+            source_path=edit.preview_path,
         )
         if not rendered:
             return False, error
         replace_error = self._replace_file_with_retry(part_path, destination, edit.cancel_event)
         if replace_error:
+            logger.warning(
+                "Clip atomic replacement failed: id=%s source=%s destination=%s error=%s",
+                edit.id,
+                part_path,
+                destination,
+                replace_error,
+            )
             try:
                 part_path.unlink(missing_ok=True)
             except OSError:
@@ -1180,6 +1460,7 @@ class WebStreamService:
         end_seconds: float,
         destination: Path,
         preview: bool,
+        source_path: Optional[Path] = None,
     ) -> tuple[bool, Optional[str]]:
         ffmpeg_exe = self._get_ffmpeg_executable()
         if not ffmpeg_exe:
@@ -1235,6 +1516,7 @@ class WebStreamService:
             cpu_video_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
             audio_bitrate = "192k"
 
+        render_source = source_path or edit.source_path
         common_prefix = [
             ffmpeg_exe,
             "-hide_banner",
@@ -1245,7 +1527,7 @@ class WebStreamService:
             "-ss",
             f"{start_seconds:.6f}",
             "-i",
-            str(edit.source_path),
+            str(render_source),
             "-t",
             f"{duration:.6f}",
             "-map",
@@ -1299,7 +1581,12 @@ class WebStreamService:
     ) -> tuple[bool, Optional[str]]:
         logger.debug("Rendering editable clip: %s", " ".join(cmd))
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                **self._subprocess_window_kwargs(),
+            )
         except Exception as exc:
             return False, f"Clip render failed: {exc}"
 
@@ -1354,7 +1641,12 @@ class WebStreamService:
             str(destination),
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, timeout=15)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=15,
+                **self._subprocess_window_kwargs(),
+            )
             if result.returncode != 0:
                 stderr = result.stderr.decode(errors="replace")[-500:] if result.stderr else ""
                 return False, stderr or "ffprobe could not validate the rendered clip"
@@ -1401,6 +1693,42 @@ class WebStreamService:
             )
         return True, None
 
+    def _media_duration_seconds(self, path: Path, fallback: float) -> float:
+        ffprobe_exe = self._get_ffprobe_executable()
+        if not ffprobe_exe or not path.exists():
+            return max(0.0, fallback)
+        cmd = [
+            ffprobe_exe,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=15,
+                **self._subprocess_window_kwargs(),
+            )
+            if result.returncode == 0:
+                duration = float(result.stdout.decode("utf-8").strip())
+                if math.isfinite(duration) and duration > 0:
+                    return duration
+        except (
+            OSError,
+            subprocess.TimeoutExpired,
+            AttributeError,
+            TypeError,
+            UnicodeDecodeError,
+            ValueError,
+        ) as exc:
+            logger.debug("Could not probe clip duration for %s: %s", path, exc)
+        return max(0.0, fallback)
+
     @staticmethod
     def _frame_duration_seconds(frame_rate: Any) -> float:
         try:
@@ -1420,6 +1748,19 @@ class WebStreamService:
             combined = 8_000_000
         video = combined - 192_000
         return max(2_000_000, min(25_000_000, video))
+
+    @staticmethod
+    def _copy_provisional_preview(source: Path, destination: Path) -> Optional[str]:
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            return None
+        except OSError as exc:
+            try:
+                destination.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return str(exc)
 
     def _replace_file_with_retry(
         self,
@@ -1448,12 +1789,31 @@ class WebStreamService:
         return self._replace_file_with_retry(source, destination, threading.Event())
 
     def _remove_preview_file(self, edit: ClipEditSession) -> None:
-        if edit.preview_path == edit.output_path:
+        self._schedule_preview_cleanup(edit.preview_path, edit.output_path)
+
+    def _schedule_preview_cleanup(self, path: Path, output_path: Path) -> None:
+        if path == output_path:
             return
-        try:
-            edit.preview_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        threading.Thread(
+            target=self._remove_preview_path_with_retry,
+            args=(path,),
+            name=f"clip-preview-cleanup-{uuid.uuid4().hex[:8]}",
+            daemon=True,
+        ).start()
+
+    @staticmethod
+    def _remove_preview_path_with_retry(path: Path) -> None:
+        for attempt in range(20):
+            try:
+                path.unlink(missing_ok=True)
+                return
+            except PermissionError:
+                if attempt < 19:
+                    time.sleep(0.1)
+            except OSError as exc:
+                logger.warning("Could not remove temporary clip preview %s: %s", path, exc)
+                return
+        logger.warning("Could not remove open temporary clip preview: %s", path)
 
     @staticmethod
     def _remove_render_artifact(path: Path) -> None:
@@ -1727,6 +2087,14 @@ class WebStreamService:
                 if sibling.exists():
                     return str(sibling)
         return shutil.which("ffprobe")
+
+    @staticmethod
+    def _subprocess_window_kwargs() -> dict[str, Any]:
+        """Prevent FFmpeg/FFprobe console flashes in the packaged Windows app."""
+        if os.name != "nt":
+            return {}
+        creation_flag = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return {"creationflags": creation_flag} if creation_flag else {}
 
     def _int_setting(self, key: str, default: int) -> int:
         value = self.config.get(key, default)

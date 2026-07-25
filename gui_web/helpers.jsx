@@ -27,6 +27,8 @@ window.AppHelpers = {
         settings.stream_manager_activity_drawer_open === true,
       stream_manager_clip_duration_seconds:
         settings.stream_manager_clip_duration_seconds || 30,
+      stream_manager_edit_after_clip:
+        settings.stream_manager_edit_after_clip !== false,
     };
   },
 
@@ -146,6 +148,7 @@ window.AppHelpers = {
       stream_manager_right_sidebar_open: true,
       stream_manager_activity_drawer_open: false,
       stream_manager_clip_duration_seconds: 120,
+      stream_manager_edit_after_clip: true,
       auto_collapse_panels_enabled: true,
     };
     let selected = "theonlymonto";
@@ -230,7 +233,7 @@ window.AppHelpers = {
       }),
       remove_favorite: () => Promise.resolve({ ok: true, favorites }),
       toggle_pin: () => Promise.resolve({ ok: true, favorites }),
-      create_clip: (durationSeconds = 30) => {
+      create_clip: (durationSeconds = 30, _behindLiveSeconds = 0, editAfterClipping = true) => {
         const capturedAt = new Date();
         const channelSlug = window.AppHelpers.kebabSlug(stream.channel || selected);
         const stamp = capturedAt.toISOString().replace(/\D/g, "").slice(0, 14);
@@ -247,14 +250,22 @@ window.AppHelpers = {
           status: "ready",
           message: "Added 5s post-roll",
           error: null,
+          retry_available: false,
           preview_url: "demo-assets/stream.m3u8",
           preview_revision: 1,
+          preview_verified: true,
+          can_edit: true,
           preview_duration_seconds: duration,
           selection_start_seconds: 0,
           selection_end_seconds: duration,
           tail_seconds: 5,
         };
-        window.__onStreamEvent?.({ type: "clip_created", path: recentClip.path, clip: recentClip });
+        window.__onStreamEvent?.({
+          type: "clip_created",
+          path: recentClip.path,
+          clip: recentClip,
+          open_editor: editAfterClipping,
+        });
         return Promise.resolve({ ok: true, path: recentClip.path, clip: recentClip });
       },
       get_recent_clip: () => Promise.resolve({ ok: true, clip: recentClip }),
@@ -267,6 +278,20 @@ window.AppHelpers = {
           selection_end_seconds: recentClip.selection_end_seconds + 5,
           tail_seconds: recentClip.tail_seconds + 5,
           message: `Captured ${recentClip.tail_seconds + 5}s after the original clip point`,
+        };
+        window.__onStreamEvent?.({ type: "clip_edit_updated", clip: recentClip });
+        return Promise.resolve({ ok: true, clip: recentClip });
+      },
+      retry_clip_edit_preparation: () => {
+        if (!recentClip) return Promise.resolve({ ok: false, error: "No recent clip" });
+        recentClip = {
+          ...recentClip,
+          status: "ready",
+          message: "Padded clip preview ready",
+          error: null,
+          retry_available: false,
+          preview_verified: true,
+          can_edit: true,
         };
         window.__onStreamEvent?.({ type: "clip_edit_updated", clip: recentClip });
         return Promise.resolve({ ok: true, clip: recentClip });

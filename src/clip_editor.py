@@ -11,6 +11,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 _NON_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_BUSY_CLIP_STATUSES = {
+    "capturing_postroll",
+    "rendering_postroll",
+    "preparing_preview",
+    "capturing_tail",
+    "saving",
+}
 
 
 def kebab_slug(value: str) -> str:
@@ -73,9 +80,12 @@ class ClipEditSession:
     preview_end_seconds: float
     preview_token: str
     preview_path: Path
+    preview_verified: bool = False
+    output_verified: bool = False
     status: str = "capturing_postroll"
     message: str = "Capturing 5s post-roll..."
     error: Optional[str] = None
+    retry_available: bool = False
     title: str = ""
     tail_seconds: float = 5.0
     preview_revision: int = 1
@@ -86,7 +96,11 @@ class ClipEditSession:
     def base_name(self) -> str:
         return clip_base_name(self.channel, self.captured_at)
 
-    def to_dict(self, preview_url: str) -> dict[str, Any]:
+    @property
+    def can_edit(self) -> bool:
+        return self.preview_verified and self.status not in _BUSY_CLIP_STATUSES
+
+    def to_dict(self, preview_url: Optional[str]) -> dict[str, Any]:
         preview_duration = max(0.0, self.preview_end_seconds - self.preview_start_seconds)
         selection_start = max(0.0, self.selected_start_seconds - self.preview_start_seconds)
         selection_end = max(selection_start, self.selected_end_seconds - self.preview_start_seconds)
@@ -106,8 +120,11 @@ class ClipEditSession:
             "status": self.status,
             "message": self.message,
             "error": self.error,
+            "retry_available": self.retry_available,
             "preview_url": preview_url,
             "preview_revision": self.preview_revision,
+            "preview_verified": self.preview_verified,
+            "can_edit": self.can_edit,
             "preview_duration_seconds": preview_duration,
             "available_start_seconds": 0.0,
             "available_end_seconds": preview_duration,

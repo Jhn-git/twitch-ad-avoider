@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -54,7 +55,12 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         )
         self.addCleanup(self.service.shutdown)
 
-    def make_edit(self) -> ClipEditSession:
+    def make_edit(
+        self,
+        *,
+        preview_verified: bool = True,
+        output_verified: bool = True,
+    ) -> ClipEditSession:
         source = Path(self.temp_dir) / "recording.ts"
         source.write_bytes(b"s" * 4096)
         source_start = datetime.now() - timedelta(seconds=100)
@@ -62,6 +68,8 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         output = Path(self.temp_dir) / "clips" / "testuser-20260724-120000.mp4"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"safety" * 512)
+        preview = Path(self.temp_dir) / ".clip-preview-clip-1-1.mp4"
+        preview.write_bytes(output.read_bytes())
         return ClipEditSession(
             id="clip-1",
             channel="testuser",
@@ -71,18 +79,20 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             output_path=output,
             duration_seconds=30.0,
             anchor_seconds=100.0,
-            rendered_start_seconds=70.0,
-            rendered_end_seconds=100.0,
-            selected_start_seconds=70.0,
-            selected_end_seconds=100.0,
-            preview_start_seconds=70.0,
-            preview_end_seconds=100.0,
+            rendered_start_seconds=0.0,
+            rendered_end_seconds=30.0,
+            selected_start_seconds=0.0,
+            selected_end_seconds=30.0,
+            preview_start_seconds=0.0,
+            preview_end_seconds=30.0,
             preview_token="media-token",
-            preview_path=output,
+            preview_path=preview,
+            preview_verified=preview_verified,
+            output_verified=output_verified,
         )
 
-    def test_automatic_postroll_renders_from_immutable_anchor(self):
-        edit = self.make_edit()
+    def test_automatic_postroll_uses_fast_padded_copy_from_immutable_anchor(self):
+        edit = self.make_edit(output_verified=False)
         self.service._set_recent_clip(edit)
         source_session = Mock(status="live")
 
@@ -94,24 +104,19 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             ),
             patch.object(
                 self.service,
-                "_render_final_clip",
+                "_publish_padded_stream_copy",
                 return_value=(True, None),
-            ) as render,
-            patch.object(
-                self.service,
-                "_prepare_editor_preview",
-                return_value=(True, None),
-            ),
+            ) as publish,
         ):
             self.service._automatic_postroll_worker(edit, source_session)
 
-        render.assert_called_once_with(edit, 70.0, 105.0, edit.output_path)
-        self.assertEqual(edit.rendered_end_seconds, 105.0)
+        publish.assert_called_once_with(edit, 105.0, replace_output=True)
         self.assertEqual(edit.tail_seconds, 5.0)
         self.assertEqual(edit.status, "ready")
+        self.assertTrue(edit.preview_verified)
 
     def test_failed_postroll_keeps_the_safety_clip(self):
-        edit = self.make_edit()
+        edit = self.make_edit(output_verified=False)
         safety_bytes = edit.output_path.read_bytes()
         self.service._set_recent_clip(edit)
 
@@ -123,15 +128,18 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             ),
             patch.object(
                 self.service,
-                "_render_final_clip",
-                return_value=(False, "NVENC and CPU render failed"),
+                "_publish_padded_stream_copy",
+                return_value=(False, "Fast padded copy failed"),
             ),
         ):
             self.service._automatic_postroll_worker(edit, Mock(status="live"))
 
         self.assertEqual(edit.output_path.read_bytes(), safety_bytes)
         self.assertEqual(edit.status, "error")
-        self.assertIn("render failed", edit.error)
+        self.assertIn("padded copy failed", edit.error)
+        self.assertTrue(edit.retry_available)
+        self.assertTrue(edit.preview_verified)
+        self.assertTrue(self.service.get_recent_clip()["clip"]["can_edit"])
 
     def test_stalled_recorder_reports_failure_without_inventing_an_endpoint(self):
         edit = self.make_edit()
@@ -153,7 +161,7 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         self.assertIn("did not catch up", error)
 
     def test_stream_end_applies_the_verified_partial_postroll(self):
-        edit = self.make_edit()
+        edit = self.make_edit(output_verified=False)
         self.service._set_recent_clip(edit)
 
         with (
@@ -164,26 +172,19 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             ),
             patch.object(
                 self.service,
-                "_render_final_clip",
+                "_publish_padded_stream_copy",
                 return_value=(True, None),
-            ) as render,
-            patch.object(
-                self.service,
-                "_prepare_editor_preview",
-                return_value=(True, None),
-            ),
+            ) as publish,
         ):
             self.service._automatic_postroll_worker(edit, Mock(status="ended"))
 
-        render.assert_called_once_with(edit, 70.0, 103.25, edit.output_path)
+        publish.assert_called_once_with(edit, 103.25, replace_output=True)
         self.assertEqual(edit.tail_seconds, 3.25)
         self.assertIn("3.2s", edit.message)
 
-    def test_manual_extension_refreshes_preview_without_rerendering_saved_clip(self):
-        edit = self.make_edit()
+    def test_manual_extension_refreshes_preview_with_a_fast_copy(self):
+        edit = self.make_edit(output_verified=False)
         edit.status = "ready"
-        edit.rendered_end_seconds = 105.0
-        edit.selected_end_seconds = 105.0
         edit.tail_seconds = 10.0
         self.service._set_recent_clip(edit)
         edit.operation_lock.acquire()
@@ -196,24 +197,121 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             ) as wait_for_source,
             patch.object(
                 self.service,
-                "_prepare_editor_preview",
+                "_publish_padded_stream_copy",
                 return_value=(True, None),
-            ) as preview,
+            ) as publish,
             patch.object(self.service, "_render_final_clip") as final_render,
         ):
             self.service._manual_tail_worker(edit)
 
         wait_for_source.assert_called_once()
         self.assertEqual(wait_for_source.call_args.args[1], 110.0)
-        preview.assert_called_once_with(edit, edit.selected_start_seconds, 110.0)
+        publish.assert_called_once_with(edit, 110.0, replace_output=True)
         final_render.assert_not_called()
-        self.assertEqual(edit.selected_end_seconds, 110.0)
         self.assertEqual(edit.status, "ready")
+
+    def test_tail_after_an_explicit_save_does_not_replace_the_saved_output(self):
+        edit = self.make_edit(output_verified=True)
+        edit.status = "ready"
+        edit.tail_seconds = 10.0
+        self.service._set_recent_clip(edit)
+        edit.operation_lock.acquire()
+
+        with (
+            patch.object(
+                self.service,
+                "_wait_for_clip_source",
+                return_value=(110.0, True, False, None),
+            ),
+            patch.object(
+                self.service,
+                "_publish_padded_stream_copy",
+                return_value=(True, None),
+            ) as publish,
+        ):
+            self.service._manual_tail_worker(edit)
+
+        publish.assert_called_once_with(edit, 110.0, replace_output=False)
+
+    def test_padded_copy_atomically_updates_output_and_separate_preview(self):
+        edit = self.make_edit(output_verified=False)
+        safety_bytes = edit.output_path.read_bytes()
+        self.service._set_recent_clip(edit)
+        replacement_bytes = b"padded" * 1024
+
+        def render_copy(source, start, end, destination, _cancel_event):
+            self.assertEqual(source, edit.source_path)
+            self.assertEqual(start, 68.0)
+            self.assertEqual(end, 105.0)
+            self.assertEqual(edit.output_path.read_bytes(), safety_bytes)
+            destination.write_bytes(replacement_bytes)
+            return True, 37.5, None
+
+        with (
+            patch.object(
+                self.service,
+                "_render_stream_copy",
+                side_effect=render_copy,
+            ),
+            patch.object(self.service, "_schedule_preview_cleanup"),
+        ):
+            result = self.service._publish_padded_stream_copy(
+                edit,
+                105.0,
+                replace_output=True,
+            )
+
+        self.assertEqual(result, (True, None))
+        self.assertEqual(edit.output_path.read_bytes(), replacement_bytes)
+        self.assertNotEqual(edit.preview_path, edit.output_path)
+        self.assertEqual(edit.preview_path.read_bytes(), replacement_bytes)
+        self.assertEqual(edit.preview_end_seconds, 37.5)
+        self.assertEqual(edit.selected_end_seconds, 37.5)
+        self.assertEqual(edit.rendered_end_seconds, 37.5)
+        self.assertFalse(edit.output_verified)
+
+    def test_padded_preview_extension_preserves_an_explicit_saved_edit(self):
+        edit = self.make_edit(output_verified=True)
+        edit.rendered_start_seconds = 5.0
+        edit.rendered_end_seconds = 25.0
+        edit.selected_start_seconds = 5.0
+        edit.selected_end_seconds = 25.0
+        saved_bytes = edit.output_path.read_bytes()
+        self.service._set_recent_clip(edit)
+
+        def render_copy(_source, _start, _end, destination, _cancel_event):
+            destination.write_bytes(b"extended" * 1024)
+            return True, 35.0, None
+
+        with (
+            patch.object(
+                self.service,
+                "_render_stream_copy",
+                side_effect=render_copy,
+            ),
+            patch.object(self.service, "_schedule_preview_cleanup"),
+        ):
+            result = self.service._publish_padded_stream_copy(
+                edit,
+                110.0,
+                replace_output=False,
+            )
+
+        self.assertEqual(result, (True, None))
+        self.assertEqual(edit.output_path.read_bytes(), saved_bytes)
+        self.assertEqual(edit.rendered_start_seconds, 5.0)
+        self.assertEqual(edit.rendered_end_seconds, 25.0)
+        self.assertEqual(edit.selected_start_seconds, 5.0)
+        self.assertEqual(edit.selected_end_seconds, 30.0)
+        self.assertTrue(edit.output_verified)
 
     def test_editor_payload_exposes_named_available_and_selected_bounds(self):
         edit = self.make_edit()
-        edit.preview_start_seconds = 55.0
-        edit.preview_end_seconds = 105.0
+        edit.status = "ready"
+        edit.preview_start_seconds = 0.0
+        edit.preview_end_seconds = 50.0
+        edit.selected_start_seconds = 15.0
+        edit.selected_end_seconds = 45.0
         self.service._set_recent_clip(edit)
 
         payload = self.service.get_recent_clip()["clip"]
@@ -225,6 +323,8 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         self.assertEqual(payload["click_timestamp"], edit.captured_at.isoformat())
         self.assertEqual(payload["saved_path"], str(edit.output_path))
         self.assertEqual(payload["computed_filename"], edit.output_path.name)
+        self.assertTrue(payload["preview_verified"])
+        self.assertTrue(payload["can_edit"])
         first_preview_url = payload["preview_url"]
         edit.preview_revision += 1
         revised_payload = self.service.get_recent_clip()["clip"]
@@ -234,10 +334,12 @@ class TestRecentClipEditor(ConfigManagerTestCase):
     def test_save_uses_preview_relative_boundaries_and_requested_title(self):
         edit = self.make_edit()
         edit.status = "ready"
-        edit.preview_start_seconds = 55.0
-        edit.preview_end_seconds = 105.0
-        edit.selected_start_seconds = 70.0
-        edit.selected_end_seconds = 105.0
+        edit.preview_start_seconds = 0.0
+        edit.preview_end_seconds = 50.0
+        edit.rendered_start_seconds = 0.0
+        edit.rendered_end_seconds = 50.0
+        edit.selected_start_seconds = 15.0
+        edit.selected_end_seconds = 50.0
         self.service._set_recent_clip(edit)
 
         def render_success(_edit, _start, _end, destination):
@@ -262,7 +364,7 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             "testuser-20260724-120000-batman-cape-look.mp4",
         )
         render.assert_called_once()
-        self.assertEqual(render.call_args.args[1:3], (65.0, 100.0))
+        self.assertEqual(render.call_args.args[1:3], (10.0, 45.0))
 
     def test_save_rejects_boundaries_outside_server_preview(self):
         edit = self.make_edit()
@@ -274,7 +376,92 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         self.assertFalse(result["ok"])
         self.assertIn("outside", result["error"])
 
-    def test_title_only_save_moves_an_output_backed_preview_without_overwriting(self):
+    def test_failed_quality_save_does_not_offer_a_postroll_retry(self):
+        edit = self.make_edit()
+        edit.status = "ready"
+        self.service._set_recent_clip(edit)
+
+        with patch.object(
+            self.service,
+            "_render_final_clip",
+            return_value=(False, "Quality render failed"),
+        ):
+            result = self.service.save_clip_edit(edit.id, 1.0, 29.0, "")
+
+        retry = self.service.retry_clip_edit_preparation(edit.id)
+        self.assertFalse(result["ok"])
+        self.assertFalse(edit.retry_available)
+        self.assertFalse(retry["ok"])
+
+    def test_unverified_preview_rejects_save_and_tail_extension(self):
+        edit = self.make_edit(preview_verified=False, output_verified=False)
+        edit.status = "error"
+        edit.error = "Preparation failed"
+        self.service._set_recent_clip(edit)
+
+        with patch.object(self.service, "_render_final_clip") as render:
+            saved = self.service.save_clip_edit(edit.id, 0.0, 30.0, "")
+        extended = self.service.request_clip_tail_extension(edit.id, 5)
+
+        self.assertFalse(saved["ok"])
+        self.assertIn("clip preview", saved["error"])
+        self.assertFalse(extended["ok"])
+        self.assertIn("clip preview", extended["error"])
+        render.assert_not_called()
+
+    def test_retry_uses_the_original_five_second_target_without_adding_more(self):
+        edit = self.make_edit(preview_verified=False, output_verified=False)
+        edit.status = "error"
+        edit.error = "Preparation failed"
+        edit.retry_available = True
+        edit.tail_seconds = 0.0
+        self.service._set_recent_clip(edit)
+
+        with (
+            patch.object(self.service, "_push_clip_update"),
+            patch.object(
+                self.service,
+                "_clip_payload",
+                return_value={"id": edit.id, "preview_verified": False},
+            ),
+            patch("src.web_stream_service.threading.Thread") as thread,
+        ):
+            result = self.service.retry_clip_edit_preparation(edit.id)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(edit.tail_seconds, 5.0)
+        self.assertEqual(edit.status, "capturing_postroll")
+        self.assertIsNone(edit.error)
+        thread.assert_called_once()
+        self.assertEqual(thread.call_args.kwargs["target"], self.service._retry_clip_edit_worker)
+        thread.return_value.start.assert_called_once()
+        edit.operation_lock.release()
+
+    def test_retry_refreshes_preview_without_replacing_an_explicit_saved_edit(self):
+        edit = self.make_edit(preview_verified=False, output_verified=True)
+        edit.status = "error"
+        edit.error = "Padded copy failed"
+        edit.retry_available = True
+        edit.tail_seconds = 5.0
+        self.service._set_recent_clip(edit)
+        edit.operation_lock.acquire()
+
+        with (
+            patch.object(self.service, "_wait_for_clip_source") as wait_for_source,
+            patch.object(
+                self.service,
+                "_publish_padded_stream_copy",
+                return_value=(True, None),
+            ) as publish,
+        ):
+            wait_for_source.return_value = (105.0, True, False, None)
+            self.service._retry_clip_edit_worker(edit)
+
+        wait_for_source.assert_called_once()
+        publish.assert_called_once_with(edit, 105.0, replace_output=False)
+        self.assertEqual(edit.status, "ready")
+
+    def test_title_only_save_leaves_the_separate_preview_in_place(self):
         edit = self.make_edit()
         edit.status = "ready"
         collision = edit.output_path.with_name("testuser-20260724-120000-batman-cape-look.mp4")
@@ -293,7 +480,7 @@ class TestRecentClipEditor(ConfigManagerTestCase):
             Path(result["path"]).name, "testuser-20260724-120000-batman-cape-look-2.mp4"
         )
         self.assertEqual(collision.read_bytes(), b"existing")
-        self.assertEqual(edit.preview_path, Path(result["path"]))
+        self.assertNotEqual(edit.preview_path, Path(result["path"]))
         self.assertTrue(edit.preview_path.exists())
 
     def test_nvenc_failure_retries_with_libx264(self):
@@ -319,6 +506,67 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         self.assertEqual(result, (True, None))
         self.assertIn("h264_nvenc", run.call_args_list[0].args[0])
         self.assertIn("libx264", run.call_args_list[1].args[0])
+
+    def test_padded_clip_uses_hidden_keyframe_aligned_stream_copy(self):
+        edit = self.make_edit()
+        destination = Path(self.temp_dir) / "padded.mp4"
+
+        def run_copy(cmd, **_kwargs):
+            destination.write_bytes(b"copy" * 512)
+            return Mock(returncode=0, stdout=b"", stderr=b"")
+
+        with (
+            patch.object(self.service, "_get_ffmpeg_executable", return_value="ffmpeg"),
+            patch.object(self.service, "_media_duration_seconds", return_value=34.25),
+            patch(
+                "src.web_stream_service.subprocess.run",
+                side_effect=run_copy,
+            ) as run,
+        ):
+            result = self.service._render_stream_copy(
+                edit.source_path,
+                68.0,
+                105.0,
+                destination,
+                edit.cancel_event,
+            )
+
+        self.assertEqual(result, (True, 34.25, None))
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[cmd.index("-ss") + 1], "68.000000")
+        self.assertEqual(cmd[cmd.index("-t") + 1], "37.000000")
+        self.assertEqual(cmd[cmd.index("-c") + 1], "copy")
+        if os.name == "nt":
+            self.assertIn("creationflags", run.call_args.kwargs)
+
+    def test_quality_render_suppresses_the_windows_console_window(self):
+        destination = Path(self.temp_dir) / "quality.mp4"
+        destination.write_bytes(b"render" * 512)
+        process = Mock(returncode=0)
+        process.poll.return_value = 0
+        process.communicate.return_value = (b"", b"")
+
+        with (
+            patch(
+                "src.web_stream_service.subprocess.Popen",
+                return_value=process,
+            ) as popen,
+            patch.object(
+                self.service,
+                "_validate_clip_output",
+                return_value=(True, None),
+            ),
+        ):
+            result = self.service._run_clip_render_command(
+                ["ffmpeg", "-i", "input.ts", str(destination)],
+                destination,
+                30.0,
+                threading.Event(),
+            )
+
+        self.assertEqual(result, (True, None))
+        if os.name == "nt":
+            self.assertIn("creationflags", popen.call_args.kwargs)
 
     def test_failed_render_removes_partial_output(self):
         edit = self.make_edit()
@@ -352,18 +600,23 @@ class TestRecentClipEditor(ConfigManagerTestCase):
         safety_bytes = edit.output_path.read_bytes()
         replacement_bytes = b"replacement" * 512
 
-        def render_part(_edit, _start, _end, destination, preview):
+        def render_part(_edit, _start, _end, destination, preview, source_path=None):
             self.assertTrue(destination.name.endswith(".part.mp4"))
             self.assertFalse(preview)
+            self.assertEqual(source_path, edit.preview_path)
             self.assertEqual(edit.output_path.read_bytes(), safety_bytes)
             destination.write_bytes(replacement_bytes)
             return True, None
 
-        with patch.object(
-            self.service,
-            "_render_transcoded_clip",
-            side_effect=render_part,
+        with (
+            edit.preview_path.open("rb") as open_preview,
+            patch.object(
+                self.service,
+                "_render_transcoded_clip",
+                side_effect=render_part,
+            ),
         ):
+            self.assertTrue(open_preview.read(1))
             result = self.service._render_final_clip(
                 edit,
                 70.0,

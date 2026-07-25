@@ -471,6 +471,10 @@ class ConfigManager:
                 "Stream manager clip duration",
                 (30, 60, 120, 300),
             ),
+            "stream_manager_edit_after_clip": lambda value: self._validate_bool_setting(
+                value,
+                "Stream manager edit-after-clip setting",
+            ),
             "auto_collapse_panels_enabled": lambda value: self._validate_bool_setting(
                 value,
                 "Auto-collapse panels setting",

@@ -49,6 +49,7 @@ DEFAULT_SETTINGS = {
     "stream_manager_right_sidebar_open": True,  # Options rail expanded/collapsed
     "stream_manager_activity_drawer_open": False,  # Activity drawer expanded/collapsed
     "stream_manager_clip_duration_seconds": 30,  # Last-selected clip duration
+    "stream_manager_edit_after_clip": True,  # Automatically open the recent clip editor
     "auto_collapse_panels_enabled": True,  # Auto-collapse rails/activity drawer after 10s idle
 }
 

@@ -139,6 +139,7 @@ class TwitchViewerAPI:
             "stream_manager_clip_duration_seconds": settings.get(
                 "stream_manager_clip_duration_seconds", 30
             ),
+            "stream_manager_edit_after_clip": settings.get("stream_manager_edit_after_clip", True),
         }
 
     # ------------------------------------------------------------------
@@ -343,12 +344,19 @@ class TwitchViewerAPI:
         return {"ok": True, "segments": segments}
 
     def create_clip(
-        self, duration_seconds: Optional[int] = None, behind_live_seconds: float = 0.0
+        self,
+        duration_seconds: Optional[int] = None,
+        behind_live_seconds: float = 0.0,
+        edit_after_clipping: bool = True,
     ) -> dict:
         seconds = duration_seconds or self._int_setting("stream_manager_clip_duration_seconds", 30)
         if not self._config.set("stream_manager_clip_duration_seconds", seconds):
             return {"ok": False, "error": "Invalid clip duration"}
-        result = self._stream_service.create_clip(seconds, behind_live_seconds)
+        result = self._stream_service.create_clip(
+            seconds,
+            behind_live_seconds,
+            prepare_provisional_preview=edit_after_clipping is not False,
+        )
         if not result.get("ok"):
             self._add_activity("error", result.get("error", "Clip failed"), "CLIP")
         return result
@@ -358,6 +366,9 @@ class TwitchViewerAPI:
 
     def request_clip_tail_extension(self, clip_id: str, seconds: float = 5.0) -> dict:
         return self._stream_service.request_clip_tail_extension(clip_id, seconds)
+
+    def retry_clip_edit_preparation(self, clip_id: str) -> dict:
+        return self._stream_service.retry_clip_edit_preparation(clip_id)
 
     def save_clip_edit(
         self,

@@ -71,8 +71,10 @@ class TestWebStreamService(WebStreamServiceTestCase):
 
     def _stub_ffmpeg_success(self, mock_run) -> None:
         def write_output(cmd, **_kwargs):
+            if "-show_entries" in cmd:
+                return Mock(returncode=0, stdout=b"30.000\n", stderr=b"")
             Path(cmd[-1]).write_bytes(b"x" * 2048)
-            return Mock(stderr=b"")
+            return Mock(returncode=0, stdout=b"", stderr=b"")
 
         mock_run.side_effect = write_output
 
@@ -240,11 +242,53 @@ segment001.ts
 
         self._stub_ffmpeg_success(mock_run)
 
-        result = self.service.create_clip(30)
+        with patch.object(self.service, "_automatic_postroll_worker"):
+            result = self.service.create_clip(30)
+
+        self.assertTrue(result["ok"])
+        output_path = Path(result["path"])
+        edit = self.service._recent_clip
+        self.assertTrue(output_path.exists())
+        self.assertIsNotNone(edit)
+        self.assertNotEqual(edit.preview_path, output_path)
+        self.assertEqual(edit.preview_path.read_bytes(), output_path.read_bytes())
+        self.assertTrue(result["clip"]["preview_verified"])
+        self.assertFalse(result["clip"]["can_edit"])
+        self.assertTrue(self.events[-1]["open_editor"])
+        ffmpeg_call = mock_run.call_args_list[0]
+        self.assertIn("-c", ffmpeg_call.args[0])
+        if os.name == "nt":
+            self.assertIn("creationflags", ffmpeg_call.kwargs)
+
+    @patch.object(WebStreamService, "_copy_provisional_preview")
+    @patch("src.web_stream_service.subprocess.run")
+    @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
+    def test_quick_clip_skips_provisional_preview_copy(
+        self,
+        _mock_which,
+        mock_run,
+        mock_copy_preview,
+    ):
+        recording, start_time = self._recording_file_with_elapsed("recording.ts", 60)
+        clip_dir = Path(self.temp_dir) / "clips"
+        self.config.set("clip_directory", str(clip_dir))
+        self.service._session = self._make_session(
+            recording_path=str(recording),
+            recording_start_time=start_time,
+        )
+        self._stub_ffmpeg_success(mock_run)
+
+        with patch.object(self.service, "_automatic_postroll_worker"):
+            result = self.service.create_clip(30, prepare_provisional_preview=False)
 
         self.assertTrue(result["ok"])
         self.assertTrue(Path(result["path"]).exists())
-        self.assertIn("-c", mock_run.call_args.args[0])
+        self.assertFalse(self.service._recent_clip.preview_path.exists())
+        self.assertIsNone(result["clip"]["preview_url"])
+        self.assertFalse(result["clip"]["preview_verified"])
+        self.assertFalse(result["clip"]["can_edit"])
+        self.assertFalse(self.events[-1]["open_editor"])
+        mock_copy_preview.assert_not_called()
 
     @patch("src.web_stream_service.subprocess.run")
     @patch("src.web_stream_service.shutil.which", return_value="ffmpeg")
@@ -263,7 +307,7 @@ segment001.ts
             result = self.service.create_clip(30, behind_live_seconds=20)
 
         self.assertTrue(result["ok"])
-        cmd = mock_run.call_args.args[0]
+        cmd = mock_run.call_args_list[0].args[0]
         start_offset = float(cmd[cmd.index("-ss") + 1])
         # elapsed (~100s) - behind_live_seconds (20) - duration (30) = ~50s
         self.assertAlmostEqual(start_offset, 50.0, delta=1.0)
@@ -288,7 +332,7 @@ segment001.ts
             result = self.service.create_clip(30, behind_live_seconds=100000)
 
         self.assertTrue(result["ok"])
-        cmd = mock_run.call_args.args[0]
+        cmd = mock_run.call_args_list[0].args[0]
         start_offset = float(cmd[cmd.index("-ss") + 1])
         self.assertEqual(start_offset, 0.0)
 
@@ -345,7 +389,7 @@ segment001.ts
             result = self.service.create_clip(30, behind_live_seconds=100)
 
         self.assertTrue(result["ok"])
-        cmd = mock_run.call_args.args[0]
+        cmd = mock_run.call_args_list[0].args[0]
         start_offset = float(cmd[cmd.index("-ss") + 1])
         # elapsed must track the file's real content (~400s), not wall-clock
         # "now" (~700s): (400 - 100) - 30 = 270, not (700 - 100) - 30 = 570.

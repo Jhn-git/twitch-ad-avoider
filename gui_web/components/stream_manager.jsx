@@ -21,6 +21,7 @@ window.Components.StreamManager = function StreamManager({
 }) {
   const selectedChannel = state.selected_channel;
   const clipDuration = state.ui_state.stream_manager_clip_duration_seconds || 30;
+  const editAfterClip = state.ui_state.stream_manager_edit_after_clip !== false;
   const leftRailOpen = state.ui_state.stream_manager_left_sidebar_open !== false;
   const rightRailOpen = state.ui_state.stream_manager_right_sidebar_open !== false;
   const previewRequestRef = React.useRef(0);
@@ -339,13 +340,17 @@ window.Components.StreamManager = function StreamManager({
     onUiState("stream_manager_clip_duration_seconds", seconds);
   };
 
+  const changeEditAfterClip = () => {
+    onUiState("stream_manager_edit_after_clip", !editAfterClip);
+  };
+
   const createClip = (behindLiveSeconds = 0) => {
-    runApiAction(api.create_clip(clipDuration, behindLiveSeconds), {
+    runApiAction(api.create_clip(clipDuration, behindLiveSeconds, editAfterClip), {
       errorMessage: "Clip failed",
       onSuccess: (result) => {
         if (result.clip) {
           onRecentClip(result.clip);
-          onOpenClipEditor();
+          if (editAfterClip) onOpenClipEditor();
         }
       },
     });
@@ -378,6 +383,8 @@ window.Components.StreamManager = function StreamManager({
           clipDuration={clipDuration}
           onClipDuration={changeClipDuration}
           onClip={createClip}
+          editAfterClip={editAfterClip}
+          onEditAfterClip={changeEditAfterClip}
           onOpenClips={() => api.open_clips_folder()}
           onScreenshot={takeScreenshot}
           segmentsIndex={segmentsIndex}

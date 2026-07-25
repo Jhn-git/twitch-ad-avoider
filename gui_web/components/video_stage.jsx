@@ -24,6 +24,8 @@ window.Components.VideoStage = function VideoStage({
   clipDuration,
   onClipDuration,
   onClip,
+  editAfterClip,
+  onEditAfterClip,
   onOpenClips,
   onScreenshot,
   segmentsIndex,
@@ -509,6 +511,17 @@ window.Components.VideoStage = function VideoStage({
               renderValue={() => ""}
             />
           </span>
+          <button
+            className={`btn compact clip-edit-mode ${editAfterClip ? "is-active" : ""}`}
+            onClick={onEditAfterClip}
+            aria-pressed={editAfterClip}
+            title={editAfterClip
+              ? "The clip editor will open after clipping"
+              : "Clips will save in the background without opening the editor"}
+          >
+            <span className="clip-edit-mode-indicator" />
+            Edit after
+          </button>
           <button
             className="btn"
             disabled={!isViewingActiveStream}

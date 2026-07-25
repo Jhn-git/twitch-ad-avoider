@@ -61,8 +61,18 @@ class FakeStreamService:
         )
         return self.get_state()
 
-    def create_clip(self, duration_seconds, behind_live_seconds=0.0):
-        self.last_clip_args = (duration_seconds, behind_live_seconds)
+    def create_clip(
+        self,
+        duration_seconds,
+        behind_live_seconds=0.0,
+        *,
+        prepare_provisional_preview=True,
+    ):
+        self.last_clip_args = (
+            duration_seconds,
+            behind_live_seconds,
+            prepare_provisional_preview,
+        )
         return {"ok": True, "path": f"clips/test-{duration_seconds}.mp4"}
 
     def get_recent_clip(self):
@@ -71,6 +81,10 @@ class FakeStreamService:
     def request_clip_tail_extension(self, clip_id, seconds=5.0):
         self.last_tail_args = (clip_id, seconds)
         return {"ok": True, "clip": {"id": clip_id, "tail_seconds": seconds}}
+
+    def retry_clip_edit_preparation(self, clip_id):
+        self.last_retry_clip_id = clip_id
+        return {"ok": True, "clip": {"id": clip_id, "preview_verified": True}}
 
     def save_clip_edit(self, clip_id, start_seconds, end_seconds, title=""):
         self.last_edit_args = (clip_id, start_seconds, end_seconds, title)
@@ -220,19 +234,30 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
         clipped = api.create_clip(60, 12.5)
 
         self.assertTrue(clipped["ok"])
-        self.assertEqual(api._stream_service.last_clip_args, (60, 12.5))
+        self.assertEqual(api._stream_service.last_clip_args, (60, 12.5, True))
+
+    def test_create_clip_can_skip_the_provisional_editor_preview(self):
+        api = self.make_api(launch_channel="testuser")
+
+        clipped = api.create_clip(60, 12.5, False)
+
+        self.assertTrue(clipped["ok"])
+        self.assertEqual(api._stream_service.last_clip_args, (60, 12.5, False))
 
     def test_recent_clip_edit_methods_delegate_to_stream_service(self):
         api = self.make_api()
 
         recent = api.get_recent_clip()
         extended = api.request_clip_tail_extension("recent", 5)
+        retried = api.retry_clip_edit_preparation("recent")
         saved = api.save_clip_edit("recent", 1.25, 34.5, "Batman Cape look")
 
         self.assertEqual(recent["clip"]["id"], "recent")
         self.assertTrue(extended["ok"])
+        self.assertTrue(retried["ok"])
         self.assertTrue(saved["ok"])
         self.assertEqual(api._stream_service.last_tail_args, ("recent", 5))
+        self.assertEqual(api._stream_service.last_retry_clip_id, "recent")
         self.assertEqual(
             api._stream_service.last_edit_args,
             ("recent", 1.25, 34.5, "Batman Cape look"),

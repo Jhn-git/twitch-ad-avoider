@@ -1,5 +1,7 @@
 window.Components = window.Components || {};
 
+const END_AUDITION_SECONDS = 5;
+
 window.Components.ClipEditor = function ClipEditor({
   api,
   clip,
@@ -12,6 +14,7 @@ window.Components.ClipEditor = function ClipEditor({
   const videoRef = React.useRef(null);
   const hlsRef = React.useRef(null);
   const pendingTailSelectionRef = React.useRef(null);
+  const auditionModeRef = React.useRef("start");
   const [selectionStart, setSelectionStart] = React.useState(0);
   const [selectionEnd, setSelectionEnd] = React.useState(1);
   const [title, setTitle] = React.useState("");
@@ -27,10 +30,12 @@ window.Components.ClipEditor = function ClipEditor({
     "saving",
   ];
   const busy = saving || busyStatuses.includes(clip?.status);
-  const editable = Boolean(clip?.preview_url) && !busy;
+  const editable = Boolean(clip?.preview_url) && Boolean(clip?.can_edit) && !busy;
+  const retryable = Boolean(clip?.retry_available) && !busy;
 
   React.useEffect(() => {
     if (!clip?.id) return;
+    auditionModeRef.current = "start";
     setTitle(clip.title || "");
   }, [clip?.id]);
 
@@ -78,9 +83,31 @@ window.Components.ClipEditor = function ClipEditor({
     video.play().catch(() => {});
   }, []);
 
-  const restartSelection = () => restartAt(selectionStart, selectionEnd);
+  const restartEndAudition = (
+    start = selectionStart,
+    end = selectionEnd,
+  ) => {
+    auditionModeRef.current = "end";
+    restartAt(Math.max(start, end - END_AUDITION_SECONDS), end);
+  };
 
-  const applySelection = (nextStart, nextEnd) => {
+  const restartSelectionFromStart = (
+    start = selectionStart,
+    end = selectionEnd,
+  ) => {
+    auditionModeRef.current = "start";
+    restartAt(start, end);
+  };
+
+  const restartAudition = () => {
+    if (auditionModeRef.current === "end") {
+      restartEndAudition();
+      return;
+    }
+    restartSelectionFromStart();
+  };
+
+  const applySelection = (nextStart, nextEnd, auditionBoundary = "start") => {
     const boundedStart = window.AppHelpers.clampRatio(
       nextStart,
       0,
@@ -93,10 +120,18 @@ window.Components.ClipEditor = function ClipEditor({
     );
     setSelectionStart(boundedStart);
     setSelectionEnd(boundedEnd);
-    window.requestAnimationFrame(() => restartAt(boundedStart, boundedEnd));
+    auditionModeRef.current = auditionBoundary;
+    window.requestAnimationFrame(() => {
+      if (auditionBoundary === "end") {
+        restartEndAudition(boundedStart, boundedEnd);
+        return;
+      }
+      restartSelectionFromStart(boundedStart, boundedEnd);
+    });
   };
 
   const moveStart = (value) => {
+    auditionModeRef.current = "start";
     setSelectionStart(window.AppHelpers.clampRatio(
       value,
       0,
@@ -105,6 +140,7 @@ window.Components.ClipEditor = function ClipEditor({
   };
 
   const moveEnd = (value) => {
+    auditionModeRef.current = "end";
     setSelectionEnd(window.AppHelpers.clampRatio(
       value,
       selectionStart + minimumSelectionSeconds,
@@ -115,12 +151,16 @@ window.Components.ClipEditor = function ClipEditor({
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.currentTime < selectionStart - 0.05 || video.currentTime >= selectionEnd - 0.03) {
-      restartAt(selectionStart, selectionEnd);
+    const loopStart = auditionModeRef.current === "end"
+      ? Math.max(selectionStart, selectionEnd - END_AUDITION_SECONDS)
+      : selectionStart;
+    if (video.currentTime < loopStart - 0.05 || video.currentTime >= selectionEnd - 0.03) {
+      restartAt(loopStart, selectionEnd);
     }
   };
 
   const requestMoreTail = () => {
+    auditionModeRef.current = "end";
     pendingTailSelectionRef.current = {
       clipId: clip.id,
       start: selectionStart,
@@ -136,6 +176,19 @@ window.Components.ClipEditor = function ClipEditor({
       if (result.clip) onClipUpdate(result.clip);
     }).catch((error) => {
       pendingTailSelectionRef.current = null;
+      onToast({ kind: "error", message: String(error) });
+    });
+  };
+
+  const retryPreparation = () => {
+    api.retry_clip_edit_preparation(clip.id).then((result) => {
+      if (!result.ok) {
+        onToast({ kind: "error", message: result.error || "Could not retry clip preparation" });
+        if (result.clip) onClipUpdate(result.clip);
+        return;
+      }
+      if (result.clip) onClipUpdate(result.clip);
+    }).catch((error) => {
       onToast({ kind: "error", message: String(error) });
     });
   };
@@ -186,7 +239,7 @@ window.Components.ClipEditor = function ClipEditor({
             ref={videoRef}
             controls
             playsInline
-            onLoadedMetadata={restartSelection}
+            onLoadedMetadata={restartAudition}
             onTimeUpdate={handleTimeUpdate}
           />
           <div className={`clip-editor-status ${statusKind}`}>
@@ -231,8 +284,8 @@ window.Components.ClipEditor = function ClipEditor({
                   value={selectionStart}
                   disabled={!editable}
                   onChange={(event) => moveStart(Number(event.target.value))}
-                  onPointerUp={restartSelection}
-                  onKeyUp={restartSelection}
+                  onPointerUp={() => restartSelectionFromStart()}
+                  onKeyUp={() => restartSelectionFromStart()}
                 />
                 <input
                   className="trim-range trim-end"
@@ -245,8 +298,8 @@ window.Components.ClipEditor = function ClipEditor({
                   value={selectionEnd}
                   disabled={!editable}
                   onChange={(event) => moveEnd(Number(event.target.value))}
-                  onPointerUp={restartSelection}
-                  onKeyUp={restartSelection}
+                  onPointerUp={() => restartEndAudition()}
+                  onKeyUp={() => restartEndAudition()}
                 />
               </div>
             </div>
@@ -256,16 +309,16 @@ window.Components.ClipEditor = function ClipEditor({
             <div>
               <span>Start</span>
               <button className="btn compact" disabled={!editable} onClick={() => (
-                applySelection(selectionStart - 1, selectionEnd)
+                applySelection(selectionStart - 1, selectionEnd, "start")
               )}>-1s</button>
               <button className="btn compact" disabled={!editable} onClick={() => (
-                applySelection(selectionStart + 1, selectionEnd)
+                applySelection(selectionStart + 1, selectionEnd, "start")
               )}>+1s</button>
             </div>
             <div>
               <span>End</span>
               <button className="btn compact" disabled={!editable} onClick={() => (
-                applySelection(selectionStart, selectionEnd - 1)
+                applySelection(selectionStart, selectionEnd - 1, "end")
               )}>-1s</button>
               <button className="btn compact" disabled={!editable} onClick={requestMoreTail}>
                 Capture +5s
@@ -273,7 +326,16 @@ window.Components.ClipEditor = function ClipEditor({
             </div>
           </div>
 
-          {clip.error && <div className="clip-editor-error">{clip.error}</div>}
+          {clip.error && (
+            <div className="clip-editor-error">
+              <span>{clip.error}</span>
+              {retryable && (
+                <button className="btn compact" onClick={retryPreparation}>
+                  Retry preparation
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="clip-editor-actions">
             <button className="btn" onClick={onClose}>Close</button>

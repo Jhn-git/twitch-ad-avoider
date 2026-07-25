@@ -98,7 +98,7 @@ function App() {
       if (event && event.type === "clip_created") {
         if (event.clip) {
           setRecentClip(event.clip);
-          setClipEditorOpen(true);
+          if (event.open_editor !== false) setClipEditorOpen(true);
         }
         pushToast({
           kind: "success",
