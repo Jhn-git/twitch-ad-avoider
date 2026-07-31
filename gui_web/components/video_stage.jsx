@@ -33,6 +33,8 @@ window.Components.VideoStage = function VideoStage({
   clipEditorOpen,
   hasRecentClip,
   onOpenRecentClip,
+  volume,
+  onVolumeChange,
 }) {
   const Icon = window.Components.Icon;
   const Dropdown = window.Components.Dropdown;
@@ -47,6 +49,9 @@ window.Components.VideoStage = function VideoStage({
   const userSeekedRef = React.useRef(false);
   const segmentsIndexRef = React.useRef(segmentsIndex);
   const timelineBoundsRef = React.useRef(null);
+  const volumeRef = React.useRef(volume);
+  const onVolumeChangeRef = React.useRef(onVolumeChange);
+  const volumeSaveTimerRef = React.useRef(null);
   const [isLive, setIsLive] = React.useState(true);
   const [theaterMode, setTheaterMode] = React.useState(false);
   const playbackUrl = stream?.playback_url;
@@ -96,6 +101,15 @@ window.Components.VideoStage = function VideoStage({
   React.useEffect(() => {
     timelineBoundsRef.current = timelineBounds;
   }, [timelineBounds]);
+  React.useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+  React.useEffect(() => {
+    onVolumeChangeRef.current = onVolumeChange;
+  }, [onVolumeChange]);
+  React.useEffect(() => () => {
+    if (volumeSaveTimerRef.current) window.clearTimeout(volumeSaveTimerRef.current);
+  }, []);
 
   const updateSeekVisuals = React.useCallback((video) => {
     if (!video.buffered || !video.buffered.length) return;
@@ -199,6 +213,10 @@ window.Components.VideoStage = function VideoStage({
     video.load();
     video.playbackRate = 1;
     userSeekedRef.current = false;
+    // Apply the persisted volume before playback starts, so the user never
+    // hears a flash of full-volume audio while a saved (usually lower) level
+    // is on its way in.
+    video.volume = volumeRef.current;
 
     if (!playbackUrl) return undefined;
 
@@ -239,10 +257,21 @@ window.Components.VideoStage = function VideoStage({
     };
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("progress", handleTimeUpdate);
+    // Fires for both a dragged volume slider and the native mute toggle -
+    // debounced so a slider drag doesn't hammer disk writes with every tick.
+    const handleVolumeChange = () => {
+      if (volumeSaveTimerRef.current) window.clearTimeout(volumeSaveTimerRef.current);
+      const nextVolume = video.volume;
+      volumeSaveTimerRef.current = window.setTimeout(() => {
+        onVolumeChangeRef.current?.(nextVolume);
+      }, 400);
+    };
+    video.addEventListener("volumechange", handleVolumeChange);
 
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("progress", handleTimeUpdate);
+      video.removeEventListener("volumechange", handleVolumeChange);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;

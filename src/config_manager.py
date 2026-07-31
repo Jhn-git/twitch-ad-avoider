@@ -44,6 +44,8 @@ from .constants import (
     MAX_CHECK_TIMEOUT,
     MIN_HLS_LIVE_EDGE,
     MAX_HLS_LIVE_EDGE,
+    MIN_VOLUME,
+    MAX_VOLUME,
 )
 from .logging_config import get_logger
 from .validators import (
@@ -309,6 +311,18 @@ class ConfigManager:
             raise ValidationError(f"{label} must be an integer")
         validate_numeric_range(value, min_val=min_val, max_val=max_val, data_type=int)
 
+    def _validate_float_range_setting(
+        self,
+        value: Any,
+        label: str,
+        min_val: float,
+        max_val: float,
+    ) -> None:
+        """Require an actual int or float (not bool) and validate its allowed range."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValidationError(f"{label} must be a number")
+        validate_numeric_range(value, min_val=min_val, max_val=max_val, data_type=float)
+
     def _validate_int_choice_setting(
         self,
         value: Any,
@@ -433,6 +447,12 @@ class ConfigManager:
             "show_stream_preview": lambda value: self._validate_bool_setting(
                 value,
                 "Show stream preview setting",
+            ),
+            "volume": lambda value: self._validate_float_range_setting(
+                value,
+                "Volume",
+                MIN_VOLUME,
+                MAX_VOLUME,
             ),
             "window_width": lambda value: self._validate_int_range_setting(
                 value,

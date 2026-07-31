@@ -22,6 +22,7 @@ window.Components.StreamManager = function StreamManager({
   const selectedChannel = state.selected_channel;
   const clipDuration = state.ui_state.stream_manager_clip_duration_seconds || 30;
   const editAfterClip = state.ui_state.stream_manager_edit_after_clip !== false;
+  const volume = state.ui_state.volume ?? 0.2;
   const leftRailOpen = state.ui_state.stream_manager_left_sidebar_open !== false;
   const rightRailOpen = state.ui_state.stream_manager_right_sidebar_open !== false;
   const previewRequestRef = React.useRef(0);
@@ -385,6 +386,8 @@ window.Components.StreamManager = function StreamManager({
           onClip={createClip}
           editAfterClip={editAfterClip}
           onEditAfterClip={changeEditAfterClip}
+          volume={volume}
+          onVolumeChange={(value) => onUiState("volume", value)}
           onOpenClips={() => api.open_clips_folder()}
           onScreenshot={takeScreenshot}
           segmentsIndex={segmentsIndex}

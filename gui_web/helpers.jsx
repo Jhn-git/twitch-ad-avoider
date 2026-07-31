@@ -29,6 +29,7 @@ window.AppHelpers = {
         settings.stream_manager_clip_duration_seconds || 30,
       stream_manager_edit_after_clip:
         settings.stream_manager_edit_after_clip !== false,
+      volume: settings.volume ?? 0.2,
     };
   },
 

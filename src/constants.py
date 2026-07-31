@@ -44,6 +44,8 @@ DEFAULT_SETTINGS = {
     "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
     "button_hover_sound_enabled": True,  # Play subtle UI hover sounds
     "show_stream_preview": True,  # Show live thumbnail + title when selecting a favorite
+    # Player settings
+    "volume": 0.2,  # Last-used player volume (0.0-1.0); low default until the user sets one
     # Stream Manager screen settings
     "stream_manager_left_sidebar_open": True,  # Favorites rail expanded/collapsed
     "stream_manager_right_sidebar_open": True,  # Options rail expanded/collapsed
@@ -92,6 +94,10 @@ MIN_WINDOW_WIDTH = 300
 MAX_WINDOW_WIDTH = 7680
 MIN_WINDOW_HEIGHT = 200
 MAX_WINDOW_HEIGHT = 4320
+
+# Player volume validation constants
+MIN_VOLUME = 0.0
+MAX_VOLUME = 1.0
 
 # Favorites refresh validation constants
 MIN_REFRESH_INTERVAL = 30  # Minimum 30 seconds

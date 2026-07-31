@@ -104,6 +104,12 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
         for seconds in (29, 3601, "60", None):
             self.assertFalse(self.config.set("pinned_favorites_refresh_interval", seconds))
 
+    def test_volume_range_validation(self):
+        for level in (0.0, 0.2, 0.5, 1.0):
+            self.assertTrue(self.config.set("volume", level))
+        for level in (-0.1, 1.1, "0.5", None, True):
+            self.assertFalse(self.config.set("volume", level))
+
     def test_boolean_validation(self):
         boolean_settings = [
             "debug",

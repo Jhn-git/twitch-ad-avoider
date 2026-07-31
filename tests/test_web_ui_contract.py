@@ -24,6 +24,17 @@ def test_video_stage_shows_live_preview_image_without_playback():
     assert ".stream-preview-image" in index_source
 
 
+def test_player_volume_persists_through_ui_state():
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+    manager_source = (ROOT / "gui_web" / "components" / "stream_manager.jsx").read_text()
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+
+    assert "volume:" in helpers_source
+    assert 'onUiState("volume", value)' in manager_source
+    assert "video.volume = volumeRef.current" in stage_source
+    assert '"volumechange"' in stage_source
+
+
 def test_dropdown_has_viewport_aware_placement():
     dropdown_source = (ROOT / "gui_web" / "components" / "dropdown.jsx").read_text()
     index_source = (ROOT / "gui_web" / "index.html").read_text()

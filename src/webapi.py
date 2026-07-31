@@ -140,6 +140,7 @@ class TwitchViewerAPI:
                 "stream_manager_clip_duration_seconds", 30
             ),
             "stream_manager_edit_after_clip": settings.get("stream_manager_edit_after_clip", True),
+            "volume": settings.get("volume", 0.2),
         }
 
     # ------------------------------------------------------------------
