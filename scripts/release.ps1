@@ -53,7 +53,7 @@ switch ($Bump) {
 }
 
 $newVersion = "$verMajor.$verMinor.$verPatch"
-$ZipPath = "dist\twitchadavoider-v$newVersion.zip"
+$MsiPath = "dist\twitchadavoider-v$newVersion.msi"
 
 # CAPTURE LAST COMMIT MESSAGE
 
@@ -74,12 +74,13 @@ if ($DryRun) {
     Write-Host "  $ConstantsPath"
     Write-Host ""
     Write-Host "Would run: python scripts/build_executable.py"
-    Write-Host "Would zip: $AppDir -> $ZipPath"
+    Write-Host "Would run: scripts\build_msi.ps1 -Version $newVersion"
+    Write-Host "Would produce: $MsiPath"
     Write-Host "Would run: git commit -am 'bump: v$newVersion'"
     Write-Host "Would run: git tag v$newVersion"
     Write-Host "Would run: git push"
     Write-Host "Would run: git push --tags"
-    Write-Host "Would run: gh release create v$newVersion $ZipPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
+    Write-Host "Would run: gh release create v$newVersion $MsiPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
     exit 0
 }
 
@@ -118,12 +119,20 @@ if (-not (Test-Path $AppDir)) {
 
 Write-Success "Build complete: $AppDir"
 
-Write-Info "Packaging release zip..."
-if (Test-Path $ZipPath) {
-    Remove-Item -LiteralPath $ZipPath -Force
+Write-Info "Building MSI installer..."
+& "$PSScriptRoot\build_msi.ps1" -Version $newVersion
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "MSI build failed. Release aborted."
+    exit 1
 }
-Compress-Archive -Path "$AppDir\*" -DestinationPath $ZipPath
-Write-Success "Created $ZipPath"
+
+if (-not (Test-Path $MsiPath)) {
+    Write-Error "MSI build finished but $MsiPath not found. Release aborted."
+    exit 1
+}
+
+Write-Success "Created $MsiPath"
 Write-Host ""
 
 # CONFIRM BEFORE PUSH
@@ -138,7 +147,7 @@ if ($confirm -ne "" -and $confirm -notmatch '^[Yy]') {
     Write-Host "  git commit -am 'bump: v$newVersion'"
     Write-Host "  git tag v$newVersion"
     Write-Host "  git push; git push --tags"
-    Write-Host "  gh release create v$newVersion $ZipPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
+    Write-Host "  gh release create v$newVersion $MsiPath --title 'TwitchAdAvoider v$newVersion' --notes '$lastCommitMessage'"
     exit 0
 }
 
@@ -161,7 +170,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "git push --tags failed"; exit 1 }
 # GITHUB RELEASE
 
 Write-Info "Creating GitHub release..."
-gh release create "v$newVersion" "$ZipPath" `
+gh release create "v$newVersion" "$MsiPath" `
     --title "TwitchAdAvoider v$newVersion" `
     --notes "$lastCommitMessage"
 

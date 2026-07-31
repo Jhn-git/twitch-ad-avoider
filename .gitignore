@@ -30,6 +30,12 @@ htmlcov/
 # Build cache
 build_cache/
 
+# WiX Toolset (MSI installer build artifacts)
+*.msi
+*.wixobj
+*.wixpdb
+*.wixlib
+
 # Virtual Environment
 venv/
 env/

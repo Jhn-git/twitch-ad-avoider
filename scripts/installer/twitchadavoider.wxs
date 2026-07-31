@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WiX v6 source for the TwitchAdAvoider MSI installer.
+  Built via scripts/build_msi.ps1, which packages the PyInstaller onedir
+  output already built at dist/twitchadavoider (run 'make build' first).
+
+  UpgradeCode below is permanent - generated once and must never change
+  across future releases, or upgrade detection between versions breaks.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package
+      Name="TwitchAdAvoider"
+      Manufacturer="TwitchAdAvoider Contributors"
+      Version="$(var.Version)"
+      UpgradeCode="32099154-2948-439F-AF17-509308E18AA2"
+      Scope="perMachine">
+
+    <!-- Blocks installing an older version over a newer one, and silently
+         major-upgrades (removes old files, installs new) any existing
+         install sharing this UpgradeCode when a higher Version installs. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of TwitchAdAvoider is already installed. Setup will now exit." />
+
+    <!-- Keeps everything inside the single .msi file, no external .cab. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Add/Remove Programs (Apps & Features) metadata -->
+    <Icon Id="TwitchAdAvoiderIcon.exe" SourceFile="assets\twitch-cartoon-logo.ico" />
+    <Property Id="ARPPRODUCTICON" Value="TwitchAdAvoiderIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Jhn-git/TwitchAdAvoider-lite" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Jhn-git/TwitchAdAvoider-lite" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- Install location: C:\Program Files\TwitchAdAvoider -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="TwitchAdAvoider" />
+    </StandardDirectory>
+
+    <!-- Start Menu shortcut (per-machine package -> All Users Start Menu,
+         i.e. %ProgramData%\Microsoft\Windows\Start Menu\Programs) -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="ApplicationShortcut" Guid="C1F2E3D4-5A6B-47C8-9D0E-1F2A3B4C5D6E">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="TwitchAdAvoider"
+                  Description="Watch Twitch streams while avoiding ads"
+                  Target="[INSTALLFOLDER]twitchadavoider.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="TwitchAdAvoiderIcon.exe" />
+        <RemoveFolder Id="CleanupProgramMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKLM"
+                        Key="Software\TwitchAdAvoider Contributors\TwitchAdAvoider"
+                        Name="Installed"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <!-- All PyInstaller onedir output (twitchadavoider.exe, launch.bat, and
+         the entire _internal\ tree) harvested by glob so it never needs to
+         be hand-listed. SourceDir and Version are passed in at build time
+         via 'wix build -d SourceDir=... -d Version=...'. -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.SourceDir)\**" />
+    </ComponentGroup>
+
+    <Feature Id="MainApplication" Title="TwitchAdAvoider" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <!-- Minimal installer UI: welcome+license combined, then progress, then
+         exit. No feature/directory customization dialogs, matching the
+         per-machine/fixed-location/no-options design. -->
+    <WixVariable Id="WixUILicenseRtf" Value="scripts\installer\License.rtf" />
+    <ui:WixUI Id="WixUI_Minimal" />
+
+  </Package>
+</Wix>

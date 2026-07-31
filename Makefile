@@ -1,4 +1,4 @@
-.PHONY: help clean test format lint typecheck check run build install dev-install all release
+.PHONY: help clean test format lint typecheck check run build installer install dev-install all release
 
 # Detect OS for cross-platform compatibility
 ifeq ($(OS),Windows_NT)
@@ -31,6 +31,7 @@ help:
 	@echo ""
 	@echo "Building:"
 	@echo "  make build        - Build Windows executable (clean + check + test + build)"
+	@echo "  make installer    - Build MSI installer (requires WiX Toolset v6)"
 	@echo "  make release      - Bump version, build, and publish GitHub release"
 	@echo ""
 
@@ -97,6 +98,12 @@ build-full: clean check test
 	@echo "Building executable..."
 	$(PYTHON) scripts/build_executable.py
 	@echo "[OK] Build complete"
+
+# Build MSI installer from a fresh executable build (requires WiX Toolset v6:
+# https://wixtoolset.org/)
+installer: build
+	powershell -ExecutionPolicy Bypass -File scripts/build_msi.ps1
+	@echo "[OK] Installer complete"
 
 # Bump version, build exe, and publish GitHub release (Windows)
 # Usage: make release        (patch bump)

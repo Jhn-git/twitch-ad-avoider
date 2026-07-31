@@ -18,9 +18,11 @@ Watch Twitch streams through Streamlink in a clean desktop WebView app with embe
 
 ## Quick Start
 
-### Windows EXE
+### Windows Installer
 
-Download the `twitchadavoider-vX.Y.Z.zip` from the Releases page, extract it, and run `twitchadavoider.exe` from inside the extracted folder (it needs its bundled support files alongside it). WebView2 is required on Windows and is already present on most Windows 10/11 installs.
+Download the `twitchadavoider-vX.Y.Z.msi` from the [Releases page](https://github.com/Jhn-git/TwitchAdAvoider-lite/releases) and run it. Windows will prompt for administrator approval (UAC) since it installs system-wide to `C:\Program Files\TwitchAdAvoider` and adds a Start Menu shortcut. Launch TwitchAdAvoider from the Start Menu afterward. WebView2 is required on Windows and is already present on most Windows 10/11 installs.
+
+Installing a newer version's `.msi` automatically upgrades the existing install in place — no need to uninstall first. To remove it, use *Settings > Apps* or *Programs and Features*.
 
 ### From Source
 
