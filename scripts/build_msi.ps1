@@ -63,6 +63,11 @@ if (Test-Path $MsiPath) {
     Remove-Item -LiteralPath $MsiPath -Force
 }
 
+# Fixed-name copy (version-less) so GitHub's /releases/latest/download/
+# evergreen link always resolves to the current release without needing
+# manual updates on every version bump.
+$FixedMsiPath = "dist\twitchadavoider.msi"
+
 # BUILD
 Write-Info "Building MSI..."
 $AbsAppDir = (Resolve-Path $AppDir).Path
@@ -86,3 +91,6 @@ if (-not (Test-Path $MsiPath)) {
 }
 
 Write-Success "Created $MsiPath"
+
+Copy-Item -LiteralPath $MsiPath -Destination $FixedMsiPath -Force
+Write-Success "Created $FixedMsiPath (fixed-name alias for the evergreen download link)"
