@@ -14,6 +14,18 @@ def test_app_refreshes_favorites_on_startup_when_enabled():
     assert "refreshFavoritesOnStartup(bridge, initial)" in app_source
 
 
+def test_newly_live_favorite_bounces_until_acknowledged():
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+    rail_source = (ROOT / "gui_web" / "components" / "favorites_rail.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
+
+    assert "window.__onFavoritesCameOnline" in app_source
+    assert "just-live" in rail_source
+    assert "onAcknowledgeLive" in rail_source
+    assert ".avatar.just-live" in index_source
+    assert "favorite-just-live-bounce" in index_source
+
+
 def test_video_stage_shows_live_preview_image_without_playback():
     stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
     index_source = (ROOT / "gui_web" / "index.html").read_text()

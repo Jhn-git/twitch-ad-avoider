@@ -222,6 +222,8 @@ class TwitchViewerAPI:
             self._push("__onToast", {"kind": "success", "message": ", ".join(newly_live) + " live"})
         if newly_live and self._config.get("favorite_live_notification_sound_enabled", True):
             self._push("__onFavoriteLiveSound", {"channels": newly_live})
+        if newly_live:
+            self._push("__onFavoritesCameOnline", {"channels": newly_live})
         return {"ok": True, "favorites": payload}
 
     def select_channel(self, channel: str) -> dict:

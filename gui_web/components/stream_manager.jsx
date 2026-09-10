@@ -18,6 +18,8 @@ window.Components.StreamManager = function StreamManager({
   onOpenClipEditor,
   onCloseClipEditor,
   onRecentClip,
+  recentlyLive,
+  onAcknowledgeLive,
 }) {
   const selectedChannel = state.selected_channel;
   const clipDuration = state.ui_state.stream_manager_clip_duration_seconds || 30;
@@ -375,6 +377,8 @@ window.Components.StreamManager = function StreamManager({
         onRemove={removeFavorite}
         onPin={togglePin}
         onRefresh={refreshFavorites}
+        recentlyLive={recentlyLive}
+        onAcknowledgeLive={onAcknowledgeLive}
       />
       <div style={{ position: "relative", minWidth: 0, minHeight: 0 }}>
         <window.Components.VideoStage

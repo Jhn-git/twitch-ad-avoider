@@ -317,6 +317,36 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
             )
         )
 
+    def test_refresh_favorites_pushes_came_online_for_newly_live_channels(self):
+        api = self.make_api()
+        api.add_favorite("TestUser")
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": False}):
+            api.refresh_favorites()
+        window = Mock()
+        api.set_window(window)
+
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            api.refresh_favorites()
+
+        came_online = [
+            call.args[0]
+            for call in window.evaluate_js.call_args_list
+            if "__onFavoritesCameOnline" in call.args[0]
+        ]
+        self.assertEqual(len(came_online), 1)
+        self.assertIn("testuser", came_online[0])
+
+        window.evaluate_js.reset_mock()
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            api.refresh_favorites()
+
+        self.assertFalse(
+            any(
+                "__onFavoritesCameOnline" in call.args[0]
+                for call in window.evaluate_js.call_args_list
+            )
+        )
+
     def test_refresh_favorites_pinned_only_checks_only_pinned_channels(self):
         api = self.make_api()
         api.add_favorite("PinnedUser")

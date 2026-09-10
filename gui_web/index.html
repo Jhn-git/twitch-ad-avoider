@@ -188,6 +188,18 @@
       0 0 0 1px rgba(32,200,107,0.22),
       0 0 16px rgba(32,200,107,0.48);
   }
+  @keyframes favorite-just-live-bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    15% { transform: translateY(-6px); }
+    30% { transform: translateY(0); }
+    42% { transform: translateY(-3px); }
+  }
+  .avatar.just-live {
+    animation: favorite-just-live-bounce 1.6s ease-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .avatar.just-live { animation: none; }
+  }
   .avatar img {
     width: 100%;
     height: 100%;
