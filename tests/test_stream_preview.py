@@ -26,6 +26,7 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
                 "stream": {
                     "title": "Chill stream",
                     "previewImageURL": "https://example.com/preview.jpg",
+                    "viewersCount": 1234,
                 },
             }
         }
@@ -48,9 +49,22 @@ def test_fetch_stream_preview_info_live_channel(monkeypatch):
     assert info.title == "Chill stream"
     assert info.preview_image_url == "https://example.com/preview.jpg"
     assert info.profile_image_url == "https://example.com/profile.jpg"
+    assert info.viewer_count == 1234
     assert call_kwargs["timeout"] == 17
     assert "previewImageURL(width: 1280, height: 720)" in call_kwargs["json"]["query"]
     assert "createdAt" in call_kwargs["json"]["query"]
+    assert "viewersCount" in call_kwargs["json"]["query"]
+
+
+def test_fetch_stream_preview_info_missing_viewer_count_is_none(monkeypatch):
+    """A live stream without a usable viewersCount leaves viewer_count unset, not 0."""
+    payload = {"data": {"user": {"stream": {"title": "Chill stream", "viewersCount": None}}}}
+    monkeypatch.setattr("src.stream_preview.requests.post", lambda *a, **k: _FakeResponse(payload))
+
+    info = fetch_stream_preview_info("ninja")
+
+    assert info.is_live is True
+    assert info.viewer_count is None
 
 
 def test_fetch_stream_preview_info_parses_stream_created_at(monkeypatch):

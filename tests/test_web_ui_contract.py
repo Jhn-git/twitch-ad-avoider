@@ -86,8 +86,34 @@ def test_clip_button_has_persistent_edit_after_toggle_and_quick_mode():
     assert "api.create_clip(clipDuration, behindLiveSeconds, editAfterClip)" in manager_source
     assert 'onUiState("stream_manager_edit_after_clip", !editAfterClip)' in manager_source
     assert "aria-pressed={editAfterClip}" in stage_source
-    assert "Edit after" in stage_source
+    assert "Edit after clipping" in stage_source
     assert ".clip-edit-mode.is-active" in index_source
+
+
+def test_edit_after_toggle_lives_in_clip_menu_and_secondary_actions_are_icons():
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    dropdown_source = (ROOT / "gui_web" / "components" / "dropdown.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
+
+    assert "footer={(" in stage_source
+    assert "dropdown-toggle-row clip-edit-mode" in stage_source
+    assert "footer = null" in dropdown_source
+    assert "dropdown-menu-divider" in dropdown_source
+    assert stage_source.count('className="btn icon-only"') == 2
+    assert ".btn.icon-only" in index_source
+    assert ".dropdown-toggle-row" in index_source
+
+
+def test_live_badge_shows_viewer_count():
+    stage_source = (ROOT / "gui_web" / "components" / "video_stage.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
+
+    assert "preview?.viewer_count" in stage_source
+    assert "preview?.channel === selectedChannel" in stage_source
+    assert 'className="live-viewers"' in stage_source
+    assert "viewerCountLabel(count)" in helpers_source
+    assert ".live-viewers" in index_source
 
 
 def test_clip_saved_toast_is_event_driven_only():

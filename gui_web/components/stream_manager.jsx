@@ -117,6 +117,7 @@ window.Components.StreamManager = function StreamManager({
       title: null,
       preview_image_url: null,
       profile_image_url: favorite?.profile_image_url || null,
+      viewer_count: null,
     };
   };
 

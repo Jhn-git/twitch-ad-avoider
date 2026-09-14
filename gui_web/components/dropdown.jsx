@@ -9,6 +9,7 @@ window.Components.Dropdown = function Dropdown({
   buttonClassName = "",
   menuClassName = "",
   renderValue,
+  footer = null,
 }) {
   const Icon = window.Components.Icon;
   const [open, setOpen] = React.useState(false);
@@ -109,6 +110,12 @@ window.Components.Dropdown = function Dropdown({
               {option.label}
             </button>
           ))}
+          {footer && (
+            <React.Fragment>
+              <div className="dropdown-menu-divider" />
+              {footer}
+            </React.Fragment>
+          )}
         </div>
       )}
     </div>

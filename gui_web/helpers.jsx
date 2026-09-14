@@ -38,6 +38,11 @@ window.AppHelpers = {
     return preview.title || (preview.is_live ? "Live now" : "");
   },
 
+  viewerCountLabel(count) {
+    if (count === null || count === undefined || !Number.isFinite(Number(count))) return "";
+    return Number(count).toLocaleString("en-US");
+  },
+
   durationLabel(seconds) {
     if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
     return `${seconds}s`;
@@ -174,6 +179,7 @@ window.AppHelpers = {
         : "",
       preview_image_url: null,
       profile_image_url: null,
+      viewer_count: 1234,
     });
     return {
       get_initial_state: () => Promise.resolve({

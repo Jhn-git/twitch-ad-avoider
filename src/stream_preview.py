@@ -34,6 +34,7 @@ class StreamPreviewInfo:
     # "2026-07-17T09:58:35Z"), independent of whenever our own recording
     # actually started - the app may open partway into an already-live stream.
     stream_created_at: Optional[str] = None
+    viewer_count: Optional[int] = None
 
 
 def fetch_stream_preview_info(
@@ -64,7 +65,7 @@ def fetch_stream_preview_info(
     # when the stage expands on wide displays.
     query = (
         '{ user(login: "%s") { profileImageURL(width: 96) '
-        "stream { title previewImageURL(width: 1280, height: 720) createdAt } } }"
+        "stream { title previewImageURL(width: 1280, height: 720) createdAt viewersCount } } }"
         % validated_channel
     )
 
@@ -89,6 +90,7 @@ def fetch_stream_preview_info(
                 profile_image_url=profile_image_url,
             )
 
+        viewers = stream_node.get("viewersCount")
         return StreamPreviewInfo(
             channel=validated_channel,
             is_live=True,
@@ -96,6 +98,7 @@ def fetch_stream_preview_info(
             preview_image_url=stream_node.get("previewImageURL"),
             profile_image_url=profile_image_url,
             stream_created_at=stream_node.get("createdAt"),
+            viewer_count=viewers if isinstance(viewers, int) else None,
         )
     except Exception as e:
         logger.warning(f"Failed to fetch stream preview for {validated_channel}: {e}")

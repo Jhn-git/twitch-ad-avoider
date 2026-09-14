@@ -32,17 +32,17 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 # READ CURRENT VERSION
 
 $pyprojectContent = Get-Content $PyprojectPath -Raw
+$currentVersion = Get-PyprojectVersion -Content $pyprojectContent
 
-if ($pyprojectContent -match 'version\s*=\s*"([0-9]+)\.([0-9]+)\.([0-9]+)"') {
-    [int]$verMajor = $Matches[1]
-    [int]$verMinor = $Matches[2]
-    [int]$verPatch = $Matches[3]
-} else {
+if (-not $currentVersion) {
     Write-Error "Could not parse version from $PyprojectPath"
     exit 1
 }
 
-$currentVersion = "$verMajor.$verMinor.$verPatch"
+$versionParts = $currentVersion.Split(".")
+[int]$verMajor = $versionParts[0]
+[int]$verMinor = $versionParts[1]
+[int]$verPatch = $versionParts[2]
 
 # CALCULATE NEW VERSION
 
@@ -90,7 +90,7 @@ if ($DryRun) {
 Write-Info "Updating version files..."
 
 $content = Get-Content $PyprojectPath -Raw
-$content = $content -replace '(version\s*=\s*")[^"]+(")', "`${1}$newVersion`${2}"
+$content = Set-PyprojectVersion -Content $content -Version $newVersion
 Set-Content $PyprojectPath -Value $content -NoNewline
 Write-Success "Updated $PyprojectPath"
 

@@ -121,5 +121,29 @@ function Update-Streamlink {
     }
 }
 
+# Matches only a line that starts with `version = "x.y.z"` (the [project] version). Anchoring to
+# line start keeps keys that merely end in "version", like mypy's python_version, untouched.
+$script:PyprojectVersionPattern = '(?m)^(version\s*=\s*")([0-9]+\.[0-9]+\.[0-9]+)(")'
+
+# Return the [project] version from pyproject.toml text, or $null if absent
+function Get-PyprojectVersion {
+    param([Parameter(Mandatory)][string]$Content)
+
+    if ($Content -match $script:PyprojectVersionPattern) {
+        return $Matches[2]
+    }
+    return $null
+}
+
+# Return pyproject.toml text with only the [project] version replaced
+function Set-PyprojectVersion {
+    param(
+        [Parameter(Mandatory)][string]$Content,
+        [Parameter(Mandatory)][string]$Version
+    )
+
+    return $Content -replace $script:PyprojectVersionPattern, "`${1}$Version`${3}"
+}
+
 # Export functions
-Export-ModuleMember -Function Write-ColorOutput, Write-Success, Write-Error, Write-Warning, Write-Info, Test-ChannelName, Test-PythonInstallation, Test-StreamlinkInstallation, Update-Streamlink
+Export-ModuleMember -Function Write-ColorOutput, Write-Success, Write-Error, Write-Warning, Write-Info, Test-ChannelName, Test-PythonInstallation, Test-StreamlinkInstallation, Update-Streamlink, Get-PyprojectVersion, Set-PyprojectVersion

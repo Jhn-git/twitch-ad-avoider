@@ -403,6 +403,22 @@
     border-radius: 50%;
     background: var(--accent);
   }
+  .live-badge-divider {
+    width: 1px;
+    height: 10px;
+    background: rgba(255,255,255,0.28);
+  }
+  .live-viewers {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .live-badge .icon {
+    width: 12px;
+    height: 12px;
+  }
   .scrub-row {
     width: var(--stage-content-width);
     display: flex;
@@ -530,7 +546,7 @@
   .clip-duration-dropdown .dropdown-menu {
     right: 0;
     left: auto;
-    min-width: 126px;
+    min-width: 170px;
   }
   .clip-edit-mode {
     gap: 7px;
@@ -565,6 +581,16 @@
   .clip-edit-mode.is-active .clip-edit-mode-indicator::after {
     left: 12px;
     background: #06130b;
+  }
+  /* Secondary actions (Screenshot, Open Clips Folder) - icon-only and
+     muted so the Clip button stays the obvious primary action. */
+  .btn.icon-only {
+    width: 38px;
+    padding: 0;
+    color: var(--ink-3);
+  }
+  .btn.icon-only:hover:not(:disabled) {
+    color: var(--ink);
   }
 
   .btn {
@@ -671,6 +697,31 @@
   }
   .dropdown-option.selected {
     font-weight: 800;
+  }
+  .dropdown-menu-divider {
+    height: 1px;
+    margin: 5px 0;
+    background: var(--line-2);
+  }
+  .dropdown-toggle-row {
+    width: 100%;
+    min-height: 32px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 0 9px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .dropdown-toggle-row:hover {
+    background: var(--accent-soft);
   }
 
   .options-body {

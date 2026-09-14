@@ -277,6 +277,7 @@ class TwitchViewerAPI:
                 "title": None,
                 "preview_image_url": None,
                 "profile_image_url": None,
+                "viewer_count": None,
             },
         )
 
@@ -287,6 +288,7 @@ class TwitchViewerAPI:
             "title": info.title,
             "preview_image_url": self._cache_busted_preview_url(info.preview_image_url),
             "profile_image_url": info.profile_image_url,
+            "viewer_count": info.viewer_count,
         }
 
     def _cache_busted_preview_url(self, url: Optional[str]) -> Optional[str]:

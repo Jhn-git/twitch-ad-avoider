@@ -20,6 +20,7 @@ const ICON_PATHS = {
   scissors: <React.Fragment><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9" /><path d="M8.1 8.1 20 20" /></React.Fragment>,
   skipToLive: <React.Fragment><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></React.Fragment>,
   stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  viewers: <React.Fragment><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></React.Fragment>,
   trash: <React.Fragment><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></React.Fragment>,
 };
 

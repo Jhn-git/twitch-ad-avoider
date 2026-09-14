@@ -124,6 +124,7 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
                 title="Live title",
                 preview_image_url=None,
                 profile_image_url="https://example.com/profile.jpg",
+                viewer_count=1234,
             )
         )
         patches.append(patch("src.webapi.fetch_stream_preview_info", self.preview_fetch))
@@ -182,6 +183,7 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
 
         self.assertTrue(preview["ok"])
         self.assertEqual(preview["preview"]["profile_image_url"], "https://example.com/profile.jpg")
+        self.assertEqual(preview["preview"]["viewer_count"], 1234)
         self.assertEqual(favorites[0]["profile_image_url"], "https://example.com/profile.jpg")
 
     def test_favorites_crud_and_pin(self):

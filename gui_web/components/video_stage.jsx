@@ -67,8 +67,10 @@ window.Components.VideoStage = function VideoStage({
   );
   const defaultClipWarmupReason =
     `Recording is warming up (${Math.floor(clipReadySeconds)}s captured for a ${clipDuration}s clip).`;
+  // Edit-after now lives inside the clip menu, so the tooltip is where the
+  // current mode stays discoverable without opening it.
   const clipWarmupReason = clipReady
-    ? "Create clip"
+    ? (editAfterClip ? "Create clip (opens editor)" : "Create clip (saves in background)")
     : (stream?.clip_warmup_reason || defaultClipWarmupReason);
 
   React.useEffect(() => {
@@ -444,6 +446,11 @@ window.Components.VideoStage = function VideoStage({
     ? "Select the streamer that's currently playing to create a clip."
     : clipWarmupReason;
   const title = window.AppHelpers.titleForPreview(preview);
+  // Guarded on the preview's channel so a just-switched selection never
+  // briefly shows the previous channel's count.
+  const viewerLabel = preview?.channel === selectedChannel
+    ? window.AppHelpers.viewerCountLabel(preview?.viewer_count)
+    : "";
 
   return (
     <main className={`stage ${theaterMode ? "theater-mode" : ""}`}>
@@ -458,6 +465,15 @@ window.Components.VideoStage = function VideoStage({
         {live && (
           <div className="live-badge">
             <span className="live-dot" /> LIVE
+            {viewerLabel && (
+              <React.Fragment>
+                <span className="live-badge-divider" />
+                <span className="live-viewers" title={`${viewerLabel} viewers`}>
+                  <Icon name="viewers" />
+                  {viewerLabel}
+                </span>
+              </React.Fragment>
+            )}
           </div>
         )}
         <button
@@ -538,34 +554,43 @@ window.Components.VideoStage = function VideoStage({
               className="clip-duration-dropdown"
               buttonClassName="clip-menu-button"
               renderValue={() => ""}
+              footer={(
+                <button
+                  type="button"
+                  className={`dropdown-toggle-row clip-edit-mode ${editAfterClip ? "is-active" : ""}`}
+                  onClick={onEditAfterClip}
+                  aria-pressed={editAfterClip}
+                  title={editAfterClip
+                    ? "The clip editor will open after clipping"
+                    : "Clips will save in the background without opening the editor"}
+                >
+                  <span className="clip-edit-mode-indicator" />
+                  Edit after clipping
+                </button>
+              )}
             />
           </span>
-          <button
-            className={`btn compact clip-edit-mode ${editAfterClip ? "is-active" : ""}`}
-            onClick={onEditAfterClip}
-            aria-pressed={editAfterClip}
-            title={editAfterClip
-              ? "The clip editor will open after clipping"
-              : "Clips will save in the background without opening the editor"}
-          >
-            <span className="clip-edit-mode-indicator" />
-            Edit after
-          </button>
-          <button
-            className="btn"
-            disabled={!isViewingActiveStream}
-            onClick={handleScreenshot}
-            title="Save a screenshot of the current frame"
-          >
-            <Icon name="camera" /> Screenshot
-          </button>
           {hasRecentClip && !clipEditorOpen && (
             <button className="btn" onClick={onOpenRecentClip}>
               <Icon name="scissors" /> Edit Latest Clip
             </button>
           )}
-          <button className="btn" onClick={onOpenClips}>
-            <Icon name="folder" /> Open Clips Folder
+          <button
+            className="btn icon-only"
+            disabled={!isViewingActiveStream}
+            onClick={handleScreenshot}
+            title="Save a screenshot of the current frame"
+            aria-label="Save a screenshot of the current frame"
+          >
+            <Icon name="camera" />
+          </button>
+          <button
+            className="btn icon-only"
+            onClick={onOpenClips}
+            title="Open clips folder"
+            aria-label="Open clips folder"
+          >
+            <Icon name="folder" />
           </button>
         </div>
       )}
