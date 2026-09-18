@@ -6,12 +6,17 @@ function App() {
   const [toasts, setToasts] = React.useState([]);
   const [recentClip, setRecentClip] = React.useState(null);
   const [clipEditorOpen, setClipEditorOpen] = React.useState(false);
-  const [recentlyLive, setRecentlyLive] = React.useState([]);
+  // { [channel]: { style, delay, duration } } - the animation each newly-live
+  // favorite is currently playing in the rail.
+  const [liveFx, setLiveFx] = React.useState({});
 
   const acknowledgeLive = React.useCallback((channel) => {
-    setRecentlyLive((channels) => (
-      channels.includes(channel) ? channels.filter((name) => name !== channel) : channels
-    ));
+    setLiveFx((current) => {
+      if (!current[channel]) return current;
+      const next = { ...current };
+      delete next[channel];
+      return next;
+    });
   }, []);
 
   const pushToast = React.useCallback((toast) => {
@@ -149,9 +154,9 @@ function App() {
       window.AppHelpers.playSound("assets/live-notification-sound-effect-52434.mp3");
     };
     // Latest went-live batch only - replaces the previous batch so the rail
-    // bounces just the channels behind the most recent notification tone.
+    // animates just the channels behind the most recent notification tone.
     window.__onFavoritesCameOnline = (payload) => {
-      setRecentlyLive(payload?.channels || []);
+      setLiveFx(window.AppHelpers.liveFxForChannels(payload?.channels));
     };
   }, [pushToast]);
 
@@ -239,7 +244,7 @@ function App() {
         onOpenClipEditor={() => setClipEditorOpen(true)}
         onCloseClipEditor={() => setClipEditorOpen(false)}
         onRecentClip={setRecentClip}
-        recentlyLive={recentlyLive}
+        liveFx={liveFx}
         onAcknowledgeLive={acknowledgeLive}
       />
       {view === "settings" && (

@@ -55,6 +55,12 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
     });
   };
 
+  const liveScopeOptions = [
+    { value: "all", label: "All favorites" },
+    { value: "pinned", label: "Pinned only" },
+    { value: "off", label: "Off" },
+  ];
+
   const Field = ({ label, keyName, type = "text", options }) => {
     const value = form[keyName];
     let control = null;
@@ -67,9 +73,14 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
         />
       );
     } else if (type === "select") {
+      // options are either plain strings (quality, log level) or {value, label}
+      // pairs when the stored value isn't what should be shown.
+      const items = options.map((option) => (
+        typeof option === "string" ? { value: option, label: option } : option
+      ));
       control = (
         <select value={value ?? ""} onChange={(event) => commit(keyName, event.target.value)}>
-          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+          {items.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
       );
     } else {
@@ -127,8 +138,9 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
               <Field label="Refresh interval" keyName="favorites_refresh_interval" type="number" />
               <Field label="Pinned refresh interval" keyName="pinned_favorites_refresh_interval" type="number" />
               <Field label="Check timeout" keyName="favorites_check_timeout" type="number" />
-              <Field label="Live notifications" keyName="favorite_live_notifications_enabled" type="bool" />
-              <Field label="Notification sound" keyName="favorite_live_notification_sound_enabled" type="bool" />
+              <Field label="Live notifications" keyName="favorite_live_notification_scope" type="select" options={liveScopeOptions} />
+              <Field label="Notification sound" keyName="favorite_live_sound_scope" type="select" options={liveScopeOptions} />
+              <Field label="Live animation" keyName="favorite_live_animation_scope" type="select" options={liveScopeOptions} />
             </section>
             <section className="settings-section">
               <h3>Interface</h3>

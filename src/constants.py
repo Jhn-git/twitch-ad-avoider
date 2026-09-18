@@ -39,9 +39,11 @@ DEFAULT_SETTINGS = {
     "favorites_refresh_interval": 300,  # Refresh interval in seconds (5 minutes)
     "pinned_favorites_refresh_interval": 60,  # Faster refresh for pinned favorites only, in seconds
     "favorites_check_timeout": 5,  # Timeout for the batched status check (all channels), in seconds
-    "favorite_live_notifications_enabled": True,  # Show in-app live notifications
+    # Which favorites each went-live signal fires for: "all", "pinned", or "off"
+    "favorite_live_notification_scope": "all",  # In-app live toast
+    "favorite_live_sound_scope": "pinned",  # Live notification sound
+    "favorite_live_animation_scope": "all",  # Favorites rail avatar animation
     "favorite_live_highlight_test_mode": False,  # Re-trigger recent-live highlight each refresh
-    "favorite_live_notification_sound_enabled": True,  # Play sound for live notifications
     "button_hover_sound_enabled": True,  # Play subtle UI hover sounds
     "show_stream_preview": True,  # Show live thumbnail + title when selecting a favorite
     # Player settings
@@ -57,6 +59,9 @@ DEFAULT_SETTINGS = {
 
 # Stream quality options
 QUALITY_OPTIONS = ["best", "worst", "720p", "480p", "360p", "160p"]
+
+# Which favorites a went-live signal (toast, sound, animation) applies to
+LIVE_EVENT_SCOPES = ("all", "pinned", "off")
 
 # File paths
 CONFIG_DIR = Path("config")

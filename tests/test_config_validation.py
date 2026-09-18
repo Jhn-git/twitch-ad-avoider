@@ -110,15 +110,59 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
         for level in (-0.1, 1.1, "0.5", None, True):
             self.assertFalse(self.config.set("volume", level))
 
+    def test_live_event_scope_validation(self):
+        scope_settings = (
+            "favorite_live_notification_scope",
+            "favorite_live_sound_scope",
+            "favorite_live_animation_scope",
+        )
+        for setting in scope_settings:
+            with self.subTest(setting=setting):
+                for scope in ("all", "pinned", "off"):
+                    self.assertTrue(self.config.set(setting, scope))
+                for scope in ("sometimes", "", True, None, 1):
+                    self.assertFalse(self.config.set(setting, scope))
+
+    def test_legacy_live_event_bools_migrate_to_scopes(self):
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "favorite_live_notifications_enabled": False,
+                    "favorite_live_notification_sound_enabled": False,
+                },
+                f,
+            )
+
+        config = ConfigManager(self.config_path)
+
+        self.assertEqual(config.get("favorite_live_notification_scope"), "off")
+        self.assertEqual(config.get("favorite_live_sound_scope"), "off")
+        self.assertNotIn("favorite_live_notifications_enabled", config.get_all())
+        self.assertNotIn("favorite_live_notification_sound_enabled", config.get_all())
+
+    def test_enabled_legacy_live_event_bools_adopt_new_defaults(self):
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "favorite_live_notifications_enabled": True,
+                    "favorite_live_notification_sound_enabled": True,
+                },
+                f,
+            )
+
+        config = ConfigManager(self.config_path)
+
+        self.assertEqual(config.get("favorite_live_notification_scope"), "all")
+        self.assertEqual(config.get("favorite_live_sound_scope"), "pinned")
+        self.assertEqual(config.get("favorite_live_animation_scope"), "all")
+
     def test_boolean_validation(self):
         boolean_settings = [
             "debug",
             "log_to_file",
             "dark_mode",
             "enable_network_diagnostics",
-            "favorite_live_notifications_enabled",
             "favorite_live_highlight_test_mode",
-            "favorite_live_notification_sound_enabled",
             "button_hover_sound_enabled",
             "show_stream_preview",
             "twitch_low_latency",

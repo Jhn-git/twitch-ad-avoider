@@ -14,16 +14,46 @@ def test_app_refreshes_favorites_on_startup_when_enabled():
     assert "refreshFavoritesOnStartup(bridge, initial)" in app_source
 
 
-def test_newly_live_favorite_bounces_until_acknowledged():
+def test_newly_live_favorite_animates_until_acknowledged():
     app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
     rail_source = (ROOT / "gui_web" / "components" / "favorites_rail.jsx").read_text()
     index_source = (ROOT / "gui_web" / "index.html").read_text()
 
     assert "window.__onFavoritesCameOnline" in app_source
-    assert "just-live" in rail_source
+    assert "liveFxForChannels" in app_source
+    assert "just-live fx-${fx.style}" in rail_source
     assert "onAcknowledgeLive" in rail_source
     assert ".avatar.just-live" in index_source
-    assert "favorite-just-live-bounce" in index_source
+
+    styles = ["hop", "jelly", "nudge", "tada", "peek"]
+    assert all(f'"{style}"' in helpers_source for style in styles)
+    for style in styles:
+        assert f"@keyframes fav-live-{style}" in index_source
+        assert f".avatar.just-live.fx-{style}" in index_source
+
+
+def test_reduced_motion_guard_outranks_the_per_style_rules():
+    """The guard must match .fx-* specificity or those rules keep animating.
+
+    A plain `.avatar.just-live` guard (2 classes) loses to
+    `.avatar.just-live.fx-hop` (3 classes), so reduced-motion users would still
+    see the animation - the attribute selector restores the tie.
+    """
+    index_source = (ROOT / "gui_web" / "index.html").read_text()
+
+    guard = index_source.split("@media (prefers-reduced-motion: reduce)")[1]
+    guard = guard.split("}")[0] + "}"
+    assert '.avatar.just-live[class*="fx-"]' in guard
+    assert "animation: none" in guard
+
+
+def test_live_animation_is_randomised_per_channel():
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+
+    assert "randomLiveFx" in helpers_source
+    assert "animationDelay" in (ROOT / "gui_web" / "components" / "favorites_rail.jsx").read_text()
+    assert "Math.random()" in helpers_source
 
 
 def test_video_stage_shows_live_preview_image_without_playback():

@@ -18,7 +18,7 @@ window.Components.StreamManager = function StreamManager({
   onOpenClipEditor,
   onCloseClipEditor,
   onRecentClip,
-  recentlyLive,
+  liveFx,
   onAcknowledgeLive,
 }) {
   const selectedChannel = state.selected_channel;
@@ -294,6 +294,9 @@ window.Components.StreamManager = function StreamManager({
       kind: "info",
       message: `${endedChannel} went offline - switched to ${nextPinnedLive.channel_name}`,
     });
+    // Stop the rail animation for the channel we're about to watch - otherwise
+    // it keeps hopping while its stream is already on screen.
+    onAcknowledgeLive?.(nextPinnedLive.channel_name);
     startStream(nextPinnedLive.channel_name);
   }, [state.stream, state.favorites]);
 
@@ -378,7 +381,7 @@ window.Components.StreamManager = function StreamManager({
         onRemove={removeFavorite}
         onPin={togglePin}
         onRefresh={refreshFavorites}
-        recentlyLive={recentlyLive}
+        liveFx={liveFx}
         onAcknowledgeLive={onAcknowledgeLive}
       />
       <div style={{ position: "relative", minWidth: 0, minHeight: 0 }}>

@@ -28,6 +28,7 @@ from typing import Dict, Any, Optional, List
 from .constants import (
     DEFAULT_SETTINGS,
     CONFIG_FILE,
+    LIVE_EVENT_SCOPES,
     MIN_NETWORK_TIMEOUT,
     MAX_NETWORK_TIMEOUT,
     MIN_RETRY_ATTEMPTS,
@@ -68,6 +69,12 @@ _LEGACY_LOAD_ONLY_SETTINGS = {
     "player_path",
     "status_check_interval",
     "status_cache_duration",
+}
+# Retired booleans replaced by three-way scope settings. An explicit opt-out (False)
+# becomes "off"; anything else falls through to the new key's default.
+_LEGACY_LIVE_EVENT_BOOLS = {
+    "favorite_live_notifications_enabled": "favorite_live_notification_scope",
+    "favorite_live_notification_sound_enabled": "favorite_live_sound_scope",
 }
 _KNOWN_SETTINGS = set(DEFAULT_SETTINGS)
 
@@ -287,6 +294,14 @@ class ConfigManager:
                 logger.info("Migrated legacy 'current_theme' setting to 'dark_mode'")
             migrated.pop("current_theme", None)
 
+        for legacy_key, scope_key in _LEGACY_LIVE_EVENT_BOOLS.items():
+            if legacy_key not in migrated:
+                continue
+            was_enabled = migrated.pop(legacy_key)
+            if was_enabled is False and scope_key not in migrated:
+                migrated[scope_key] = "off"
+            logger.info(f"Migrated legacy '{legacy_key}' setting to '{scope_key}'")
+
         for legacy_key in _LEGACY_LOAD_ONLY_SETTINGS - {"current_theme"}:
             if legacy_key in migrated:
                 migrated.pop(legacy_key, None)
@@ -334,6 +349,19 @@ class ConfigManager:
             raise ValidationError(f"{label} must be an integer")
         if value not in choices:
             allowed = ", ".join(str(choice) for choice in choices)
+            raise ValidationError(f"{label} must be one of: {allowed}")
+
+    def _validate_choice_setting(
+        self,
+        value: Any,
+        label: str,
+        choices: tuple,
+    ) -> None:
+        """Require a string that is one of a fixed set of allowed values."""
+        if not isinstance(value, str):
+            raise ValidationError(f"{label} must be a string")
+        if value not in choices:
+            allowed = ", ".join(choices)
             raise ValidationError(f"{label} must be one of: {allowed}")
 
     def _validate_optional_file_path_setting(self, value: Any) -> None:
@@ -426,19 +454,24 @@ class ConfigManager:
                 MIN_CHECK_TIMEOUT,
                 MAX_CHECK_TIMEOUT,
             ),
-            "favorite_live_notifications_enabled": lambda value: self._validate_bool_setting(
+            "favorite_live_notification_scope": lambda value: self._validate_choice_setting(
                 value,
-                "Favorite live notifications setting",
+                "Favorite live notification scope",
+                LIVE_EVENT_SCOPES,
+            ),
+            "favorite_live_sound_scope": lambda value: self._validate_choice_setting(
+                value,
+                "Favorite live sound scope",
+                LIVE_EVENT_SCOPES,
+            ),
+            "favorite_live_animation_scope": lambda value: self._validate_choice_setting(
+                value,
+                "Favorite live animation scope",
+                LIVE_EVENT_SCOPES,
             ),
             "favorite_live_highlight_test_mode": lambda value: self._validate_bool_setting(
                 value,
                 "Favorite live highlight test mode setting",
-            ),
-            "favorite_live_notification_sound_enabled": (
-                lambda value: self._validate_bool_setting(
-                    value,
-                    "Favorite live notification sound setting",
-                )
             ),
             "button_hover_sound_enabled": lambda value: self._validate_bool_setting(
                 value,

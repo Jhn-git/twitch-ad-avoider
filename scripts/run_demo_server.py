@@ -70,10 +70,24 @@ def ensure_demo_stream():
     subprocess.run(FFMPEG_ARGS, cwd=ROOT, check=True)
 
 
+class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    """Serve gui_web/ with caching disabled.
+
+    SimpleHTTPRequestHandler sends no Cache-Control, so browsers fall back to
+    heuristic freshness and happily reuse a stale .jsx after an edit - which
+    looks exactly like the edit not working. Demo mode only exists to check
+    the current working tree, so never cache anything.
+    """
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
+
+
 def main():
     ensure_demo_stream()
     os.chdir(GUI_WEB)
-    handler = http.server.SimpleHTTPRequestHandler
+    handler = NoCacheHandler
     with socketserver.TCPServer(("127.0.0.1", PORT), handler) as httpd:
         print(f"Serving gui_web/ at http://127.0.0.1:{PORT}")
         httpd.serve_forever()

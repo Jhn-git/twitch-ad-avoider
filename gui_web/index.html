@@ -188,17 +188,77 @@
       0 0 0 1px rgba(32,200,107,0.22),
       0 0 16px rgba(32,200,107,0.48);
   }
-  @keyframes favorite-just-live-bounce {
-    0%, 60%, 100% { transform: translateY(0); }
-    15% { transform: translateY(-6px); }
-    30% { transform: translateY(0); }
-    42% { transform: translateY(-3px); }
+  /* Newly-live favorites each get one of these at random (AppHelpers.randomLiveFx),
+     with jittered delay/duration so a batch never moves in lockstep. Travel is kept
+     small because .favorites-list scrolls and would clip anything larger. */
+  @keyframes fav-live-hop {
+    0%, 58%, 100% { transform: translateY(0) scale(1, 1); }
+    6% { transform: translateY(1px) scale(1.12, 0.86); }
+    18% { transform: translateY(-10px) scale(0.9, 1.14); }
+    30% { transform: translateY(0) scale(1.1, 0.9); }
+    38% { transform: translateY(-5px) scale(0.97, 1.04); }
+    46% { transform: translateY(0) scale(1.04, 0.96); }
+  }
+  @keyframes fav-live-jelly {
+    0%, 55%, 100% { transform: scale(1, 1); }
+    10% { transform: scale(1.26, 0.76); }
+    22% { transform: scale(0.82, 1.22); }
+    33% { transform: scale(1.14, 0.9); }
+    43% { transform: scale(0.95, 1.05); }
+  }
+  @keyframes fav-live-nudge {
+    0%, 60%, 100% { transform: translateX(0) rotate(0); }
+    10% { transform: translateX(-4px) rotate(-8deg); }
+    25% { transform: translateX(5px) rotate(9deg); }
+    40% { transform: translateX(-3px) rotate(-5deg); }
+    52% { transform: translateX(0) rotate(0); }
+  }
+  @keyframes fav-live-tada {
+    0%, 70%, 100% { transform: rotate(0) scale(1); }
+    10% { transform: rotate(0) scale(0.9); }
+    20% { transform: rotate(-5deg) scale(1.12); }
+    32% { transform: rotate(5deg) scale(1.12); }
+    44% { transform: rotate(-4deg) scale(1.1); }
+    56% { transform: rotate(3deg) scale(1.06); }
+  }
+  @keyframes fav-live-peek {
+    0%, 64%, 100% { transform: translateY(0) scale(1, 1); }
+    8% { transform: translateY(8px) scale(0.8, 1.2); }
+    24% { transform: translateY(-7px) scale(1.08, 0.94); }
+    40% { transform: translateY(0) scale(0.98, 1.02); }
   }
   .avatar.just-live {
-    animation: favorite-just-live-bounce 1.6s ease-out infinite;
+    animation-duration: 2s;
+    animation-iteration-count: infinite;
+    transform-origin: center bottom;
+  }
+  .avatar.just-live.fx-hop {
+    animation-name: fav-live-hop;
+    animation-timing-function: ease-out;
+  }
+  .avatar.just-live.fx-jelly {
+    animation-name: fav-live-jelly;
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .avatar.just-live.fx-nudge {
+    animation-name: fav-live-nudge;
+    animation-timing-function: ease-in-out;
+    transform-origin: center center;
+  }
+  .avatar.just-live.fx-tada {
+    animation-name: fav-live-tada;
+    animation-timing-function: ease-in-out;
+    transform-origin: center center;
+  }
+  .avatar.just-live.fx-peek {
+    animation-name: fav-live-peek;
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   @media (prefers-reduced-motion: reduce) {
-    .avatar.just-live { animation: none; }
+    /* The [class*="fx-"] selector matches the per-style rules' specificity -
+       plain .avatar.just-live loses to .avatar.just-live.fx-hop and friends. */
+    .avatar.just-live,
+    .avatar.just-live[class*="fx-"] { animation: none; }
   }
   .avatar img {
     width: 100%;

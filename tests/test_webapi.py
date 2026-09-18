@@ -349,6 +349,62 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
             )
         )
 
+    def test_live_signals_respect_their_configured_scope(self):
+        api = self.make_api()
+        api.add_favorite("PinnedUser")
+        api.add_favorite("UnpinnedUser")
+        api.toggle_pin("pinneduser")
+        offline = {"pinneduser": False, "unpinneduser": False}
+        online = {"pinneduser": True, "unpinneduser": True}
+
+        def go_live():
+            """Reset both channels to offline, then push them live, and report pushes."""
+            with patch.object(api._status_monitor, "check_channels", return_value=offline):
+                api.refresh_favorites()
+            window = Mock()
+            api.set_window(window)
+            with patch.object(api._status_monitor, "check_channels", return_value=online):
+                api.refresh_favorites()
+            return [call.args[0] for call in window.evaluate_js.call_args_list]
+
+        # Default scopes: everyone animates, only the pinned channel makes noise.
+        pushes = go_live()
+        animation = [push for push in pushes if "__onFavoritesCameOnline" in push]
+        sound = [push for push in pushes if "__onFavoriteLiveSound" in push]
+        self.assertEqual(len(animation), 1)
+        self.assertIn("unpinneduser", animation[0])
+        self.assertEqual(len(sound), 1)
+        self.assertIn("pinneduser", sound[0])
+        self.assertNotIn("unpinneduser", sound[0])
+
+        # "off" silences a signal entirely, even for pinned channels.
+        api._config.set("favorite_live_sound_scope", "off")
+        api._config.set("favorite_live_animation_scope", "pinned")
+        pushes = go_live()
+        self.assertFalse(any("__onFavoriteLiveSound" in push for push in pushes))
+        animation = [push for push in pushes if "__onFavoritesCameOnline" in push]
+        self.assertEqual(len(animation), 1)
+        self.assertNotIn("unpinneduser", animation[0])
+
+    def test_highlight_test_mode_refires_for_already_live_channels(self):
+        api = self.make_api()
+        api.add_favorite("TestUser")
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            api.refresh_favorites()
+        api._config.set("favorite_live_highlight_test_mode", True)
+        window = Mock()
+        api.set_window(window)
+
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            api.refresh_favorites()
+
+        self.assertTrue(
+            any(
+                "__onFavoritesCameOnline" in call.args[0]
+                for call in window.evaluate_js.call_args_list
+            )
+        )
+
     def test_refresh_favorites_pinned_only_checks_only_pinned_channels(self):
         api = self.make_api()
         api.add_favorite("PinnedUser")

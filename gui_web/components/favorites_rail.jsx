@@ -10,7 +10,7 @@ window.Components.FavoritesRail = function FavoritesRail({
   onRemove,
   onPin,
   onRefresh,
-  recentlyLive = [],
+  liveFx = {},
   onAcknowledgeLive,
 }) {
   const Icon = window.Components.Icon;
@@ -39,7 +39,7 @@ window.Components.FavoritesRail = function FavoritesRail({
         {favorites.map((favorite) => {
           const channel = favorite.channel_name;
           const selected = channel === selectedChannel;
-          const justLive = favorite.is_live && recentlyLive.includes(channel);
+          const fx = favorite.is_live ? liveFx[channel] : null;
           return (
             <button
               key={channel}
@@ -51,7 +51,8 @@ window.Components.FavoritesRail = function FavoritesRail({
               onDoubleClick={() => onSelect(channel, true)}
             >
               <span
-                className={`avatar ${favorite.is_live ? "live" : ""} ${justLive ? "just-live" : ""} ${favorite.profile_image_url ? "has-image" : ""}`}
+                className={`avatar ${favorite.is_live ? "live" : ""} ${fx ? `just-live fx-${fx.style}` : ""} ${favorite.profile_image_url ? "has-image" : ""}`}
+                style={fx ? { animationDelay: fx.delay, animationDuration: fx.duration } : undefined}
                 title={open ? undefined : channel}
               >
                 {favorite.profile_image_url && (

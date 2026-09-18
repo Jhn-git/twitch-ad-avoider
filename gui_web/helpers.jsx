@@ -15,6 +15,27 @@ window.AppHelpers = {
     audio.play().catch(() => {});
   },
 
+  // Must match the .avatar.just-live.fx-* rules in index.html.
+  LIVE_ANIMATION_STYLES: ["hop", "jelly", "nudge", "tada", "peek"],
+
+  // A random animation plus timing jitter, so a batch of favorites going live at
+  // once looks like a crowd messing about rather than one synchronised bounce.
+  randomLiveFx() {
+    const styles = this.LIVE_ANIMATION_STYLES;
+    return {
+      style: styles[Math.floor(Math.random() * styles.length)],
+      delay: `${(Math.random() * 0.45).toFixed(2)}s`,
+      duration: `${(1.8 + Math.random() * 0.4).toFixed(2)}s`,
+    };
+  },
+
+  liveFxForChannels(channels) {
+    return (channels || []).reduce((map, channel) => {
+      map[channel] = this.randomLiveFx();
+      return map;
+    }, {});
+  },
+
   applyTheme(isDark) {
     document.body.dataset.theme = isDark ? "dark" : "light";
   },
@@ -142,9 +163,10 @@ window.AppHelpers = {
       favorites_refresh_interval: 300,
       pinned_favorites_refresh_interval: 60,
       favorites_check_timeout: 5,
-      favorite_live_notifications_enabled: true,
+      favorite_live_notification_scope: "all",
+      favorite_live_sound_scope: "pinned",
+      favorite_live_animation_scope: "all",
       favorite_live_highlight_test_mode: false,
-      favorite_live_notification_sound_enabled: true,
       button_hover_sound_enabled: true,
       show_stream_preview: true,
       window_width: 1440,

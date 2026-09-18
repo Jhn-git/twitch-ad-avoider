@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from src.config_manager import ConfigManager
-from src.constants import CLIPS_DIR, QUALITY_OPTIONS
+from src.constants import CLIPS_DIR, DEFAULT_SETTINGS, QUALITY_OPTIONS
 from src.exceptions import ValidationError
 from src.favorites_manager import FavoriteChannelInfo, FavoritesManager
 from src.logging_config import get_logger, reconfigure_logging_from_config
@@ -203,10 +203,15 @@ class TwitchViewerAPI:
         status_results = self._status_monitor.check_channels(favorites)
         if not status_results:
             return {"ok": False, "error": "Status check failed, showing last known status"}
+        highlight_test_mode = bool(self._config.get("favorite_live_highlight_test_mode", False))
         newly_live: list[str] = []
         for channel, is_live in status_results.items():
+            if not is_live:
+                continue
             previous = self._favorites.get_channel_info(channel)
-            if is_live and previous and not previous.is_live:
+            # Test mode re-fires every live channel each refresh so the rail animations
+            # and notification tone can be exercised without waiting for a real go-live.
+            if highlight_test_mode or (previous and not previous.is_live):
                 newly_live.append(channel)
         self._favorites.update_channel_statuses(status_results)
         payload = self._favorites_payload()
@@ -218,13 +223,38 @@ class TwitchViewerAPI:
             f"{scope_label} complete: {live_count}/{len(status_results)} live",
             "FAVORITES",
         )
-        if newly_live and self._config.get("favorite_live_notifications_enabled", True):
-            self._push("__onToast", {"kind": "success", "message": ", ".join(newly_live) + " live"})
-        if newly_live and self._config.get("favorite_live_notification_sound_enabled", True):
-            self._push("__onFavoriteLiveSound", {"channels": newly_live})
-        if newly_live:
-            self._push("__onFavoritesCameOnline", {"channels": newly_live})
+        pinned = {item["channel_name"] for item in payload if item.get("is_pinned")}
+        toast_channels = self._scoped_channels(
+            newly_live, pinned, "favorite_live_notification_scope"
+        )
+        if toast_channels:
+            self._push(
+                "__onToast",
+                {"kind": "success", "message": ", ".join(toast_channels) + " live"},
+            )
+        sound_channels = self._scoped_channels(newly_live, pinned, "favorite_live_sound_scope")
+        if sound_channels:
+            self._push("__onFavoriteLiveSound", {"channels": sound_channels})
+        animated_channels = self._scoped_channels(
+            newly_live, pinned, "favorite_live_animation_scope"
+        )
+        if animated_channels:
+            self._push("__onFavoritesCameOnline", {"channels": animated_channels})
         return {"ok": True, "favorites": payload}
+
+    def _scoped_channels(
+        self,
+        channels: list[str],
+        pinned: set[str],
+        setting_key: str,
+    ) -> list[str]:
+        """Narrow a newly-live channel list to the scope configured for one signal."""
+        scope = self._config.get(setting_key, DEFAULT_SETTINGS[setting_key])
+        if scope == "off":
+            return []
+        if scope == "pinned":
+            return [channel for channel in channels if channel in pinned]
+        return list(channels)
 
     def select_channel(self, channel: str) -> dict:
         try:
