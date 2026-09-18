@@ -19,6 +19,17 @@ function App() {
     });
   }, []);
 
+  // Replays the went-live animation on every favorite that is currently live, so
+  // the effect can be seen on demand instead of only when someone actually goes
+  // live. Returns how many channels it started, for the caller's feedback.
+  const previewLiveAnimation = React.useCallback(() => {
+    const live = (state?.favorites || [])
+      .filter((favorite) => favorite.is_live)
+      .map((favorite) => favorite.channel_name);
+    if (live.length) setLiveFx(window.AppHelpers.liveFxForChannels(live));
+    return live.length;
+  }, [state?.favorites]);
+
   const pushToast = React.useCallback((toast) => {
     const id = `t${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((items) => [
@@ -254,6 +265,7 @@ function App() {
           onBack={() => setView("stream")}
           onState={updateState}
           onToast={pushToast}
+          onPreviewLiveAnimation={previewLiveAnimation}
         />
       )}
       <window.Components.ToastStack toasts={toasts} />

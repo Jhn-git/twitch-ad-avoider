@@ -1,6 +1,13 @@
 window.Components = window.Components || {};
 
-window.Components.SettingsView = function SettingsView({ api, state, onBack, onState, onToast }) {
+window.Components.SettingsView = function SettingsView({
+  api,
+  state,
+  onBack,
+  onState,
+  onToast,
+  onPreviewLiveAnimation,
+}) {
   const Icon = window.Components.Icon;
   const [form, setForm] = React.useState(state.settings);
   const [errors, setErrors] = React.useState({});
@@ -53,6 +60,17 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
       });
       onToast({ kind: "success", message: "Settings reset" });
     });
+  };
+
+  // Leaves Settings on the way out - the animation plays in the favorites rail,
+  // which this full-screen overlay covers.
+  const previewAnimation = () => {
+    const started = onPreviewLiveAnimation?.() || 0;
+    if (!started) {
+      onToast({ kind: "info", message: "No favorites are live right now" });
+      return;
+    }
+    onBack();
   };
 
   const liveScopeOptions = [
@@ -141,6 +159,12 @@ window.Components.SettingsView = function SettingsView({ api, state, onBack, onS
               <Field label="Live notifications" keyName="favorite_live_notification_scope" type="select" options={liveScopeOptions} />
               <Field label="Notification sound" keyName="favorite_live_sound_scope" type="select" options={liveScopeOptions} />
               <Field label="Live animation" keyName="favorite_live_animation_scope" type="select" options={liveScopeOptions} />
+              <div className="setting-field">
+                <span>Preview animation</span>
+                <button className="btn setting-action" onClick={previewAnimation}>
+                  <Icon name="refresh" /> Play
+                </button>
+              </div>
             </section>
             <section className="settings-section">
               <h3>Interface</h3>

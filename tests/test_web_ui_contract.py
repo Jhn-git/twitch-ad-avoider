@@ -33,6 +33,18 @@ def test_newly_live_favorite_animates_until_acknowledged():
         assert f".avatar.just-live.fx-{style}" in index_source
 
 
+def test_settings_can_replay_the_live_animation_on_demand():
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+    settings_source = (ROOT / "gui_web" / "components" / "settings_view.jsx").read_text()
+
+    assert "previewLiveAnimation" in app_source
+    assert "favorite.is_live" in app_source
+    assert "onPreviewLiveAnimation={previewLiveAnimation}" in app_source
+    assert "onPreviewLiveAnimation" in settings_source
+    # The rail is hidden behind the settings overlay, so the preview must close it.
+    assert "onBack();" in settings_source
+
+
 def test_reduced_motion_guard_outranks_the_per_style_rules():
     """The guard must match .fx-* specificity or those rules keep animating.
 

@@ -131,10 +131,15 @@
   .favorites-list {
     flex: 1;
     overflow-y: auto;
-    padding: 6px 10px 12px 14px;
+    /* Scroll containers clip at the padding box, so this padding is what keeps
+       the .avatar.live glow (a 16px blur) from being cut off when an animation
+       travels. Right/bottom are trimmed to keep the rows their original width.
+       A row scrolled hard against the top edge can still clip - unavoidable
+       while the list scrolls. */
+    padding: 20px 4px 12px 20px;
   }
   .rail.left.collapsed .favorites-list {
-    padding: 5px 10px 12px;
+    padding: 24px 10px 12px;
   }
   .favorite-row {
     width: 100%;
@@ -200,26 +205,26 @@
     46% { transform: translateY(0) scale(1.04, 0.96); }
   }
   @keyframes fav-live-jelly {
-    0%, 55%, 100% { transform: scale(1, 1); }
-    10% { transform: scale(1.26, 0.76); }
-    22% { transform: scale(0.82, 1.22); }
-    33% { transform: scale(1.14, 0.9); }
-    43% { transform: scale(0.95, 1.05); }
+    0%, 58%, 100% { transform: translate(0, 0) scale(1, 1); }
+    10% { transform: translate(-4px, 3px) scale(1.34, 0.7); }
+    24% { transform: translate(4px, -5px) scale(0.74, 1.3); }
+    36% { transform: translate(-3px, 2px) scale(1.2, 0.84); }
+    48% { transform: translate(2px, -2px) scale(0.92, 1.08); }
   }
   @keyframes fav-live-nudge {
     0%, 60%, 100% { transform: translateX(0) rotate(0); }
-    10% { transform: translateX(-4px) rotate(-8deg); }
-    25% { transform: translateX(5px) rotate(9deg); }
-    40% { transform: translateX(-3px) rotate(-5deg); }
-    52% { transform: translateX(0) rotate(0); }
+    10% { transform: translateX(-7px) rotate(-10deg); }
+    25% { transform: translateX(8px) rotate(11deg); }
+    40% { transform: translateX(-5px) rotate(-7deg); }
+    52% { transform: translateX(2px) rotate(3deg); }
   }
   @keyframes fav-live-tada {
-    0%, 70%, 100% { transform: rotate(0) scale(1); }
-    10% { transform: rotate(0) scale(0.9); }
-    20% { transform: rotate(-5deg) scale(1.12); }
-    32% { transform: rotate(5deg) scale(1.12); }
-    44% { transform: rotate(-4deg) scale(1.1); }
-    56% { transform: rotate(3deg) scale(1.06); }
+    0%, 72%, 100% { transform: translateY(0) rotate(0) scale(1); }
+    8% { transform: translateY(2px) rotate(0) scale(0.88); }
+    20% { transform: translateY(-5px) rotate(-16deg) scale(1.16); }
+    34% { transform: translateY(-5px) rotate(15deg) scale(1.16); }
+    46% { transform: translateY(-3px) rotate(-12deg) scale(1.12); }
+    58% { transform: translateY(-1px) rotate(8deg) scale(1.06); }
   }
   @keyframes fav-live-peek {
     0%, 64%, 100% { transform: translateY(0) scale(1, 1); }
@@ -230,7 +235,10 @@
   .avatar.just-live {
     animation-duration: 2s;
     animation-iteration-count: infinite;
-    transform-origin: center bottom;
+    /* Scale about the centre. Pinning the bottom edge instead makes every
+       vertical scale push the top edge upward, which turns jelly's in-place
+       squish and peek's dip into yet another "hops straight up". */
+    transform-origin: center center;
   }
   .avatar.just-live.fx-hop {
     animation-name: fav-live-hop;
@@ -243,12 +251,10 @@
   .avatar.just-live.fx-nudge {
     animation-name: fav-live-nudge;
     animation-timing-function: ease-in-out;
-    transform-origin: center center;
   }
   .avatar.just-live.fx-tada {
     animation-name: fav-live-tada;
     animation-timing-function: ease-in-out;
-    transform-origin: center center;
   }
   .avatar.just-live.fx-peek {
     animation-name: fav-live-peek;
@@ -960,6 +966,13 @@
     background: var(--field);
     color: var(--ink);
     padding: 0 8px;
+  }
+  .setting-field .btn.setting-action {
+    min-height: 31px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
   }
   .field-error {
     grid-column: 2;
