@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MODEL = "gpt-5.6-luna"
+MODEL = "gpt-6-luna"
 DEFAULT_EFFORT = "high"
 DEFAULT_TIMEOUT = 900
 MAX_INLINE_DIFF = 150_000  # bytes; larger diffs are left for Luna to read with `git diff`
