@@ -19,6 +19,9 @@ logger = get_logger(__name__)
 
 # Transient failures (DNS drop after sleep/wake, Twitch 5xx blips) are common
 # enough that a single failed request shouldn't fail a whole refresh interval.
+# Twitch rejects GQL requests with more than 15 root-field aliases (HTTP 400), so
+# large favorites lists are checked in chunks of this size.
+MAX_ALIASES_PER_REQUEST = 15
 MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = (0.5, 1.5)
 
@@ -88,13 +91,22 @@ class StatusMonitor:
 
         logger.info(f"Checking status for {len(valid_channels)} channels")
 
-        try:
-            results = self._batch_check_with_retry(valid_channels)
-        except Exception as e:
-            self.last_error_kind = _classify_error(e)
-            logger.error(f"Status check failed ({self.last_error_kind}): {e}")
+        results: Dict[str, bool] = {}
+        last_error: Optional[Exception] = None
+        for start in range(0, len(valid_channels), MAX_ALIASES_PER_REQUEST):
+            chunk = valid_channels[start : start + MAX_ALIASES_PER_REQUEST]
+            try:
+                results.update(self._batch_check_with_retry(chunk))
+            except Exception as e:
+                last_error = e
+                logger.error(f"Status check failed ({_classify_error(e)}): {e}")
+
+        if not results:
+            self.last_error_kind = _classify_error(last_error) if last_error else ERROR_OTHER
             return {}
 
+        # A chunk failing while others succeed returns partial results: those
+        # channels keep their last known status, the rest update normally.
         self.last_error_kind = None
         live_count = sum(results.values())
         logger.info(f"Status check complete: {live_count}/{len(valid_channels)} live")
@@ -130,6 +142,10 @@ class StatusMonitor:
             headers={"Client-ID": TWITCH_GQL_CLIENT_ID},
             timeout=self.check_timeout,
         )
+        if response.status_code >= 400:
+            logger.error(
+                f"GQL status check rejected ({response.status_code}): {response.text[:300]}"
+            )
         response.raise_for_status()
 
         data = response.json().get("data") or {}

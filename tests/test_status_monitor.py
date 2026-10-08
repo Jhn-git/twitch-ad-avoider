@@ -127,3 +127,37 @@ def test_check_channels_does_not_retry_client_errors(monkeypatch):
     assert monitor.check_channels(["ninja"]) == {}
     assert calls["count"] == 1
     assert monitor.last_error_kind == "other"
+
+
+def test_check_channels_splits_requests_under_alias_limit(monkeypatch):
+    """Twitch 400s above 15 root aliases, so big favorites lists are chunked."""
+    monitor = StatusMonitor()
+    sizes = []
+
+    def batch_check(channels):
+        sizes.append(len(channels))
+        return {channel: False for channel in channels}
+
+    monkeypatch.setattr(monitor, "_batch_check", batch_check)
+    names = [f"streamer{i}" for i in range(17)]
+
+    result = monitor.check_channels(names)
+
+    assert sizes == [15, 2]
+    assert set(result) == set(names)
+
+
+def test_check_channels_returns_partial_results_when_one_chunk_fails(monkeypatch):
+    monitor = StatusMonitor()
+
+    def batch_check(channels):
+        if "streamer0" in channels:
+            return {channel: True for channel in channels}
+        raise _http_error(400)
+
+    monkeypatch.setattr(monitor, "_batch_check", batch_check)
+
+    result = monitor.check_channels([f"streamer{i}" for i in range(17)])
+
+    assert len(result) == 15
+    assert monitor.last_error_kind is None
