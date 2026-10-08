@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 
 def load_probe_module():
@@ -154,11 +154,14 @@ class TestProbeTwitchVodAudio(unittest.TestCase):
         )
 
         self.assertEqual(command[1:4], ["-u", "-c", probe.TRANSCRIBE_WRAPPER_CODE])
-        self.assertEqual(command[-3:], [
-            r"C:\transcribe-yt\transcribe-youtube.py",
-            r"C:\temp\audio.m4a",
-            r"C:\temp\transcripts",
-        ])
+        self.assertEqual(
+            command[-3:],
+            [
+                r"C:\transcribe-yt\transcribe-youtube.py",
+                r"C:\temp\audio.m4a",
+                r"C:\temp\transcripts",
+            ],
+        )
 
     def test_expected_output_duration_seconds_uses_remaining_source_time(self):
         duration = probe.expected_output_duration_seconds(
@@ -175,7 +178,8 @@ class TestProbeTwitchVodAudio(unittest.TestCase):
                 probe.TRANSCRIBE_PROGRESS_PREFIX
                 + '{"type":"status","message":"Loading model..."}\n',
                 probe.TRANSCRIBE_PROGRESS_PREFIX
-                + '{"type":"progress","percent":25,"current_time":75.0,"duration":300.0,"last_text":"hello world"}\n',
+                + '{"type":"progress","percent":25,"current_time":75.0,"duration":300.0,'
+                '"last_text":"hello world"}\n',
                 probe.TRANSCRIBE_RESULT_PREFIX
                 + '{"txt_path":"C:\\\\temp\\\\probe.txt","srt_path":"C:\\\\temp\\\\probe.srt"}\n',
             ]
@@ -281,7 +285,11 @@ SRT transcript:  C:\\temp\\probe.srt
 
         with (
             patch.object(probe, "find_required_executable", side_effect=["ffmpeg", "ffprobe"]),
-            patch.object(probe, "resolve_vod_audio_stream", return_value=(fake_plugin, "audio_only", fake_stream)),
+            patch.object(
+                probe,
+                "resolve_vod_audio_stream",
+                return_value=(fake_plugin, "audio_only", fake_stream),
+            ),
             patch.object(probe, "extract_audio_with_ffmpeg") as extract_mock,
             patch.object(probe, "probe_audio_output", return_value=fake_probe_info),
             patch.object(
@@ -328,7 +336,9 @@ SRT transcript:  C:\\temp\\probe.srt
                     "resolve_vod_audio_stream",
                     return_value=(fake_plugin, "audio_only", fake_stream),
                 ),
-                patch.object(probe, "stream_input_url", return_value="https://example.com/audio.m3u8"),
+                patch.object(
+                    probe, "stream_input_url", return_value="https://example.com/audio.m3u8"
+                ),
                 patch.object(probe, "probe_input_duration_seconds", return_value=21030.0),
                 patch.object(probe, "probe_audio_output", return_value=fake_probe_info),
                 patch.object(probe, "extract_audio_with_ffmpeg") as extract_mock,

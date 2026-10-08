@@ -8,14 +8,12 @@ import json
 import shutil
 import subprocess
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import streamlink
-
 
 DEFAULT_OUTPUT_DIR = Path("temp") / "vod-audio-probe"
 DEFAULT_TRANSCRIBE_YT_ROOT = Path.home() / "Desktop" / "transcribe-yt"
@@ -228,11 +226,7 @@ def build_progress_line(
 ) -> str:
     parts = [label]
     percent = None
-    if (
-        current_seconds is not None
-        and total_seconds is not None
-        and total_seconds > 0
-    ):
+    if current_seconds is not None and total_seconds is not None and total_seconds > 0:
         percent = min(max(current_seconds / total_seconds * 100.0, 0.0), 100.0)
     if percent is not None:
         parts.append(format_percent(percent))
@@ -461,7 +455,11 @@ def run_ffmpeg_with_progress(
             should_report = value == "end"
 
             percent = None
-            if expected_duration_seconds and expected_duration_seconds > 0 and out_time_seconds is not None:
+            if (
+                expected_duration_seconds
+                and expected_duration_seconds > 0
+                and out_time_seconds is not None
+            ):
                 percent = min(max(out_time_seconds / expected_duration_seconds * 100.0, 0.0), 100.0)
                 if percent >= last_reported_percent + 2.0:
                     should_report = True
@@ -496,8 +494,7 @@ def run_ffmpeg_with_progress(
     return_code = process.wait()
     if return_code != 0:
         raise RuntimeError(
-            "ffmpeg failed while extracting audio: "
-            f"{stderr_text.strip() or 'unknown error'}"
+            "ffmpeg failed while extracting audio: " f"{stderr_text.strip() or 'unknown error'}"
         )
 
 
@@ -725,7 +722,9 @@ def parse_transcribe_output(output: str) -> list[Path]:
     return transcript_paths
 
 
-def stream_transcribe_output(process: subprocess.Popen[str]) -> tuple[list[str], dict[str, Any] | None]:
+def stream_transcribe_output(
+    process: subprocess.Popen[str],
+) -> tuple[list[str], dict[str, Any] | None]:
     stdout_lines: list[str] = []
     result_payload: dict[str, Any] | None = None
     last_percent = -1
@@ -851,9 +850,7 @@ def transcribe_audio_probe(
     return_code = process.wait()
     if return_code != 0:
         combined = "\n".join(
-            part.strip()
-            for part in ("\n".join(stdout_lines), stderr_text)
-            if part.strip()
+            part.strip() for part in ("\n".join(stdout_lines), stderr_text) if part.strip()
         )
         raise RuntimeError(f"transcribe-yt failed:\n{combined or 'no output returned'}")
 
@@ -909,7 +906,8 @@ def run_probe(args: argparse.Namespace) -> int:
         if planned_duration_seconds <= 0:
             raise RuntimeError(
                 "The requested start offset is beyond the available VOD duration. "
-                f"Start: {format_clock(float(start_seconds))}, VOD: {format_clock(source_duration_seconds)}"
+                f"Start: {format_clock(float(start_seconds))}, "
+                f"VOD: {format_clock(source_duration_seconds)}"
             )
         print(f"Planned output duration: {format_clock(planned_duration_seconds)}")
 
