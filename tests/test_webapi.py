@@ -435,7 +435,31 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
         self.assertFalse(result["ok"])
         favorites = api.get_favorites()
         self.assertTrue(favorites[0]["is_live"])
-        window.evaluate_js.assert_not_called()
+        # Only the activity-log entry is pushed - no favorites update on failure.
+        pushed = " ".join(str(call.args[0]) for call in window.evaluate_js.call_args_list)
+        self.assertNotIn("__onFavoritesUpdated", pushed)
+
+    def test_refresh_favorites_failure_reports_reason_and_logs_once_per_streak(self):
+        api = self.make_api()
+        api.add_favorite("TestUser")
+        window = Mock()
+        api.set_window(window)
+
+        with patch.object(api._status_monitor, "check_channels", return_value={}):
+            api._status_monitor.last_error_kind = "offline"
+            first = api.refresh_favorites()
+            second = api.refresh_favorites()
+        self.assertFalse(first["ok"])
+        self.assertEqual(first["reason"], "offline")
+        self.assertIn("connection", first["error"])
+        warnings = [a for a in api._activity if a["level"] == "warning"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(second["reason"], "offline")
+
+        with patch.object(api._status_monitor, "check_channels", return_value={"testuser": True}):
+            recovered = api.refresh_favorites()
+        self.assertTrue(recovered["ok"])
+        self.assertTrue(any("recovered" in a["message"] for a in api._activity))
 
     def test_window_push_uses_json_payload(self):
         api = self.make_api()

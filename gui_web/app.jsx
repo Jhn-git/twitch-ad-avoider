@@ -68,24 +68,55 @@ function App() {
   }, []);
 
   const refreshInFlightRef = React.useRef(false);
+  // Self-healing state: consecutive failed refreshes (toast only the first), a
+  // short-backoff retry timer so recovery doesn't wait for the next slow
+  // interval tick, and when we last succeeded (for wake-from-sleep catch-up).
+  const refreshFailuresRef = React.useRef(0);
+  const refreshRetryTimerRef = React.useRef(null);
+  const lastRefreshOkRef = React.useRef(Date.now());
+  const REFRESH_RETRY_DELAYS_SECONDS = [15, 30, 60];
 
   const refreshFavorites = React.useCallback((bridge) => {
     if (!bridge?.refresh_favorites || refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
+    if (refreshRetryTimerRef.current) {
+      window.clearTimeout(refreshRetryTimerRef.current);
+      refreshRetryTimerRef.current = null;
+    }
+    const onFailure = (message) => {
+      refreshFailuresRef.current += 1;
+      if (refreshFailuresRef.current === 1) {
+        pushToast({ kind: "error", message });
+      }
+      const delays = REFRESH_RETRY_DELAYS_SECONDS;
+      const delay = delays[Math.min(refreshFailuresRef.current - 1, delays.length - 1)];
+      refreshRetryTimerRef.current = window.setTimeout(() => {
+        refreshRetryTimerRef.current = null;
+        refreshFavorites(bridge);
+      }, delay * 1000);
+    };
     bridge.refresh_favorites().then((result) => {
       if (!result.ok) {
-        pushToast({ kind: "error", message: result.error || "Favorites refresh failed" });
+        onFailure(result.error || "Favorites refresh failed");
         return;
       }
+      const recovered = refreshFailuresRef.current > 0;
+      refreshFailuresRef.current = 0;
+      lastRefreshOkRef.current = Date.now();
+      if (recovered) pushToast({ kind: "success", message: "Reconnected - favorites updated" });
       setState((current) => (
         current ? { ...current, favorites: result.favorites || current.favorites } : current
       ));
     }).catch((error) => {
-      pushToast({ kind: "error", message: String(error) });
+      onFailure(String(error));
     }).finally(() => {
       refreshInFlightRef.current = false;
     });
   }, [pushToast]);
+
+  React.useEffect(() => () => {
+    if (refreshRetryTimerRef.current) window.clearTimeout(refreshRetryTimerRef.current);
+  }, []);
 
   const pinnedRefreshInFlightRef = React.useRef(false);
 
@@ -99,13 +130,17 @@ function App() {
     pinnedRefreshInFlightRef.current = true;
     bridge.refresh_favorites(true).then((result) => {
       if (!result.ok) return;
+      lastRefreshOkRef.current = Date.now();
+      // Connectivity is back but the full refresh is still waiting on its
+      // backoff timer - run it now so the whole list heals together.
+      if (refreshFailuresRef.current > 0) refreshFavorites(bridge);
       setState((current) => (
         current ? { ...current, favorites: result.favorites || current.favorites } : current
       ));
     }).catch(() => {}).finally(() => {
       pinnedRefreshInFlightRef.current = false;
     });
-  }, []);
+  }, [refreshFavorites]);
 
   const refreshFavoritesOnStartup = React.useCallback((bridge, initial) => {
     if (initial.settings?.favorites_auto_refresh === false) return;
@@ -210,6 +245,25 @@ function App() {
     }, refreshIntervalSeconds * 1000);
     return () => window.clearInterval(id);
   }, [api, autoRefreshEnabled, refreshIntervalSeconds, refreshFavorites]);
+
+  // Catch up right away when the network returns or the window wakes after a
+  // long gap (sleep/resume), instead of waiting out the interval timers.
+  React.useEffect(() => {
+    if (!api || !autoRefreshEnabled) return undefined;
+    const STALE_AFTER_MS = 60 * 1000;
+    const onOnline = () => refreshFavorites(api);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const stale = Date.now() - lastRefreshOkRef.current > STALE_AFTER_MS;
+      if (refreshFailuresRef.current > 0 || stale) refreshFavorites(api);
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [api, autoRefreshEnabled, refreshFavorites]);
 
   const pinnedRefreshIntervalSeconds = state?.settings?.pinned_favorites_refresh_interval;
 

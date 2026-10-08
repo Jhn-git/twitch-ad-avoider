@@ -28,6 +28,13 @@ from src.web_stream_service import (
 
 logger = get_logger(__name__)
 
+STATUS_CHECK_ERROR_MESSAGES = {
+    "offline": "Can't reach Twitch - check your connection (showing last known status)",
+    "timeout": "Twitch status check timed out (showing last known status)",
+    "server": "Twitch is having issues right now (showing last known status)",
+    "other": "Status check failed, showing last known status",
+}
+
 
 class TwitchViewerAPI:
     """Single Python bridge object exposed as ``window.pywebview.api``."""
@@ -45,6 +52,7 @@ class TwitchViewerAPI:
         self._status_monitor = StatusMonitor(
             check_timeout=self._int_setting("favorites_check_timeout", 5)
         )
+        self._status_check_failing = False
         self._selected_channel = self._normalize_optional_channel(launch_channel)
         self._launch_quality = launch_quality if launch_quality in QUALITY_OPTIONS else "best"
         self._activity: list[dict[str, Any]] = []
@@ -202,7 +210,17 @@ class TwitchViewerAPI:
         self._status_monitor.update_timeout(self._int_setting("favorites_check_timeout", 5))
         status_results = self._status_monitor.check_channels(favorites)
         if not status_results:
-            return {"ok": False, "error": "Status check failed, showing last known status"}
+            reason = self._status_monitor.last_error_kind or "other"
+            message = STATUS_CHECK_ERROR_MESSAGES.get(reason, STATUS_CHECK_ERROR_MESSAGES["other"])
+            # Only log the first failure of a streak; the frontend retries on a short
+            # backoff while the network is down and would otherwise flood the drawer.
+            if not self._status_check_failing:
+                self._status_check_failing = True
+                self._add_activity("warning", message, "FAVORITES")
+            return {"ok": False, "error": message, "reason": reason}
+        if self._status_check_failing:
+            self._status_check_failing = False
+            self._add_activity("info", "Twitch status check recovered", "FAVORITES")
         highlight_test_mode = bool(self._config.get("favorite_live_highlight_test_mode", False))
         newly_live: list[str] = []
         for channel, is_live in status_results.items():

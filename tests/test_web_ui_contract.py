@@ -14,6 +14,16 @@ def test_app_refreshes_favorites_on_startup_when_enabled():
     assert "refreshFavoritesOnStartup(bridge, initial)" in app_source
 
 
+def test_favorites_refresh_self_heals_after_failures():
+    app_source = (ROOT / "gui_web" / "app.jsx").read_text()
+
+    assert "refreshFailuresRef" in app_source
+    assert "REFRESH_RETRY_DELAYS_SECONDS" in app_source
+    assert 'window.addEventListener("online"' in app_source
+    assert 'document.addEventListener("visibilitychange"' in app_source
+    assert "Reconnected - favorites updated" in app_source
+
+
 def test_newly_live_favorite_animates_until_acknowledged():
     app_source = (ROOT / "gui_web" / "app.jsx").read_text()
     helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
