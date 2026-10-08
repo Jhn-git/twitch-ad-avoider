@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -67,6 +69,20 @@ class LunaReviewTests(unittest.TestCase):
         self.assertLess(text.index("src/a.py:3"), text.index("low.py:3"))
         self.assertIn("Gaps in the process: no tests", text)
         self.assertIn("No findings.", luna.render(report(findings=[])))
+
+    def test_latest_luna_picks_highest_version(self):
+        slugs = ["gpt-5.6-luna", "gpt-6-luna", "gpt-6.1-sol", "gpt-5.10-luna", "gpt-6-lunar"]
+        cache = {"models": [{"slug": s} for s in slugs]}
+        with tempfile.TemporaryDirectory() as home, patch.dict("os.environ", {"CODEX_HOME": home}):
+            (Path(home) / "models_cache.json").write_text(json.dumps(cache), encoding="utf-8")
+            self.assertEqual(luna.latest_luna_model(), "gpt-6-luna")
+            (Path(home) / "models_cache.json").write_text("{not json", encoding="utf-8")
+            self.assertEqual(luna.latest_luna_model(), luna.FALLBACK_MODEL)
+        with (
+            tempfile.TemporaryDirectory() as empty,
+            patch.dict("os.environ", {"CODEX_HOME": empty}),
+        ):
+            self.assertEqual(luna.latest_luna_model(), luna.FALLBACK_MODEL)
 
     def test_empty_diff_is_an_error(self):
         args = luna.parse_args([])

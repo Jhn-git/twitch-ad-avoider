@@ -9,6 +9,7 @@ anything. It needs a locally signed-in Codex CLI; no keys are handled here.
     python scripts/luna_review.py --files src/webapi.py gui_web/app.jsx
     python scripts/luna_review.py --animations    # code-level animation pass only
     python scripts/luna_review.py --dry-run       # print the prompt, don't call Codex
+    python scripts/luna_review.py --model gpt-6-luna   # pin a model instead of auto-picking
 
 Exit code: 0 clean or findings printed, 1 on a tool failure.
 """
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,7 +28,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MODEL = "gpt-6-luna"
+FALLBACK_MODEL = "gpt-6-luna"  # used when Codex's model list can't be read
+LUNA_SLUG = re.compile(r"^gpt-(\d+(?:\.\d+)*)-luna$")
 DEFAULT_EFFORT = "high"
 DEFAULT_TIMEOUT = 900
 MAX_INLINE_DIFF = 150_000  # bytes; larger diffs are left for Luna to read with `git diff`
@@ -163,7 +166,22 @@ def kill_tree(proc: subprocess.Popen) -> None:
     proc.kill()
 
 
-def ask_luna(prompt: str, effort: str, timeout: int) -> dict:
+def latest_luna_model() -> str:
+    """Highest-versioned `gpt-<version>-luna` in Codex's own model list, else the fallback."""
+    cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+    try:
+        models = json.loads(cache.read_text(encoding="utf-8"))["models"]
+        found = [
+            (tuple(int(n) for n in m.group(1).split(".")), m.group(0))
+            for m in (LUNA_SLUG.match(str(item.get("slug"))) for item in models)
+            if m
+        ]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return FALLBACK_MODEL
+    return max(found)[1] if found else FALLBACK_MODEL
+
+
+def ask_luna(prompt: str, effort: str, timeout: int, args_model: str | None = None) -> dict:
     work = Path(tempfile.mkdtemp(prefix="luna-review-"))
     schema_file, out_file = work / "schema.json", work / "out.json"
     schema_file.write_text(json.dumps(SCHEMA), encoding="utf-8")
@@ -173,7 +191,7 @@ def ask_luna(prompt: str, effort: str, timeout: int) -> dict:
         "--ephemeral",
         "--ignore-user-config",
         "--model",
-        MODEL,
+        args_model or latest_luna_model(),
         "-c",
         f'model_reasoning_effort="{effort}"',
         "--sandbox",
@@ -262,6 +280,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     target.add_argument("--files", nargs="+", help="review whole files instead of a diff")
     parser.add_argument("--animations", action="store_true", help="code-level animation pass only")
     parser.add_argument("--focus", help="extra thing for Luna to look at")
+    parser.add_argument("--model", help="override the model (default: newest Luna Codex lists)")
     parser.add_argument("--effort", default=DEFAULT_EFFORT, help=f"default {DEFAULT_EFFORT}")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="seconds")
     parser.add_argument("--json", action="store_true", help="print the raw JSON report")
@@ -276,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             print(prompt)
             return 0
-        report = ask_luna(prompt, args.effort, args.timeout)
+        report = ask_luna(prompt, args.effort, args.timeout, args.model)
     except ReviewError as exc:
         print(f"luna_review: {exc}", file=sys.stderr)
         return 1
