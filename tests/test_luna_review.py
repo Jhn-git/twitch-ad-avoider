@@ -90,15 +90,6 @@ class LunaReviewTests(unittest.TestCase):
             with self.assertRaises(luna.ReviewError):
                 luna.build_prompt(args)
 
-    def test_animation_mode_adds_code_only_brief(self):
-        args = luna.parse_args(["--animations", "--files", "scripts/luna_review.py"])
-        prompt = luna.build_prompt(args)
-        self.assertIn("code level only", prompt)
-        self.assertNotIn(
-            "code level only",
-            luna.build_prompt(luna.parse_args(["--files", "scripts/luna_review.py"])),
-        )
-
     def test_oversized_diff_is_not_inlined(self):
         args = luna.parse_args([])
         huge = "x" * (luna.MAX_INLINE_DIFF + 1)

@@ -7,7 +7,6 @@ anything. It needs a locally signed-in Codex CLI; no keys are handled here.
     python scripts/luna_review.py --base main     # everything since main
     python scripts/luna_review.py --commits 3     # the last 3 commits
     python scripts/luna_review.py --files src/webapi.py gui_web/app.jsx
-    python scripts/luna_review.py --animations    # code-level animation pass only
     python scripts/luna_review.py --dry-run       # print the prompt, don't call Codex
     python scripts/luna_review.py --model gpt-6-luna   # pin a model instead of auto-picking
 
@@ -79,13 +78,6 @@ Rules:
   left gaps (missing tests, unverified assumptions). Empty string if none.
 """
 
-ANIMATION_BRIEF = """This is an ANIMATION pass, code level only. Do not judge how it looks or feels.
-Review only the animation code itself: timers/intervals/requestAnimationFrame that are never
-cleaned up, listeners that leak, work done every frame that could be cached, layout-thrashing
-properties animated instead of transform/opacity, missing prefers-reduced-motion handling,
-animations that keep running when hidden or unmounted, state updates racing with unmount,
-and CSS keyframes/transitions that conflict or are dead. Ignore non-animation code."""
-
 
 class ReviewError(RuntimeError):
     pass
@@ -132,8 +124,6 @@ def gather_target(args: argparse.Namespace) -> tuple[str, str]:
 def build_prompt(args: argparse.Namespace) -> str:
     target, diff = gather_target(args)
     parts = [BASE_BRIEF]
-    if args.animations:
-        parts.append(ANIMATION_BRIEF)
     if args.focus:
         parts.append(f"Extra focus from the author: {args.focus}")
     parts.append(f"Review target: {target}.")
@@ -278,7 +268,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     target.add_argument("--base", help="review everything since this ref (e.g. main)")
     target.add_argument("--commits", type=positive_int, help="review the last N commits")
     target.add_argument("--files", nargs="+", help="review whole files instead of a diff")
-    parser.add_argument("--animations", action="store_true", help="code-level animation pass only")
     parser.add_argument("--focus", help="extra thing for Luna to look at")
     parser.add_argument("--model", help="override the model (default: newest Luna Codex lists)")
     parser.add_argument("--effort", default=DEFAULT_EFFORT, help=f"default {DEFAULT_EFFORT}")
