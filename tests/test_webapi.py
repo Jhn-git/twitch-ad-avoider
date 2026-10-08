@@ -230,6 +230,60 @@ class TestTwitchViewerAPI(ConfigManagerTestCase):
         self.assertEqual(clipped["path"], "clips/test-60.mp4")
         self.assertFalse(stopped["stream"]["active"])
 
+    def test_auto_stop_on_unfocus_ignores_activity_elsewhere(self):
+        # The whole point of checking real system idle time (not just window
+        # focus) is that staying active in another window - clicking around,
+        # typing, etc. - must never trigger a stop just because this app's
+        # window isn't the focused one.
+        api = self.make_api(launch_channel="testuser")
+        api.start_stream(quality="best")
+
+        with patch("src.webapi.get_system_idle_seconds", return_value=1.0):
+            result = api.check_auto_stop_on_unfocus()
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["stopped"])
+        self.assertTrue(api.get_stream_state()["active"])
+
+    def test_auto_stop_on_unfocus_stops_once_truly_idle(self):
+        api = self.make_api(launch_channel="testuser")
+        api.start_stream(quality="best")
+        window = Mock()
+        api.set_window(window)
+
+        with patch("src.webapi.get_system_idle_seconds", return_value=301.0):
+            result = api.check_auto_stop_on_unfocus()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["stopped"])
+        self.assertFalse(api.get_stream_state()["active"])
+        toast_calls = [
+            call.args[0]
+            for call in window.evaluate_js.call_args_list
+            if "__onToast" in call.args[0]
+        ]
+        self.assertEqual(len(toast_calls), 1)
+        self.assertIn("testuser", toast_calls[0])
+
+    def test_auto_stop_on_unfocus_respects_disabled_setting(self):
+        api = self.make_api(launch_channel="testuser")
+        api.start_stream(quality="best")
+        api.save_settings({"auto_stop_on_unfocus_enabled": False})
+
+        with patch("src.webapi.get_system_idle_seconds", return_value=301.0):
+            result = api.check_auto_stop_on_unfocus()
+
+        self.assertFalse(result["stopped"])
+        self.assertTrue(api.get_stream_state()["active"])
+
+    def test_auto_stop_on_unfocus_noop_when_nothing_playing(self):
+        api = self.make_api()
+
+        with patch("src.webapi.get_system_idle_seconds", return_value=301.0):
+            result = api.check_auto_stop_on_unfocus()
+
+        self.assertFalse(result["stopped"])
+
     def test_create_clip_forwards_behind_live_seconds(self):
         api = self.make_api(launch_channel="testuser")
 

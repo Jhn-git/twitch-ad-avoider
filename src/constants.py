@@ -55,6 +55,8 @@ DEFAULT_SETTINGS = {
     "stream_manager_clip_duration_seconds": 30,  # Last-selected clip duration
     "stream_manager_edit_after_clip": True,  # Automatically open the recent clip editor
     "auto_collapse_panels_enabled": True,  # Auto-collapse rails/activity drawer after 10s idle
+    "auto_stop_on_unfocus_enabled": True,  # Stop playback once unfocused AND away from the PC
+    "auto_stop_on_unfocus_seconds": 300,  # Away/idle duration before auto-stop, in seconds (5 min)
 }
 
 # Stream quality options
@@ -109,3 +111,7 @@ MIN_REFRESH_INTERVAL = 30  # Minimum 30 seconds
 MAX_REFRESH_INTERVAL = 3600  # Maximum 1 hour
 MIN_CHECK_TIMEOUT = 3  # Minimum 3 seconds per channel
 MAX_CHECK_TIMEOUT = 10  # Maximum 10 seconds per channel
+
+# Auto-stop-on-unfocus validation constants
+MIN_AUTO_STOP_UNFOCUS_SECONDS = 30
+MAX_AUTO_STOP_UNFOCUS_SECONDS = 3600

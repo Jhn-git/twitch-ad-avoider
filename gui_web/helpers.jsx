@@ -178,6 +178,8 @@ window.AppHelpers = {
       stream_manager_clip_duration_seconds: 120,
       stream_manager_edit_after_clip: true,
       auto_collapse_panels_enabled: true,
+      auto_stop_on_unfocus_enabled: true,
+      auto_stop_on_unfocus_seconds: 300,
     };
     let selected = "theonlymonto";
     let recentClip = null;
@@ -350,6 +352,9 @@ window.AppHelpers = {
       open_channel: () => Promise.resolve({ ok: true }),
       open_chat: () => Promise.resolve({ ok: true }),
       open_clips_folder: () => Promise.resolve({ ok: true }),
+      // No real system-wide idle detection in the browser-only demo - never
+      // auto-stops, since there's no backend to check actual input idle time.
+      check_auto_stop_on_unfocus: () => Promise.resolve({ ok: true, stopped: false }),
       save_settings: (patch) => Promise.resolve({ ok: true, settings: { ...settings, ...patch } }),
       reset_settings_to_defaults: () => Promise.resolve({ ok: true, settings }),
       validate_setting: () => Promise.resolve({ ok: true }),

@@ -172,6 +172,8 @@ window.Components.SettingsView = function SettingsView({
               <Field label="Show preview" keyName="show_stream_preview" type="bool" />
               <Field label="Hover sound" keyName="button_hover_sound_enabled" type="bool" />
               <Field label="Auto-collapse panels (10s idle)" keyName="auto_collapse_panels_enabled" type="bool" />
+              <Field label="Auto-stop when away from PC" keyName="auto_stop_on_unfocus_enabled" type="bool" />
+              <Field label="Away timeout (seconds)" keyName="auto_stop_on_unfocus_seconds" type="number" />
               <Field label="Window width" keyName="window_width" type="number" />
               <Field label="Window height" keyName="window_height" type="number" />
             </section>

@@ -47,6 +47,8 @@ from .constants import (
     MAX_HLS_LIVE_EDGE,
     MIN_VOLUME,
     MAX_VOLUME,
+    MIN_AUTO_STOP_UNFOCUS_SECONDS,
+    MAX_AUTO_STOP_UNFOCUS_SECONDS,
 )
 from .logging_config import get_logger
 from .validators import (
@@ -531,6 +533,16 @@ class ConfigManager:
             "auto_collapse_panels_enabled": lambda value: self._validate_bool_setting(
                 value,
                 "Auto-collapse panels setting",
+            ),
+            "auto_stop_on_unfocus_enabled": lambda value: self._validate_bool_setting(
+                value,
+                "Auto-stop on unfocus setting",
+            ),
+            "auto_stop_on_unfocus_seconds": lambda value: self._validate_int_range_setting(
+                value,
+                "Auto-stop on unfocus seconds",
+                MIN_AUTO_STOP_UNFOCUS_SECONDS,
+                MAX_AUTO_STOP_UNFOCUS_SECONDS,
             ),
         }
 

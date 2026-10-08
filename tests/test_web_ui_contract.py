@@ -235,3 +235,22 @@ def test_clip_editor_replays_boundaries_and_exposes_tail_and_save_actions():
     assert "Save &amp; Return" in editor_source
     assert "kebabSlug(title)" in editor_source
     assert "kebabSlug(value)" in helpers_source
+
+
+def test_stream_auto_stops_only_when_unfocused_and_actually_away():
+    manager_source = (ROOT / "gui_web" / "components" / "stream_manager.jsx").read_text()
+    settings_source = (ROOT / "gui_web" / "components" / "settings_view.jsx").read_text()
+    helpers_source = (ROOT / "gui_web" / "helpers.jsx").read_text()
+
+    # The frontend only polls the backend while unfocused - it never decides
+    # to stop on its own, since only the backend can see real system-wide
+    # input idle time (staying active in another window must not trigger a
+    # stop just because this window isn't focused).
+    assert "auto_stop_on_unfocus_enabled" in manager_source
+    assert 'window.addEventListener("blur", startPolling)' in manager_source
+    assert 'window.addEventListener("focus", stopPolling)' in manager_source
+    assert "api.check_auto_stop_on_unfocus()" in manager_source
+    assert 'keyName="auto_stop_on_unfocus_enabled" type="bool"' in settings_source
+    assert 'keyName="auto_stop_on_unfocus_seconds" type="number"' in settings_source
+    assert "auto_stop_on_unfocus_enabled" in helpers_source
+    assert "check_auto_stop_on_unfocus" in helpers_source

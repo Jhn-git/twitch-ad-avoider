@@ -260,6 +260,40 @@ window.Components.StreamManager = function StreamManager({
     });
   };
 
+  // Stop playback if the user is truly away from the PC while this window
+  // isn't focused - NOT just whenever the window loses focus, since that
+  // alone also fires while the user is busy in another app (clicking around
+  // elsewhere counts as "at the PC"). While unfocused, poll the backend every
+  // few seconds; it checks real system-wide input idle time (GetLastInputInfo)
+  // and only stops+backs off once idle time clears the configured threshold,
+  // so switching apps and staying active there never triggers a stop.
+  const autoStopOnUnfocusEnabled = state.settings.auto_stop_on_unfocus_enabled !== false;
+
+  React.useEffect(() => {
+    if (!autoStopOnUnfocusEnabled || !isWatching) return undefined;
+
+    let interval = null;
+    const startPolling = () => {
+      if (interval) return;
+      interval = window.setInterval(() => {
+        api.check_auto_stop_on_unfocus();
+      }, 5000);
+    };
+    const stopPolling = () => {
+      if (interval) window.clearInterval(interval);
+      interval = null;
+    };
+
+    window.addEventListener("blur", startPolling);
+    window.addEventListener("focus", stopPolling);
+
+    return () => {
+      window.removeEventListener("blur", startPolling);
+      window.removeEventListener("focus", stopPolling);
+      stopPolling();
+    };
+  }, [autoStopOnUnfocusEnabled, isWatching, api]);
+
   // Auto-swap to the next live pinned favorite when the currently-playing
   // pinned streamer goes offline, so watching isn't left staring at a
   // frozen, no-longer-live stream. Deliberately scoped to the natural

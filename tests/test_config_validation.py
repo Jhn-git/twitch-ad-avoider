@@ -104,6 +104,12 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
         for seconds in (29, 3601, "60", None):
             self.assertFalse(self.config.set("pinned_favorites_refresh_interval", seconds))
 
+    def test_auto_stop_on_unfocus_seconds_range_validation(self):
+        for seconds in (30, 300, 3600):
+            self.assertTrue(self.config.set("auto_stop_on_unfocus_seconds", seconds))
+        for seconds in (29, 3601, "60", None):
+            self.assertFalse(self.config.set("auto_stop_on_unfocus_seconds", seconds))
+
     def test_volume_range_validation(self):
         for level in (0.0, 0.2, 0.5, 1.0):
             self.assertTrue(self.config.set("volume", level))
@@ -173,6 +179,7 @@ class TestConfigManagerValidation(ConfigManagerTestCase):
             "stream_manager_activity_drawer_open",
             "stream_manager_edit_after_clip",
             "auto_collapse_panels_enabled",
+            "auto_stop_on_unfocus_enabled",
         ]
 
         for setting in boolean_settings:

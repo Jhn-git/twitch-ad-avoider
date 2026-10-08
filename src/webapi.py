@@ -19,6 +19,7 @@ from src.favorites_manager import FavoriteChannelInfo, FavoritesManager
 from src.logging_config import get_logger, reconfigure_logging_from_config
 from src.status_monitor import StatusMonitor
 from src.stream_preview import StreamPreviewInfo, fetch_stream_preview_info
+from src.system_idle import get_system_idle_seconds
 from src.validators import validate_channel_name
 from src.web_stream_service import (
     WebStreamService,
@@ -382,6 +383,39 @@ class TwitchViewerAPI:
 
     def stop_stream(self) -> dict:
         return {"ok": True, "stream": self._stream_service.stop()}
+
+    def check_auto_stop_on_unfocus(self) -> dict:
+        """Stop playback if truly away from the PC while unfocused.
+
+        Called by the frontend on a short poll while the app window lacks OS
+        focus. Only stops once real system-wide input idle time (not just
+        window focus) clears the configured threshold - staying active in
+        another window keeps resetting idle time, so this never fires just
+        because the user is busy elsewhere.
+        """
+        if not self._config.get("auto_stop_on_unfocus_enabled", True):
+            return {"ok": True, "stopped": False}
+        state = self._stream_service.get_state()
+        if not state.get("active"):
+            return {"ok": True, "stopped": False}
+        threshold = self._int_setting("auto_stop_on_unfocus_seconds", 300)
+        if get_system_idle_seconds() < threshold:
+            return {"ok": True, "stopped": False}
+
+        channel = state.get("channel")
+        self._stream_service.stop()
+        self._push(
+            "__onToast",
+            {
+                "kind": "info",
+                "message": (
+                    f"{channel} stopped - away from PC"
+                    if channel
+                    else "Stream stopped - away from PC"
+                ),
+            },
+        )
+        return {"ok": True, "stopped": True}
 
     def get_stream_state(self) -> dict:
         return self._stream_service.get_state()
