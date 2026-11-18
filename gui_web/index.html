@@ -108,6 +108,7 @@
     height: 100%;
     display: grid;
     grid-template-columns: var(--left-rail-width) minmax(560px, 1fr) var(--right-rail-width);
+    grid-template-rows: minmax(0, 1fr);
     background: var(--bg);
   }
   .app-shell.left-collapsed { --left-rail-width: 66px; }
@@ -115,6 +116,7 @@
 
   .rail {
     min-width: 0;
+    min-height: 0;
     height: 100%;
     background: var(--rail);
     border-color: var(--line);
@@ -146,8 +148,7 @@
   }
   .rail.collapsed .rail-title,
   .rail.collapsed .fav-name,
-  .rail.collapsed .favorite-row .rail-actions,
-  .rail.collapsed .add-favorite span {
+  .rail.collapsed .favorite-row .rail-actions {
     display: none;
   }
   .rail.collapsed .rail-actions { gap: 0; }
@@ -176,16 +177,24 @@
 
   .favorites-list {
     flex: 1;
+    /* min-height: 0 lets the list shrink below its content so it scrolls
+       instead of pushing rows past the bottom of the window. The bar is
+       hidden (wheel/keyboard still scroll); a bottom fade hints at more. */
+    min-height: 0;
     overflow-y: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
     /* Scroll containers clip at the padding box, so this padding is what keeps
        the .avatar.live glow (a 16px blur) from being cut off when an animation
        travels. Right/bottom are trimmed to keep the rows their original width.
        A row scrolled hard against the top edge can still clip - unavoidable
        while the list scrolls. */
-    padding: 20px 4px 12px 20px;
+    padding: 20px 4px 32px 20px;
   }
+  .favorites-list::-webkit-scrollbar { display: none; }
   .rail.left.collapsed .favorites-list {
-    padding: 24px 10px 12px;
+    padding: 24px 10px 32px;
   }
   .favorite-row {
     width: 100%;
@@ -355,28 +364,6 @@
   }
   .favorite-row:hover .pin,
   .favorite-row.pinned .pin { opacity: 1; }
-
-  .add-favorite {
-    margin: 10px 14px 14px;
-    min-height: 34px;
-    border: 1px dashed var(--line-2);
-    background: transparent;
-    color: var(--ink-3);
-    border-radius: 6px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
-  }
-  .add-favorite:hover { color: var(--ink); border-color: var(--accent); }
-  .rail.left.collapsed .add-favorite {
-    width: 42px;
-    min-height: 36px;
-    margin: 10px auto 14px;
-    padding: 0;
-  }
 
   .stage {
     --stage-content-width: min(1360px, 100%, max(620px, calc((100vh - 232px) * 16 / 9)));

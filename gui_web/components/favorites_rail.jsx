@@ -20,6 +20,9 @@ window.Components.FavoritesRail = function FavoritesRail({
       <div className="rail-head">
         <span className="rail-title">Favorites</span>
         <div className="rail-actions">
+          <button className="icon-btn" title="Add favorite" onClick={onAdd}>
+            <Icon name="plus" />
+          </button>
           {open && (
             <button className="icon-btn" title="Refresh favorites" onClick={onRefresh}>
               <Icon name="refresh" />
@@ -88,10 +91,6 @@ window.Components.FavoritesRail = function FavoritesRail({
           );
         })}
       </div>
-      <button className="add-favorite" onClick={onAdd} title="Add favorite">
-        <Icon name="plus" />
-        <span>Add favorite</span>
-      </button>
     </aside>
   );
 };
